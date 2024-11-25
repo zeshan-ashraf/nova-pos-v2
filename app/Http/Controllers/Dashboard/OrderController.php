@@ -110,6 +110,11 @@ class OrderController extends Controller
             $oDetails['total'] = $content->total;
             $oDetails['created_at'] = Carbon::now();
 
+            // Reduce the stock
+            
+            Product::where('id', $content->id)
+                ->update(['product_store' => DB::raw('product_store-'.$content->qty)]);
+            
             OrderDetails::insert($oDetails);
         }
 
@@ -142,14 +147,14 @@ class OrderController extends Controller
     public function updateStatus(Request $request)
     {
         $order_id = $request->id;
-
+        /*
         // Reduce the stock
         $products = OrderDetails::where('order_id', $order_id)->get();
 
         foreach ($products as $product) {
             Product::where('id', $product->product_id)
                     ->update(['product_store' => DB::raw('product_store-'.$product->quantity)]);
-        }
+        }*/
 
         Order::findOrFail($order_id)->update(['order_status' => 'complete']);
 
