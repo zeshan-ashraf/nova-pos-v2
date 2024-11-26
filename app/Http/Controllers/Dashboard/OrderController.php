@@ -13,6 +13,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Redirect;
 use Gloudemans\Shoppingcart\Facades\Cart;
 use Haruncpi\LaravelIdGenerator\IdGenerator;
+use App\Models\PaymentLog;
 
 class OrderController extends Controller
 {
@@ -213,12 +214,22 @@ class OrderController extends Controller
         $mainPay = $order->pay;
         $mainDue = $order->due;
 
+        if ($validatedData['due'] > $mainDue) {
+            return back()->withErrors(['due' => 'The amount you are trying to pay exceeds the outstanding due.'])
+                     ->withInput();
+        }
+
         $paid_due = $mainDue - $validatedData['due'];
         $paid_pay = $mainPay + $validatedData['due'];
 
         Order::findOrFail($request->order_id)->update([
             'due' => $paid_due,
             'pay' => $paid_pay,
+        ]);
+
+        PaymentLog::create([
+            'order_id' => $order->id,
+            'amount_paid' => $validatedData['due'],
         ]);
 
         return Redirect::route('order.pendingDue')->with('success', 'Due Amount Updated Successfully!');
