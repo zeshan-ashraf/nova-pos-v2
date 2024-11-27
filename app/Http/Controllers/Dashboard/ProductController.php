@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Dashboard;
 
 use Exception;
+use App\Models\StockLog;
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\Supplier;
@@ -138,7 +139,7 @@ class ProductController extends Controller
             'product_garage' => 'string|nullable',
             'product_store' => 'string|nullable',
             'buying_date' => 'date_format:Y-m-d|max:10|nullable',
-            'expire_date' => 'date_format:Y-m-d|max:10|nullable',
+            // 'expire_date' => 'nullable|date|date_format:Y-m-d',
             'buying_price' => 'required|integer',
             'selling_price' => 'required|integer',
         ];
@@ -162,12 +163,24 @@ class ProductController extends Controller
             $file->storeAs($path, $fileName);
             $validatedData['product_image'] = $fileName;
         }
-
-        Product::where('id', $product->id)->update($validatedData);
-
+            $oldStockQty = $product->product_store;
+            Product::where('id', $product->id)->update($validatedData);
+            $newStockQty = $validatedData['product_store'] ?? $product->product_store;
+            $stockChange = $newStockQty - $oldStockQty;
+            $this->logStockUpdate($product, $validatedData, $stockChange);
+            
         return Redirect::route('products.index')->with('success', 'Product has been updated!');
     }
-
+    public function logStockUpdate(Product $product, $validatedData, $stockChange)
+{
+    // dd($product, $validatedData, $stockChange);
+    StockLog::create([
+        'product_id' => $product->id,
+        'supplier_id' => $validatedData['supplier_id'],
+        'stock_qty' => $stockChange, 
+        'price' => $validatedData['buying_price'],
+    ]);
+}
     /**
      * Remove the specified resource from storage.
      */
