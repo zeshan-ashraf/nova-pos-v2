@@ -16,6 +16,7 @@ use App\Http\Controllers\Dashboard\OrderController;
 use App\Http\Controllers\Dashboard\PosController;
 use App\Http\Controllers\Dashboard\RoleController;
 use App\Http\Controllers\Dashboard\UserController;
+use App\Http\Controllers\Dashboard\ActivityController;
 
 /*
 |--------------------------------------------------------------------------
@@ -121,7 +122,23 @@ Route::middleware(['permission:orders.menu'])->group(function () {
 
     // Stock Management
     Route::get('/stock', [OrderController::class, 'stockManage'])->name('order.stockManage');
+    Route::get('/order/product/{id}', [OrderController::class, 'stockLog'])->name('order.stockLog');
+    Route::post('/order/{id}/upload-invoice', [OrderController::class, 'uploadInvoice'])->name('order.uploadInvoice');
+    Route::get('/search/{productId}', [OrderController::class, 'search'])->name('stock.search');
+
+    //orders Payment Log
+    Route::get('/order/{id}', [OrderController::class, 'paymentLog'])->name('order.paymentLog');
+    Route::get('paymentLogs/search/{orderId}', [OrderController::class, 'paymentSearch'])->name('paymentlog.search');
+    Route::post('/payment-log/{paymentLogId}/upload-invoice', [OrderController::class, 'uploadInvoice'])->name('paymentlog.uploadInvoice');
+
 });
+
+// ====== ACTIVITY CONTROLLER ======
+// Route::middleware(['permission:activity.menu'])->group(function () {
+    Route::resource('/activities', ActivityController::class);
+    Route::get('/activity-search', [ActivityController::class, 'activitySearch'])->name('activities.search');
+
+// });
 
 // ====== DATABASE BACKUP ======
 Route::middleware(['permission:database.menu'])->group(function () {

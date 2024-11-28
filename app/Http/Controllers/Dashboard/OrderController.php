@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\StockLog;
+use App\Models\Category;
+use App\Models\Supplier;
 use App\Models\OrderDetails;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -112,10 +115,10 @@ class OrderController extends Controller
             $oDetails['created_at'] = Carbon::now();
 
             // Reduce the stock
-            
+
             Product::where('id', $content->id)
                 ->update(['product_store' => DB::raw('product_store-'.$content->qty)]);
-            
+
             OrderDetails::insert($oDetails);
         }
 
@@ -205,10 +208,14 @@ class OrderController extends Controller
     {
         $rules = [
             'order_id' => 'required|numeric',
-            'due' => 'required|numeric',
+            'due' => 'required|numeric|min:1',
         ];
 
-        $validatedData = $request->validate($rules);
+        $customMessages = [
+            'due.min' => 'The due amount cannot be 0 or less.',
+        ];
+
+        $validatedData = $request->validate($rules, $customMessages);
 
         $order = Order::findOrFail($request->order_id);
         $mainPay = $order->pay;
@@ -234,4 +241,108 @@ class OrderController extends Controller
 
         return Redirect::route('order.pendingDue')->with('success', 'Due Amount Updated Successfully!');
     }
+    public function stockLog(Request $request, $id)
+    {
+        $product = Product::findOrFail($id);
+        $stockLogs = StockLog::with(['product', 'supplier'])
+        ->where('product_id', $id)
+        ->orderBy($request->get('sort', 'created_at'), $request->get('direction', 'desc'))
+        ->paginate(10);
+
+        $stockLogs->getCollection()->transform(function ($stockLog) {
+            $stockLog->created_at = $stockLog->created_at->format('Y-m-d');
+            return $stockLog;
+        });
+            return view('products.stock-log', [
+                'product' => $product,
+                'stockLogs' => $stockLogs
+            ]);
+    }
+    public function search(Request $request, $id)
+    {
+        $searchTerm = $request->get('search');
+
+        $stockLogs = StockLog::with(['supplier', 'product'])
+        ->where('product_id', $id)
+        ->where(function ($query) use ($searchTerm) {
+            $query->whereHas('supplier', function ($query) use ($searchTerm) {
+                $query->where('name', 'like', "%{$searchTerm}%");
+            })
+            ->orWhereHas('product', function ($query) use ($searchTerm) {
+                $query->where('product_name', 'like', "%{$searchTerm}%");
+            })
+            ->orWhere('stock_qty', 'like', "%{$searchTerm}%")
+            ->orWhere('price', 'like', "%{$searchTerm}%");
+        })
+        ->get();
+
+        $stockLogs->transform(function ($stockLog) {
+            $stockLog->created_at = $stockLog->created_at->format('Y-m-d');
+            return $stockLog;
+        });
+
+        if ($request->ajax()) {
+            return response()->json(['stockLogs' => $stockLogs]);
+        }
+
+        return view('stocklogs.index', compact('stockLogs'));
+    }
+
+    public function paymentLog(Request $request, $id)
+    {
+        $order = Order::findOrFail($id);
+        $paymentLogs = paymentLog::with(['order'])
+        ->where('order_id', $id)
+        ->orderBy($request->get('sort', 'created_at'), $request->get('direction', 'desc'))
+        ->paginate(10);
+        $paymentLogs->getCollection()->transform(function ($paymentLog) {
+            $paymentLog->created_at = $paymentLog->created_at->format('Y-m-d');
+            return $paymentLog;
+        });
+
+        return view('orders.payment-log', [
+            'order' => $order,
+            'paymentLogs' => $paymentLogs,
+        ]);
+    }
+    public function paymentSearch(Request $request, $id)
+    {
+        $searchTerm = $request->get('search');
+
+        $paymentLogs = PaymentLog::with(['order.customer'])
+            ->where('order_id', $id)
+            ->where(function ($query) use ($searchTerm) {
+                $query->whereHas('order.customer', function ($query) use ($searchTerm) {
+                    $query->where('name', 'like', "%{$searchTerm}%");
+                })
+                ->orWhere('created_at', 'like', "%{$searchTerm}%")
+                ->orWhere('amount_paid', 'like', "%{$searchTerm}%");
+            })
+            ->paginate(10);
+        $paymentLogs->transform(function ($paymentLog) {
+            $paymentLog->created_at = $paymentLog->created_at->format('Y-m-d');
+            return $paymentLog;
+        });
+
+        if ($request->ajax()) {
+            return response()->json(['paymentLogs' => $paymentLogs]);
+        }
+
+        return view('orders.payment-log', compact('paymentLogs'));
+    }
+
+      public function uploadInvoice(Request $request, $paymentLogId)
+    {
+        $request->validate([
+            'invoice_image' => 'required|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+        ]);
+
+        $paymentLog = PaymentLog::findOrFail($paymentLogId);
+        $invoiceImagePath = $request->file('invoice_image')->store('invoices', 'public');
+        $paymentLog->invoice_image = $invoiceImagePath;
+        $paymentLog->save();
+
+        return back()->with('success', 'Invoice uploaded successfully!');
+    }
+
 }

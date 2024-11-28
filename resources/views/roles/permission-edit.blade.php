@@ -56,6 +56,10 @@
             'slug' => 'database',
             'name' => 'Database'
         ],
+        [
+            'slug' => 'activity',
+            'name' => 'Activity'
+        ],
     ]
 @endphp
 

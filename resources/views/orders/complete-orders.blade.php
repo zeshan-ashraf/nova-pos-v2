@@ -87,6 +87,9 @@
                                     <a class="btn btn-success mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Print" href="{{ route('order.invoiceDownload', $order->id) }}">
                                         Print
                                     </a>
+                                    <a class="btn btn-secondary mr-2" data-toggle="tooltip" data-placement="top" title="View Payment Log" data-original-title="View Stock Log"
+                                    href="{{ route('order.paymentLog', $order->id) }}"><i class="ri-book-line mr-0"></i>
+                               </a>
                                 </div>
                             </td>
                         </tr>
