@@ -107,9 +107,10 @@
                                         <a class="btn btn-success mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Edit"
                                             href="{{ route('products.edit', $product->id) }}"><i class="ri-pencil-line mr-0"></i>
                                         </a>
-                                       <a class="btn btn-secondary mr-2" data-toggle="tooltip" data-placement="top" title="View Stock Log for Product" data-original-title="View Stock Log"
-                                            href="{{ route('order.stockLog', $product->id) }}"><i class="ri-book-line mr-0"></i>
-                                       </a>
+                                        <a class="btn btn-secondary mr-2" data-toggle="tooltip" data-placement="top" title="View Stock Log" data-original-title="View Stock Log"
+                                        href="{{ route('order.stockLog', $product->id) }}">
+                                        <i class="ri-archive-line mr-0"></i>
+                                     </a>
 
 
                                             <button type="submit" class="btn btn-warning mr-2 border-none" onclick="return confirm('Are you sure you want to delete this record?')" data-toggle="tooltip" data-placement="top" title="" data-original-title="Delete"><i class="ri-delete-bin-line mr-0"></i></button>

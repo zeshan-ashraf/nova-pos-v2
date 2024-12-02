@@ -41,7 +41,11 @@
                         </svg>
                     </a>
                     <ul id="orders" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
-
+                        <li class="{{ Request::is('orders/all*') ? 'active' : '' }}">
+                            <a href="{{ route('order.index') }}">
+                                <i class="fa-solid fa-arrow-right"></i><span>Orders</span>
+                            </a>
+                        </li>
                         <li class="{{ Request::is('orders/pending*') ? 'active' : '' }}">
                             <a href="{{ route('order.pendingOrders') }}">
                                 <i class="fa-solid fa-arrow-right"></i><span>Pending Orders</span>

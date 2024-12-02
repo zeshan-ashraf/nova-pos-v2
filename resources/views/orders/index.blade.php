@@ -14,25 +14,25 @@
             @endif
             <div class="d-flex flex-wrap align-items-center justify-content-between mb-4">
                 <div>
-                    <h4 class="mb-3">Complete Order List</h4>
+                    <h4 class="mb-3">Orders List</h4>
                 </div>
                 <div>
-                    <a href="{{ route('order.pendingOrders') }}" class="btn btn-danger add-list"><i class="las la-trash mr-3"></i>Clear Search</a>
+                    <a href="{{ route('order.index') }}" class="btn btn-danger add-list"><i class="las la-trash mr-3"></i>Clear Search</a>
                 </div>
             </div>
         </div>
 
         <div class="col-lg-12">
-            <form action="{{ route('order.completeOrders') }}" method="get">
+            <form action="{{ route('order.index') }}" method="get">
                 <div class="d-flex flex-wrap align-items-center justify-content-between">
                     <div class="form-group row">
                         <label for="row" class="col-sm-3 align-self-center">Row:</label>
                         <div class="col-sm-9">
                             <select class="form-control" name="row">
-                                <option value="10" @if(request('row') == '10')selected="selected"@endif>10</option>
-                                <option value="25" @if(request('row') == '25')selected="selected"@endif>25</option>
-                                <option value="50" @if(request('row') == '50')selected="selected"@endif>50</option>
-                                <option value="100" @if(request('row') == '100')selected="selected"@endif>100</option>
+                                <option value="10" @if(request('row') == '10') selected="selected" @endif>10</option>
+                                <option value="25" @if(request('row') == '25') selected="selected" @endif>25</option>
+                                <option value="50" @if(request('row') == '50') selected="selected" @endif>50</option>
+                                <option value="100" @if(request('row') == '100') selected="selected" @endif>100</option>
                             </select>
                         </div>
                     </div>
@@ -70,15 +70,25 @@
                     <tbody class="ligth-body">
                         @foreach ($orders as $order)
                         <tr>
-                            <td>{{ (($orders->currentPage() * 10) - 10) + $loop->iteration  }}</td>
+                            <td>{{ (($orders->currentPage() * 10) - 10) + $loop->iteration }}</td>
                             <td>{{ $order->invoice_no }}</td>
                             <td>{{ $order->customer->name }}</td>
                             <td>{{ $order->order_date }}</td>
                             <td>{{ $order->pay }}</td>
                             <td>{{ $order->payment_status }}</td>
                             <td>
-                                <span class="badge badge-success">{{ $order->order_status }}</span>
+                                <span class="badge
+                                    @if($order->order_status == 'complete')
+                                        badge-success
+                                    @elseif($order->order_status == 'pending')
+                                        badge-danger
+                                    @else
+                                        badge-secondary
+                                    @endif">
+                                    {{ $order->order_status }}
+                                </span>
                             </td>
+
                             <td>
                                 <div class="d-flex align-items-center list-action">
                                     <a class="btn btn-info mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Details" href="{{ route('order.orderDetails', $order->id) }}">
@@ -86,6 +96,9 @@
                                     </a>
                                     <a class="btn btn-success mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Print" href="{{ route('order.invoiceDownload', $order->id) }}">
                                         Print
+                                    </a>
+                                    <a class="btn btn-secondary mr-2" data-toggle="tooltip" data-placement="top" title="View Payment Log" data-original-title="View Stock Log" href="{{ route('order.paymentLog', $order->id) }}">
+                                        <i class="ri-archive-line mr-0"></i>
                                     </a>
                                 </div>
                             </td>
@@ -96,6 +109,7 @@
             </div>
             {{ $orders->links() }}
         </div>
+
     </div>
     <!-- Page end  -->
 </div>

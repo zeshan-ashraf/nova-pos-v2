@@ -20,6 +20,13 @@
 
                 <div class="card-body">
                     <!-- View Activity Form (Read-Only) -->
+                    <!-- Customer Name -->
+                    <div class="form-group row">
+                        <div class="col-md-6">
+                            <label for="customer_id">Customer</label>
+                            <input type="text" class="form-control" id="customer_id" value="{{ $activity->customer->name ?? 'N/A' }}" readonly>
+                        </div>
+                    </div>
 
                     <!-- Activity Title -->
                     <div class="form-group row">
@@ -37,50 +44,53 @@
                         </div>
                     </div>
 
-                    <!-- Activity Date -->
+                    <!-- Activity Date and Activity Cost in a Single Row -->
                     <div class="form-group row">
+                        <!-- Activity Date -->
                         <div class="col-md-6">
                             <label for="date">Activity Date</label>
                             <input type="text" class="form-control" id="date" value="{{ $activity->date }}" readonly>
                         </div>
-                    </div>
 
-                    <!-- Activity Images -->
-                    <div class="form-group row">
-                        <div class="col-md-6">
-                            <label for="image_1">Image 1</label>
-                            <div id="image-preview-1" class="mt-2">
-                                <img class="avatar-60 rounded" id="preview-image-1"
-                                    src="{{ is_array($activity->images) && isset($activity->images[0]) ? asset('storage/' . $activity->images[0]) : asset('assets/images/product/default.webp') }}"
-                                    alt="Image 1">
-                            </div>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label for="image_2">Image 2</label>
-                            <div id="image-preview-2" class="mt-2">
-                                <img class="avatar-60 rounded" id="preview-image-2"
-                                    src="{{ is_array($activity->images) && isset($activity->images[1]) ? asset('storage/' . $activity->images[1]) : asset('assets/images/product/default.webp') }}"
-                                    alt="Image 2">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Activity Cost -->
-                    <div class="form-group row">
+                        <!-- Activity Cost -->
                         <div class="col-md-6">
                             <label for="activity_cost">Activity Cost</label>
                             <input type="text" class="form-control" id="activity_cost" value="{{ $activity->activity_cost }}" readonly>
                         </div>
                     </div>
 
-                    <!-- Customer Name -->
+
+                    <!-- Activity Images -->
                     <div class="form-group row">
+                        <!-- Image 1 -->
                         <div class="col-md-6">
-                            <label for="customer_id">Customer</label>
-                            <input type="text" class="form-control" id="customer_id" value="{{ $activity->customer->name ?? 'N/A' }}" readonly>
+                            <label for="image_1">Image 1</label>
+                            <div id="image-preview-1" class="mt-2">
+                                <!-- Wrap the image in an anchor tag to open it in a new tab -->
+                                <a href="{{ is_array($activity->images) && isset($activity->images[0]) ? asset('storage/' . $activity->images[0]) : asset('assets/images/product/default.webp') }}" target="_blank">
+                                    <!-- Set a larger size for the image -->
+                                    <img class="img-fluid rounded" id="preview-image-1"
+                                        src="{{ is_array($activity->images) && isset($activity->images[0]) ? asset('storage/' . $activity->images[0]) : asset('assets/images/product/default.webp') }}"
+                                        alt="Image 1">
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Image 2 -->
+                        <div class="col-md-6">
+                            <label for="image_2">Image 2</label>
+                            <div id="image-preview-2" class="mt-2">
+                                <!-- Wrap the image in an anchor tag to open it in a new tab -->
+                                <a href="{{ is_array($activity->images) && isset($activity->images[1]) ? asset('storage/' . $activity->images[1]) : asset('assets/images/product/default.webp') }}" target="_blank">
+                                    <!-- Set a larger size for the image -->
+                                    <img class="img-fluid rounded" id="preview-image-2"
+                                        src="{{ is_array($activity->images) && isset($activity->images[1]) ? asset('storage/' . $activity->images[1]) : asset('assets/images/product/default.webp') }}"
+                                        alt="Image 2">
+                                </a>
+                            </div>
                         </div>
                     </div>
+
 
                     <!-- Back to Index Button -->
                     <div class="mt-2">

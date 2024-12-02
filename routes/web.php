@@ -109,6 +109,7 @@ Route::middleware(['permission:pos.menu'])->group(function () {
 
 // ====== ORDERS ======
 Route::middleware(['permission:orders.menu'])->group(function () {
+    Route::get('/orders/all', [OrderController::class, 'index'])->name('order.index');
     Route::get('/orders/pending', [OrderController::class, 'pendingOrders'])->name('order.pendingOrders');
     Route::get('/orders/complete', [OrderController::class, 'completeOrders'])->name('order.completeOrders');
     Route::get('/orders/details/{order_id}', [OrderController::class, 'orderDetails'])->name('order.orderDetails');

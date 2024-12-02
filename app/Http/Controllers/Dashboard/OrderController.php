@@ -23,6 +23,31 @@ class OrderController extends Controller
     /**
      * Display a listing of the resource.
      */
+    public function index()
+    {
+        $row = (int) request('row', 10);
+
+        if ($row < 1 || $row > 100) {
+            abort(400, 'The per-page parameter must be an integer between 1 and 100.');
+        }
+
+        $search = request('search');
+        $orders = Order::sortable()
+            ->when($search, function ($query, $search) {
+                return $query->where('invoice_no', 'like', '%' . $search . '%')
+                             ->orWhereHas('customer', function($query) use ($search) {
+                                 $query->where('name', 'like', '%' . $search . '%');
+                             })
+                             ->orWhere('order_date', 'like', '%' . $search . '%')
+                             ->orWhere('pay', 'like', '%' . $search . '%')
+                             ->orWhere('payment_status', 'like', '%' . $search . '%');
+            })
+            ->paginate($row);
+        return view('orders.index', [
+            'orders' => $orders
+        ]);
+    }
+
     public function pendingOrders()
     {
         $row = (int) request('row', 10);

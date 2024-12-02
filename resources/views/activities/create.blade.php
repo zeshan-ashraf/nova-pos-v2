@@ -20,6 +20,25 @@
                 <div class="card-body">
                     <form action="{{ route('activities.store') }}" method="POST" enctype="multipart/form-data">
                         @csrf
+                        <!-- begin: Input Customer -->
+                        <div class="form-group row">
+                            <div class="col-md-6">
+                                <label for="customer_id">Customer <span class="text-danger">*</span></label>
+                                <select class="form-control @error('customer_id') is-invalid @enderror" name="customer_id" required>
+                                    <option selected="" disabled>-- Select Customer --</option>
+                                    @foreach ($customers as $customer)
+                                        <option value="{{ $customer->id }}" {{ old('customer_id') == $customer->id ? 'selected' : '' }}>{{ $customer->name }}</option>
+                                    @endforeach
+                                </select>
+                                @error('customer_id')
+                                <div class="invalid-feedback">
+                                    {{ $message }}
+                                </div>
+                                @enderror
+                            </div>
+                        </div>
+                        <!-- end: Input Customer -->
+
                         <!-- begin: Input Title -->
                         <div class="form-group row">
                             <div class="col-md-12">
@@ -48,19 +67,31 @@
                         </div>
                         <!-- end: Input Description -->
 
-                        <!-- begin: Input Date -->
+                        <!-- begin: Input Date and Activity Cost -->
                         <div class="form-group row">
+                            <!-- Activity Date -->
                             <div class="col-md-6">
                                 <label for="date">Activity Date <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control @error('date') is-invalid @enderror" id="date" name="date" value="{{ old('date') }}" required readonly>
+                                <input type="date" class="form-control @error('date') is-invalid @enderror" id="date" name="date" value="{{ old('date', now()->format('Y-m-d')) }}" required readonly>
                                 @error('date')
                                 <div class="invalid-feedback">
                                     {{ $message }}
                                 </div>
                                 @enderror
                             </div>
+
+                            <!-- Activity Cost -->
+                            <div class="col-md-6">
+                                <label for="activity_cost">Activity Cost <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control @error('activity_cost') is-invalid @enderror" id="activity_cost" name="activity_cost" value="{{ old('activity_cost') }}" required>
+                                @error('activity_cost')
+                                <div class="invalid-feedback">
+                                    {{ $message }}
+                                </div>
+                                @enderror
+                            </div>
                         </div>
-                        <!-- end: Input Date -->
+                        <!-- end: Input Date and Activity Cost -->
 
                         <!-- begin: Input Images -->
                         <div class="form-group row">
@@ -93,39 +124,6 @@
                             </div>
                         </div>
                         <!-- end: Input Images -->
-
-                        <!-- begin: Input Activity Cost -->
-                        <div class="form-group row">
-                            <div class="col-md-6">
-                                <label for="activity_cost">Activity Cost <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control @error('activity_cost') is-invalid @enderror" id="activity_cost" name="activity_cost" value="{{ old('activity_cost') }}" required>
-                                @error('activity_cost')
-                                <div class="invalid-feedback">
-                                    {{ $message }}
-                                </div>
-                                @enderror
-                            </div>
-                        </div>
-                        <!-- end: Input Activity Cost -->
-
-                        <!-- begin: Input Customer -->
-                        <div class="form-group row">
-                            <div class="col-md-6">
-                                <label for="customer_id">Customer <span class="text-danger">*</span></label>
-                                <select class="form-control @error('customer_id') is-invalid @enderror" name="customer_id" required>
-                                    <option selected="" disabled>-- Select Customer --</option>
-                                    @foreach ($customers as $customer)
-                                        <option value="{{ $customer->id }}" {{ old('customer_id') == $customer->id ? 'selected' : '' }}>{{ $customer->name }}</option>
-                                    @endforeach
-                                </select>
-                                @error('customer_id')
-                                <div class="invalid-feedback">
-                                    {{ $message }}
-                                </div>
-                                @enderror
-                            </div>
-                        </div>
-                        <!-- end: Input Customer -->
 
                         <!-- Submit Button -->
                         <div class="mt-2">
