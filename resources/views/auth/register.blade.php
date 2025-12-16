@@ -11,7 +11,7 @@
                             <div class="p-3">
 
                                 <h2 class="mb-2">Register</h2>
-                                <p>Create your PillsPlus account.</p>
+                                <p>Create your Nova POS account.</p>
 
                                 <form method="POST" action="{{ route('register') }}">
                                     @csrf

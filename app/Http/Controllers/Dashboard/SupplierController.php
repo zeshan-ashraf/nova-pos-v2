@@ -43,20 +43,26 @@ class SupplierController extends Controller
     {
         $rules = [
             'photo' => 'image|file|max:1024',
-            'name' => 'required|string|max:50',
-            'email' => 'required|email|max:50|unique:suppliers,email',
+            // 'name' => 'required|string|max:50', // Removed from UI - will be set from shopname
+            // 'email' => 'required|email|max:50|unique:suppliers,email', // Removed from validation - may be needed in future
             'phone' => 'required|string|max:15|unique:suppliers,phone',
             'shopname' => 'required|string|max:50',
             'type' => 'required|string|max:25',
             'account_holder' => 'max:50',
-            'account_number' => 'max:25',
-            'bank_name' => 'max:25',
-            'bank_branch' => 'max:50',
-            'city' => 'required|string|max:50',
+            // 'account_number' => 'max:25', // Removed from UI - may be needed in future
+            // 'bank_name' => 'max:25', // Removed from UI - may be needed in future
+            // 'bank_branch' => 'max:50', // Removed from UI - may be needed in future
+            // 'city' => 'required|string|max:50', // Removed from UI - may be needed in future
             'address' => 'required|string|max:100',
         ];
 
         $validatedData = $request->validate($rules);
+        
+        // Copy shopname to name field for backward compatibility
+        $validatedData['name'] = $validatedData['shopname'];
+        
+        // Set email to null if not provided or empty
+        $validatedData['email'] = $request->filled('email') && !empty($request->email) ? $request->email : null;
 
         /**
          * Handle upload image with Storage.
@@ -101,20 +107,26 @@ class SupplierController extends Controller
     {
         $rules = [
             'photo' => 'image|file|max:1024',
-            'name' => 'required|string|max:50',
-            'email' => 'required|email|max:50|unique:suppliers,email,'.$supplier->id,
+            // 'name' => 'required|string|max:50', // Removed from UI - will be set from shopname
+            // 'email' => 'required|email|max:50|unique:suppliers,email,'.$supplier->id, // Removed from validation - may be needed in future
             'phone' => 'required|string|max:15|unique:suppliers,phone,'.$supplier->id,
             'shopname' => 'required|string|max:50',
             'type' => 'required|string|max:25',
             'account_holder' => 'max:50',
-            'account_number' => 'max:25',
-            'bank_name' => 'max:25',
-            'bank_branch' => 'max:50',
-            'city' => 'required|string|max:50',
+            // 'account_number' => 'max:25', // Removed from UI - may be needed in future
+            // 'bank_name' => 'max:25', // Removed from UI - may be needed in future
+            // 'bank_branch' => 'max:50', // Removed from UI - may be needed in future
+            // 'city' => 'required|string|max:50', // Removed from UI - may be needed in future
             'address' => 'required|string|max:100',
         ];
 
         $validatedData = $request->validate($rules);
+        
+        // Copy shopname to name field for backward compatibility
+        $validatedData['name'] = $validatedData['shopname'];
+        
+        // Set email to null if not provided or empty
+        $validatedData['email'] = $request->filled('email') && !empty($request->email) ? $request->email : null;
 
         /**
          * Handle upload image with Storage.

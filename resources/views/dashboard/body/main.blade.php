@@ -3,7 +3,7 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-        <title>PillsPlus APP</title>
+        <title>Nova POS APP</title>
 
         <!-- Favicon -->
         <link rel="shortcut icon" href="{{ asset('assets/images/favicon.ico') }}"/>
@@ -12,6 +12,32 @@
 
         <link rel="stylesheet" href="{{ asset('assets/vendor/line-awesome/dist/line-awesome/css/line-awesome.min.css') }}">
         <link rel="stylesheet" href="{{ asset('assets/vendor/remixicon/fonts/remixicon.css') }}">
+
+        <style>
+            .iq-top-navbar .navbar {
+                min-height: 64px;
+                padding-top: 8px;
+                padding-bottom: 8px;
+            }
+
+            .iq-sidebar {
+                padding-top: 64px;
+            }
+
+            .content-page {
+               /* padding-top: 85px;*/
+            }
+
+            @media (max-width: 991px) {
+                .iq-sidebar {
+                    padding-top: 90px;
+                }
+
+                .content-page {
+                    padding-top: 40px;
+                }
+            }
+        </style>
 
         @yield('specificpagestyles')
     </head>
@@ -44,5 +70,39 @@
 
     <!-- App JavaScript -->
     <script src="{{ asset('assets/js/app.js') }}"></script>
+    
+    <!-- Fix for stuck modal backdrops -->
+    <script>
+        // Remove any stuck modal backdrops on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Remove any modal backdrops that shouldn't be there
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            backdrops.forEach(function(backdrop) {
+                backdrop.remove();
+            });
+            
+            // Remove modal-open class from body if no modals are open
+            if (!document.querySelector('.modal.show')) {
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            }
+        });
+        
+        // Also check periodically for stuck backdrops
+        setInterval(function() {
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            const openModals = document.querySelectorAll('.modal.show');
+            
+            if (openModals.length === 0 && backdrops.length > 0) {
+                backdrops.forEach(function(backdrop) {
+                    backdrop.remove();
+                });
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            }
+        }, 1000);
+    </script>
 </body>
 </html>

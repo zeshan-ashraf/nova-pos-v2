@@ -42,7 +42,8 @@
                         <!-- end: Input Image -->
                         <!-- begin: Input Data -->
                         <div class=" row align-items-center">
-                            <div class="form-group col-md-6">
+                            {{-- Customer Name field removed from UI - may be needed in future --}}
+                            {{-- <div class="form-group col-md-6">
                                 <label for="name">Customer Name <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control @error('name') is-invalid @enderror" id="name" name="name" value="{{ old('name', $customer->name) }}" required>
                                 @error('name')
@@ -50,7 +51,7 @@
                                     {{ $message }}
                                 </div>
                                 @enderror
-                            </div>
+                            </div> --}}
                             <div class="form-group col-md-6">
                                 <label for="shopname">Shop Name <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control @error('shopname') is-invalid @enderror" id="shopname" name="shopname" value="{{ old('shopname', $customer->shopname) }}" required>
@@ -61,8 +62,8 @@
                                 @enderror
                             </div>
                             <div class="form-group col-md-6">
-                                <label for="email">Customer Email <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control @error('email') is-invalid @enderror" id="email" name="email" value="{{ old('email', $customer->email) }}" required>
+                                <label for="email">Customer Email</label>
+                                <input type="text" class="form-control @error('email') is-invalid @enderror" id="email" name="email" value="{{ old('email', $customer->email) }}">
                                 @error('email')
                                 <div class="invalid-feedback">
                                     {{ $message }}
@@ -88,6 +89,34 @@
                                 @enderror
                             </div>
                             <div class="form-group col-md-6">
+                                <label for="credit_limit">Credit Limit <span class="text-danger">*</span></label>
+                                <input type="number" step="0.01" min="0" class="form-control @error('credit_limit') is-invalid @enderror" id="credit_limit" name="credit_limit" value="{{ old('credit_limit', $customer->credit_limit ?? 0) }}" required>
+                                @error('credit_limit')
+                                <div class="invalid-feedback">
+                                    {{ $message }}
+                                </div>
+                                @enderror
+                            </div>
+                            <div class="form-group col-md-6">
+                                <label for="credit_amount">Credit Amount</label>
+                                <input type="number" step="0.01" min="0" class="form-control @error('credit_amount') is-invalid @enderror" id="credit_amount" name="credit_amount" value="{{ old('credit_amount', $customer->credit_amount ?? 0) }}">
+                                @error('credit_amount')
+                                <div class="invalid-feedback">
+                                    {{ $message }}
+                                </div>
+                                @enderror
+                            </div>
+                            <div class="form-group col-md-6">
+                                <label for="credit_days">Credit Days <span class="text-danger">*</span></label>
+                                <input type="number" min="0" class="form-control @error('credit_days') is-invalid @enderror" id="credit_days" name="credit_days" value="{{ old('credit_days', $customer->credit_days ?? 0) }}" required>
+                                @error('credit_days')
+                                <div class="invalid-feedback">
+                                    {{ $message }}
+                                </div>
+                                @enderror
+                            </div>
+                            {{-- Bank Name field removed from UI - may be needed in future --}}
+                            {{-- <div class="form-group col-md-6">
                                 <label for="bank_name">Bank Name</label>
                                 <select class="form-control @error('bank_name') is-invalid @enderror" name="bank_name">
                                     <option value="">Select Year..</option>
@@ -102,8 +131,9 @@
                                     {{ $message }}
                                 </div>
                                 @enderror
-                            </div>
-                            <div class="form-group col-md-6">
+                            </div> --}}
+                            {{-- Account Number field removed from UI - may be needed in future --}}
+                            {{-- <div class="form-group col-md-6">
                                 <label for="account_number">Account Number</label>
                                 <input type="text" class="form-control @error('account_number') is-invalid @enderror" id="account_number" name="account_number" value="{{ old('account_number', $customer->account_number) }}">
                                 @error('account_number')
@@ -111,8 +141,9 @@
                                     {{ $message }}
                                 </div>
                                 @enderror
-                            </div>
-                            <div class="form-group col-md-6">
+                            </div> --}}
+                            {{-- Bank Branch field removed from UI - may be needed in future --}}
+                            {{-- <div class="form-group col-md-6">
                                 <label for="bank_branch">Bank Branch</label>
                                 <input type="text" class="form-control @error('bank_branch') is-invalid @enderror" id="bank_branch" name="bank_branch" value="{{ old('bank_branch', $customer->bank_branch) }}">
                                 @error('bank_branch')
@@ -120,8 +151,9 @@
                                     {{ $message }}
                                 </div>
                                 @enderror
-                            </div>
-                            <div class="form-group col-md-6">
+                            </div> --}}
+                            {{-- City field removed from UI - may be needed in future --}}
+                            {{-- <div class="form-group col-md-6">
                                 <label for="city">Customer City <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control @error('city') is-invalid @enderror" id="city" name="city" value="{{ old('city', $customer->city) }}" required>
                                 @error('city')
@@ -129,7 +161,7 @@
                                     {{ $message }}
                                 </div>
                                 @enderror
-                            </div>
+                            </div> --}}
                             <div class="form-group col-md-12">
                                 <label for="address">Customer Address <span class="text-danger">*</span></label>
                                 <textarea class="form-control @error('address') is-invalid @enderror" name="address" required>{{ old('address', $customer->address) }}</textarea>

@@ -35,7 +35,7 @@
                     <div class="form-group row">
                         <label for="row" class="col-sm-3 align-self-center">Row:</label>
                         <div class="col-sm-9">
-                            <select class="form-control" name="row">
+                            <select class="form-control" name="row" onchange="this.form.submit()">
                                 <option value="10" @if(request('row') == '10')selected="selected"@endif>10</option>
                                 <option value="25" @if(request('row') == '25')selected="selected"@endif>25</option>
                                 <option value="50" @if(request('row') == '50')selected="selected"@endif>50</option>
@@ -74,8 +74,8 @@
                     <tbody id="stock-log-table-body" class="ligth-body">
                         @foreach ($stockLogs as $stockLog)
                         <tr>
-                            <td>{{ (($stockLogs->currentPage() * 10) - 10) + $loop->iteration }}</td> <!-- Serial Number -->
-                            <td>{{ $stockLog->supplier->name }}</td>
+                            <td>{{ (($stockLogs->currentPage() * $stockLogs->perPage()) - $stockLogs->perPage()) + $loop->iteration }}</td> <!-- Serial Number -->
+                            <td>{{ $stockLog->supplier ? $stockLog->supplier->name : 'N/A' }}</td>
                             <td>{{ $stockLog->created_at->format('Y-m-d') }}</td>
                             <td>{{ $stockLog->stock_qty }}</td>
                             <td>{{ $stockLog->price }}</td>
@@ -118,7 +118,7 @@
                 </table>
 
             </div>
-            {{ $stockLogs->links() }}
+            {{ $stockLogs->appends(request()->query())->links() }}
         </div>
     </div>
     <!-- Page end  -->

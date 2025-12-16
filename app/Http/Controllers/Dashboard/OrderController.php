@@ -8,6 +8,7 @@ use App\Models\StockLog;
 use App\Models\Category;
 use App\Models\Supplier;
 use App\Models\OrderDetails;
+use App\Models\Customer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -17,6 +18,8 @@ use Illuminate\Support\Facades\Redirect;
 use Gloudemans\Shoppingcart\Facades\Cart;
 use Haruncpi\LaravelIdGenerator\IdGenerator;
 use App\Models\PaymentLog;
+use App\Support\ActiveShop;
+use App\Services\CustomerCreditService;
 
 class OrderController extends Controller
 {
@@ -31,8 +34,12 @@ class OrderController extends Controller
             abort(400, 'The per-page parameter must be an integer between 1 and 100.');
         }
 
+        $authUser = auth()->user();
+        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+
         $search = request('search');
-        $orders = Order::sortable()
+        $ordersQuery = Order::with(['customer', 'shop.parent'])
+            ->sortable()
             ->when($search, function ($query, $search) {
                 return $query->where('invoice_no', 'like', '%' . $search . '%')
                              ->orWhereHas('customer', function($query) use ($search) {
@@ -41,10 +48,24 @@ class OrderController extends Controller
                              ->orWhere('order_date', 'like', '%' . $search . '%')
                              ->orWhere('pay', 'like', '%' . $search . '%')
                              ->orWhere('payment_status', 'like', '%' . $search . '%');
-            })
-            ->paginate($row);
+            });
+
+        // Apply shop filtering
+        if ($authUser->shop_id) {
+            // Child shop or parent shop user - only see their allowed shops
+            $ordersQuery->whereIn('shop_id', $visibleShopIds);
+        } else {
+            // Super admin - can see all orders (including unassigned)
+            $ordersQuery->where(function ($query) use ($visibleShopIds) {
+                $query->whereNull('shop_id');
+                if ($visibleShopIds->isNotEmpty()) {
+                    $query->orWhereIn('shop_id', $visibleShopIds);
+                }
+            });
+        }
+
         return view('orders.index', [
-            'orders' => $orders
+            'orders' => $ordersQuery->paginate($row)->appends(request()->query())
         ]);
     }
 
@@ -56,10 +77,27 @@ class OrderController extends Controller
             abort(400, 'The per-page parameter must be an integer between 1 and 100.');
         }
 
-        $orders = Order::where('order_status', 'pending')->sortable()->paginate($row);
+        $authUser = auth()->user();
+        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+
+        $ordersQuery = Order::with(['customer', 'shop.parent'])
+            ->where('order_status', 'pending')
+            ->sortable();
+
+        // Apply shop filtering
+        if ($authUser->shop_id) {
+            $ordersQuery->whereIn('shop_id', $visibleShopIds);
+        } else {
+            $ordersQuery->where(function ($query) use ($visibleShopIds) {
+                $query->whereNull('shop_id');
+                if ($visibleShopIds->isNotEmpty()) {
+                    $query->orWhereIn('shop_id', $visibleShopIds);
+                }
+            });
+        }
 
         return view('orders.pending-orders', [
-            'orders' => $orders
+            'orders' => $ordersQuery->paginate($row)->appends(request()->query())
         ]);
     }
 
@@ -71,10 +109,27 @@ class OrderController extends Controller
             abort(400, 'The per-page parameter must be an integer between 1 and 100.');
         }
 
-        $orders = Order::where('order_status', 'complete')->sortable()->paginate($row);
+        $authUser = auth()->user();
+        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+
+        $ordersQuery = Order::with(['customer', 'shop.parent'])
+            ->where('order_status', 'complete')
+            ->sortable();
+
+        // Apply shop filtering
+        if ($authUser->shop_id) {
+            $ordersQuery->whereIn('shop_id', $visibleShopIds);
+        } else {
+            $ordersQuery->where(function ($query) use ($visibleShopIds) {
+                $query->whereNull('shop_id');
+                if ($visibleShopIds->isNotEmpty()) {
+                    $query->orWhereIn('shop_id', $visibleShopIds);
+                }
+            });
+        }
 
         return view('orders.complete-orders', [
-            'orders' => $orders
+            'orders' => $ordersQuery->paginate($row)->appends(request()->query())
         ]);
     }
 
@@ -98,11 +153,11 @@ class OrderController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function storeOrder(Request $request)
+    public function storeOrder(Request $request, CustomerCreditService $creditService)
     {
         $rules = [
             'customer_id' => 'required|numeric',
-            'payment_status' => 'required|string',
+            'payment_status' => 'required|string|in:HandCash,Cheque,Due,Bank',
             'pay' => 'numeric|nullable',
             'due' => 'numeric|nullable',
         ];
@@ -115,6 +170,26 @@ class OrderController extends Controller
         ]);
 
         $validatedData = $request->validate($rules);
+        $payAmount = $validatedData['pay'] ?? 0;
+        
+        // Validate that customer belongs to the same shop as logged-in user
+        $authUser = auth()->user();
+        $customer = Customer::findOrFail($validatedData['customer_id']);
+        
+        if ($authUser->shop_id) {
+            // For users with shop_id, customer must belong to the same shop
+            if ($customer->shop_id !== $authUser->shop_id) {
+                return back()->withErrors(['customer_id' => 'The selected customer does not belong to your shop.'])
+                    ->withInput();
+            }
+        } else {
+            // For SuperAdmin, customer should have a shop_id (not null)
+            if (!$customer->shop_id) {
+                return back()->withErrors(['customer_id' => 'The selected customer is not assigned to any shop.'])
+                    ->withInput();
+            }
+        }
+        
         $validatedData['order_date'] = Carbon::now()->format('Y-m-d');
         $validatedData['order_status'] = 'pending';
         $validatedData['total_products'] = Cart::count();
@@ -122,10 +197,19 @@ class OrderController extends Controller
         $validatedData['vat'] = Cart::tax();
         $validatedData['invoice_no'] = $invoice_no;
         $validatedData['total'] = Cart::total();
-        $validatedData['due'] = Cart::total() - $validatedData['pay'];
+        $validatedData['pay'] = $payAmount;
+        $validatedData['due'] = Cart::total() - $payAmount;
+        $validatedData['shop_id'] = $authUser->shop_id ?: $customer->shop_id;
         $validatedData['created_at'] = Carbon::now();
 
-        $order_id = Order::insertGetId($validatedData);
+        $order_id = null;
+        // Wrap creation + credit update in a transaction to keep balances consistent
+        DB::transaction(function () use (&$order_id, $validatedData, $creditService, $customer) {
+            $order_id = Order::insertGetId($validatedData);
+
+            // Increase customer credit by pending amount (if any)
+            $creditService->addPending($customer, $validatedData['due']);
+        });
 
         // Create Order Details
         $contents = Cart::content();
@@ -150,7 +234,15 @@ class OrderController extends Controller
         // Delete Cart Sopping History
         Cart::destroy();
 
-        return Redirect::route('dashboard')->with('success', 'Order has been created!');
+        $warning = null;
+        if ($creditService->exceedsLimit($customer, $validatedData['due'])) {
+            $warning = 'Credit limit exceeded for this customer. Order saved on credit.';
+        }
+
+        return Redirect::route('dashboard')->with([
+            'success' => 'Order has been created!',
+            'warning' => $warning,
+        ]);
     }
 
     /**
@@ -158,7 +250,9 @@ class OrderController extends Controller
      */
     public function orderDetails(Int $order_id)
     {
-        $order = Order::where('id', $order_id)->first();
+        $order = Order::with(['customer', 'shop.banks'])->findOrFail($order_id);
+        $this->ensureShopAccess($order);
+        
         $orderDetails = OrderDetails::with('product')
                         ->where('order_id', $order_id)
                         ->orderBy('id', 'DESC')
@@ -175,7 +269,8 @@ class OrderController extends Controller
      */
     public function updateStatus(Request $request)
     {
-        $order_id = $request->id;
+        $order = Order::findOrFail($request->id);
+        $this->ensureShopAccess($order);
         /*
         // Reduce the stock
         $products = OrderDetails::where('order_id', $order_id)->get();
@@ -185,14 +280,16 @@ class OrderController extends Controller
                     ->update(['product_store' => DB::raw('product_store-'.$product->quantity)]);
         }*/
 
-        Order::findOrFail($order_id)->update(['order_status' => 'complete']);
+        $order->update(['order_status' => 'complete']);
 
         return Redirect::route('order.pendingOrders')->with('success', 'Order has been completed!');
     }
 
     public function invoiceDownload(Int $order_id)
     {
-        $order = Order::where('id', $order_id)->first();
+        $order = Order::with(['customer', 'shop.banks'])->findOrFail($order_id);
+        $this->ensureShopAccess($order);
+        
         $orderDetails = OrderDetails::with('product')
                         ->where('order_id', $order_id)
                         ->orderBy('id', 'DESC')
@@ -213,23 +310,39 @@ class OrderController extends Controller
             abort(400, 'The per-page parameter must be an integer between 1 and 100.');
         }
 
-        $orders = Order::where('due', '>', '0')
-            ->sortable()
-            ->paginate($row);
+        $authUser = auth()->user();
+        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+
+        $ordersQuery = Order::with(['customer', 'shop.parent'])
+            ->where('due', '>', '0')
+            ->sortable();
+
+        // Apply shop filtering
+        if ($authUser->shop_id) {
+            $ordersQuery->whereIn('shop_id', $visibleShopIds);
+        } else {
+            $ordersQuery->where(function ($query) use ($visibleShopIds) {
+                $query->whereNull('shop_id');
+                if ($visibleShopIds->isNotEmpty()) {
+                    $query->orWhereIn('shop_id', $visibleShopIds);
+                }
+            });
+        }
 
         return view('orders.pending-due', [
-            'orders' => $orders
+            'orders' => $ordersQuery->paginate($row)->appends(request()->query())
         ]);
     }
 
     public function orderDueAjax(Int $id)
     {
         $order = Order::findOrFail($id);
+        $this->ensureShopAccess($order);
 
         return response()->json($order);
     }
 
-    public function updateDue(Request $request)
+    public function updateDue(Request $request, CustomerCreditService $creditService)
     {
         $rules = [
             'order_id' => 'required|numeric',
@@ -243,6 +356,9 @@ class OrderController extends Controller
         $validatedData = $request->validate($rules, $customMessages);
 
         $order = Order::findOrFail($request->order_id);
+        $this->ensureShopAccess($order);
+        $customer = $order->customer;
+        
         $mainPay = $order->pay;
         $mainDue = $order->due;
 
@@ -254,15 +370,22 @@ class OrderController extends Controller
         $paid_due = $mainDue - $validatedData['due'];
         $paid_pay = $mainPay + $validatedData['due'];
 
-        Order::findOrFail($request->order_id)->update([
-            'due' => $paid_due,
-            'pay' => $paid_pay,
-        ]);
+        DB::transaction(function () use ($order, $paid_due, $paid_pay, $validatedData, $creditService, $customer) {
+            $order->update([
+                'due' => $paid_due,
+                'pay' => $paid_pay,
+            ]);
 
-        PaymentLog::create([
-            'order_id' => $order->id,
-            'amount_paid' => $validatedData['due'],
-        ]);
+            PaymentLog::create([
+                'order_id' => $order->id,
+                'amount_paid' => $validatedData['due'],
+            ]);
+
+            // Decrease customer credit by the paid amount
+            if ($customer) {
+                $creditService->applyPayment($customer, $validatedData['due']);
+            }
+        });
 
         return Redirect::route('order.pendingDue')->with('success', 'Due Amount Updated Successfully!');
     }
@@ -316,6 +439,8 @@ class OrderController extends Controller
     public function paymentLog(Request $request, $id)
     {
         $order = Order::findOrFail($id);
+        $this->ensureShopAccess($order);
+        
         $paymentLogs = paymentLog::with(['order'])
         ->where('order_id', $id)
         ->orderBy($request->get('sort', 'created_at'), $request->get('direction', 'desc'))
@@ -363,11 +488,264 @@ class OrderController extends Controller
         ]);
 
         $paymentLog = PaymentLog::findOrFail($paymentLogId);
+        if ($paymentLog->order) {
+            $this->ensureShopAccess($paymentLog->order);
+        }
+        
         $invoiceImagePath = $request->file('invoice_image')->store('invoices', 'public');
         $paymentLog->invoice_image = $invoiceImagePath;
         $paymentLog->save();
 
         return back()->with('success', 'Invoice uploaded successfully!');
+    }
+
+    /**
+     * Ensure the current user has access to the order based on shop.
+     */
+    protected function ensureShopAccess(Order $order): void
+    {
+        $authUser = auth()->user();
+        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+
+        if ($authUser->shop_id) {
+            // Child shop or parent shop user - must belong to allowed shops
+            if ($order->shop_id && !$visibleShopIds->contains($order->shop_id)) {
+                abort(403, 'You do not have access to this order.');
+            }
+        }
+        // Super admin can access all orders
+    }
+
+    /**
+     * Show the form for creating a new invoice.
+     */
+    public function createInvoice()
+    {
+        $authUser = auth()->user();
+        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+
+        // Filter customers by shop
+        $customersQuery = Customer::query();
+        if ($authUser->shop_id) {
+            $customersQuery->whereIn('shop_id', $visibleShopIds);
+        } else {
+            $customersQuery->where(function ($query) use ($visibleShopIds) {
+                $query->whereNull('shop_id');
+                if ($visibleShopIds->isNotEmpty()) {
+                    $query->orWhereIn('shop_id', $visibleShopIds);
+                }
+            });
+        }
+
+        // Filter products by shop for dropdown
+        $productsQuery = Product::where(function($query) {
+                $query->where('status', 'valid')
+                      ->orWhere('status', 'active');
+            });
+
+        if ($authUser->shop_id) {
+            $productsQuery->whereIn('shop_id', $visibleShopIds);
+        } else {
+            $productsQuery->where(function ($query) use ($visibleShopIds) {
+                $query->whereNull('shop_id');
+                if ($visibleShopIds->isNotEmpty()) {
+                    $query->orWhereIn('shop_id', $visibleShopIds);
+                }
+            });
+        }
+
+        return view('orders.create-invoice', [
+            'customers' => $customersQuery->orderBy('shopname')->get(),
+            'products' => $productsQuery->orderBy('product_name')->get(),
+        ]);
+    }
+
+    /**
+     * Search products for autocomplete (filtered by shop).
+     */
+    public function searchProducts(Request $request)
+    {
+        $search = $request->get('q', '');
+        $authUser = auth()->user();
+        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+
+        $productsQuery = Product::where(function($query) {
+                $query->where('status', 'valid')
+                      ->orWhere('status', 'active');
+            })
+            ->where('product_name', 'like', '%' . $search . '%');
+
+        // Apply shop filtering
+        if ($authUser->shop_id) {
+            $productsQuery->whereIn('shop_id', $visibleShopIds);
+        } else {
+            $productsQuery->where(function ($query) use ($visibleShopIds) {
+                $query->whereNull('shop_id');
+                if ($visibleShopIds->isNotEmpty()) {
+                    $query->orWhereIn('shop_id', $visibleShopIds);
+                }
+            });
+        }
+
+        $products = $productsQuery->limit(20)->get()->map(function ($product) {
+            return [
+                'id' => $product->id,
+                'text' => $product->product_name,
+                'name' => $product->product_name,
+                'price' => $product->selling_price ?? 0,
+                'stock' => $product->product_store ?? 0,
+                'code' => $product->product_code ?? '',
+            ];
+        });
+
+        return response()->json(['results' => $products]);
+    }
+
+    /**
+     * Store a newly created invoice.
+     */
+    public function storeInvoice(Request $request, CustomerCreditService $creditService)
+    {
+        $rules = [
+            'customer_id' => 'required|numeric',
+            'order_date' => 'required|date',
+            'payment_status' => 'required|string|in:cash,bank,cheque,credit',
+            'pay' => 'numeric|nullable|min:0',
+            'vat' => 'numeric|nullable|min:0',
+            'invoice_discount' => 'numeric|nullable|min:0',
+            'products' => 'required|array|min:1',
+            'products.*.product_id' => 'required|numeric',
+            'products.*.quantity' => 'required|numeric|min:1',
+            'products.*.unit_price' => 'required|numeric|min:0',
+            'products.*.total' => 'required|numeric|min:0',
+            'products.*.item_discount' => 'nullable|numeric|min:0',
+        ];
+
+        $validatedData = $request->validate($rules);
+        $payAmount = $validatedData['pay'] ?? 0;
+
+        // Validate that customer belongs to the same shop as logged-in user
+        $authUser = auth()->user();
+        $customer = Customer::findOrFail($validatedData['customer_id']);
+        
+        if ($authUser->shop_id) {
+            // For users with shop_id, customer must belong to the same shop
+            if ($customer->shop_id !== $authUser->shop_id) {
+                return back()->withErrors(['customer_id' => 'The selected customer does not belong to your shop.'])
+                    ->withInput();
+            }
+        } else {
+            // For SuperAdmin, customer should have a shop_id (not null)
+            if (!$customer->shop_id) {
+                return back()->withErrors(['customer_id' => 'The selected customer is not assigned to any shop.'])
+                    ->withInput();
+            }
+        }
+
+        // Generate invoice number
+        $invoice_no = IdGenerator::generate([
+            'table' => 'orders',
+            'field' => 'invoice_no',
+            'length' => 10,
+            'prefix' => 'INV-'
+        ]);
+
+        // Calculate totals
+        $subtotal = 0;
+        $totalProducts = 0;
+        foreach ($validatedData['products'] as $product) {
+            if (!empty($product['product_id'])) {
+                $subtotal += $product['total'];
+                $totalProducts++;
+            }
+        }
+
+        $vat = $validatedData['vat'] ?? 0;
+        $invoiceDiscount = $validatedData['invoice_discount'] ?? 0;
+        $total = max(0, $subtotal + $vat - $invoiceDiscount);
+        $pay = $payAmount;
+        $due = max(0, $total - $pay);
+
+        // Prepare order data
+        $orderData = [
+            'customer_id' => $validatedData['customer_id'],
+            'shop_id' => $authUser->shop_id,
+            'order_date' => Carbon::parse($validatedData['order_date'])->format('Y-m-d H:i:s'),
+            'order_status' => 'pending',
+            'total_products' => $totalProducts,
+            'sub_total' => $subtotal,
+            'invoice_discount' => $invoiceDiscount,
+            'vat' => $vat,
+            'invoice_no' => $invoice_no,
+            'total' => $total,
+            'payment_status' => $validatedData['payment_status'],
+            'pay' => $pay,
+            'due' => $due,
+            'comment' => $request->input('comment'),
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ];
+
+        $order_id = null;
+        // Create order and adjust credit in one transaction
+        DB::transaction(function () use (&$order_id, $orderData, $creditService, $customer, $validatedData, $due) {
+            $order_id = Order::insertGetId($orderData);
+
+            // Increase customer credit by pending amount (unpaid portion)
+            $creditService->addPending($customer, $due);
+        });
+
+        // Create order details and reduce stock
+        foreach ($validatedData['products'] as $product) {
+            if (empty($product['product_id'])) {
+                continue;
+            }
+
+            $productModel = Product::findOrFail($product['product_id']);
+            
+            // Validate stock
+            if ($productModel->product_store < $product['quantity']) {
+                // Rollback order creation
+                Order::where('id', $order_id)->delete();
+                return back()->withErrors(['products' => "Insufficient stock for product: {$productModel->product_name}. Available: {$productModel->product_store}"])
+                    ->withInput();
+            }
+
+            // Validate shop access for product
+            if ($authUser->shop_id && $productModel->shop_id !== $authUser->shop_id) {
+                Order::where('id', $order_id)->delete();
+                return back()->withErrors(['products' => "Product {$productModel->product_name} does not belong to your shop."])
+                    ->withInput();
+            }
+
+            // Create order detail
+            $orderDetailData = [
+                'order_id' => $order_id,
+                'product_id' => $product['product_id'],
+                'quantity' => $product['quantity'],
+                'unitcost' => $product['unit_price'],
+                'item_discount' => $product['item_discount'] ?? 0,
+                'total' => $product['total'],
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ];
+
+            OrderDetails::insert($orderDetailData);
+
+            // Reduce stock
+            Product::where('id', $product['product_id'])
+                ->update(['product_store' => DB::raw('product_store - ' . $product['quantity'])]);
+        }
+
+        $warning = null;
+        if ($creditService->exceedsLimit($customer, $due)) {
+            $warning = 'Credit limit exceeded for this customer. Invoice saved on credit.';
+        }
+
+        return Redirect::route('order.index')->with([
+            'success' => 'Invoice has been created successfully!',
+            'warning' => $warning,
+        ]);
     }
 
 }

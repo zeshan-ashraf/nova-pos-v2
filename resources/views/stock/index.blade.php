@@ -35,7 +35,7 @@
                     <div class="form-group row">
                         <label for="row" class="col-sm-3 align-self-center">Row:</label>
                         <div class="col-sm-9">
-                            <select class="form-control" name="row">
+                            <select class="form-control" name="row" onchange="this.form.submit()">
                                 <option value="10" @if(request('row') == '10')selected="selected"@endif>10</option>
                                 <option value="25" @if(request('row') == '25')selected="selected"@endif>25</option>
                                 <option value="50" @if(request('row') == '50')selected="selected"@endif>50</option>
@@ -75,13 +75,13 @@
                     <tbody class="ligth-body">
                         @forelse ($products as $product)
                         <tr>
-                            <td>{{ (($products->currentPage() * 10) - 10) + $loop->iteration  }}</td>
+                            <td>{{ (($products->currentPage() * $products->perPage()) - $products->perPage()) + $loop->iteration  }}</td>
                             <td>
                                 <img class="avatar-60 rounded" src="{{ $product->product_image ? asset('storage/products/'.$product->product_image) : asset('assets/images/product/default.webp') }}">
                             </td>
                             <td>{{ $product->product_name }}</td>
                             <td>{{ $product->category->name }}</td>
-                            <td>{{ $product->supplier->name }}</td>
+                            <td>{{ $product->supplier ? $product->supplier->name : 'N/A' }}</td>
                             <td>{{ $product->selling_price }}</td>
                             <td>
                                 <span class="btn btn-warning text-white mr-2">{{ $product->product_store }}</span>
@@ -99,7 +99,7 @@
                     </tbody>
                 </table>
             </div>
-            {{ $products->links() }}
+            {{ $products->appends(request()->query())->links() }}
         </div>
     </div>
     <!-- Page end  -->

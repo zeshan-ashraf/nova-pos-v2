@@ -68,7 +68,7 @@
                     <tbody class="ligth-body">
                         @foreach ($permissions as $permission)
                         <tr>
-                            <td>{{ (($permissions->currentPage() * 10) - 10) + $loop->iteration  }}</td>
+                            <td>{{ (($permissions->currentPage() * $permissions->perPage()) - $permissions->perPage()) + $loop->iteration  }}</td>
                             <td>{{ $permission->name }}</td>
                             <td>{{ $permission->group_name }}</td>
                             <td>
@@ -88,7 +88,7 @@
                     </tbody>
                 </table>
             </div>
-            {{ $permissions->links() }}
+            {{ $permissions->appends(request()->query())->links() }}
         </div>
     </div>
     <!-- Page end  -->

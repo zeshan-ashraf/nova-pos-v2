@@ -28,7 +28,7 @@
                     <div class="form-group row">
                         <label for="row" class="col-sm-3 align-self-center">Row:</label>
                         <div class="col-sm-9">
-                            <select class="form-control" name="row">
+                            <select class="form-control" name="row" onchange="this.form.submit()">
                                 <option value="10" @if(request('row') == '10')selected="selected"@endif>10</option>
                                 <option value="25" @if(request('row') == '25')selected="selected"@endif>25</option>
                                 <option value="50" @if(request('row') == '50')selected="selected"@endif>50</option>
@@ -70,7 +70,7 @@
                     <tbody class="ligth-body">
                         @foreach ($orders as $order)
                         <tr>
-                            <td>{{ (($orders->currentPage() * 10) - 10) + $loop->iteration  }}</td>
+                            <td>{{ (($orders->currentPage() * $orders->perPage()) - $orders->perPage()) + $loop->iteration  }}</td>
                             <td>{{ $order->invoice_no }}</td>
                             <td>{{ $order->customer->name }}</td>
                             <td>{{ $order->order_date }}</td>
@@ -91,7 +91,7 @@
                     </tbody>
                 </table>
             </div>
-            {{ $orders->links() }}
+            {{ $orders->appends(request()->query())->links() }}
         </div>
     </div>
     <!-- Page end  -->

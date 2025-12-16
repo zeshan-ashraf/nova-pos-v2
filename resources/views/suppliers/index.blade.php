@@ -31,7 +31,7 @@
                     <div class="form-group row">
                         <label for="row" class="col-sm-3 align-self-center">Row:</label>
                         <div class="col-sm-9">
-                            <select class="form-control" name="row">
+                            <select class="form-control" name="row" onchange="this.form.submit()">
                                 <option value="10" @if(request('row') == '10')selected="selected"@endif>10</option>
                                 <option value="25" @if(request('row') == '25')selected="selected"@endif>25</option>
                                 <option value="50" @if(request('row') == '50')selected="selected"@endif>50</option>
@@ -62,10 +62,10 @@
                         <tr class="ligth ligth-data">
                             <th>No.</th>
                             <th>Photo</th>
-                            <th>@sortablelink('name')</th>
+                            {{-- <th>@sortablelink('name')</th> --}} {{-- Name column removed from UI - may be needed in future --}}
+                            <th>@sortablelink('shopname', 'Shop Name')</th>
                             <th>@sortablelink('email')</th>
                             <th>@sortablelink('phone')</th>
-                            <th>@sortablelink('shopname')</th>
                             <th>@sortablelink('type')</th>
                             <th>Action</th>
                         </tr>
@@ -73,14 +73,14 @@
                     <tbody class="ligth-body">
                         @foreach ($suppliers as $supplier)
                         <tr>
-                            <td>{{ (($suppliers->currentPage() * 10) - 10) + $loop->iteration  }}</td>
+                            <td>{{ (($suppliers->currentPage() * $suppliers->perPage()) - $suppliers->perPage()) + $loop->iteration  }}</td>
                             <td>
                                 <img class="avatar-60 rounded" src="{{ $supplier->photo ? asset('storage/suppliers/'.$supplier->photo) : asset('assets/images/user/1.png') }}">
                             </td>
-                            <td>{{ $supplier->name }}</td>
+                            {{-- <td>{{ $supplier->name }}</td> --}} {{-- Name column removed from UI - may be needed in future --}}
+                            <td>{{ $supplier->shopname }}</td>
                             <td>{{ $supplier->email }}</td>
                             <td>{{ $supplier->phone }}</td>
-                            <td>{{ $supplier->shopname }}</td>
                             <td>{{ $supplier->type }}</td>
                             <td>
                                 <div class="d-flex align-items-center list-action">
@@ -102,7 +102,7 @@
                     </tbody>
                 </table>
             </div>
-            {{ $suppliers->links() }}
+            {{ $suppliers->appends(request()->query())->links() }}
         </div>
     </div>
     <!-- Page end  -->

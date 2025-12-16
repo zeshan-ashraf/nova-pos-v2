@@ -5,7 +5,7 @@
                 <i class="ri-menu-line wrapper-menu"></i>
                 <a href="{{ route('dashboard') }}" class="header-logo">
                     <img src="../assets/images/logo.png" class="img-fluid rounded-normal" alt="logo">
-                    <h5 class="logo-title ml-3">PillsPlus</h5>
+                    <h5 class="logo-title ml-3">Nova POS</h5>
                 </a>
             </div>
             <div class="iq-search-bar device-search">
@@ -23,6 +23,63 @@
 
                 <div class="collapse navbar-collapse" id="navbarSupportedContent">
                     <ul class="navbar-nav ml-auto navbar-list align-items-center">
+                        @auth
+                            @php
+                                $activeShop = \App\Support\ActiveShop::current();
+                                $canSwitchShop = \App\Support\ActiveShop::canSwitch(auth()->user());
+                                $switchableShops = $canSwitchShop ? \App\Support\ActiveShop::switchable(auth()->user()) : collect();
+                            @endphp
+                            <li class="nav-item nav-icon dropdown caption-content">
+                                @if($canSwitchShop && $switchableShops->isNotEmpty())
+                                    <a href="#" class="search-toggle dropdown-toggle" id="dropdownActiveShop"
+                                        data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                        <div class="d-flex align-items-center">
+                                            <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+                                                <i class="fa-solid fa-store"></i>
+                                            </div>
+                                            <div class="ml-2 text-left">
+                                                <!--<small class="text-muted d-block">Active Shop</small>-->
+                                                <span class="font-weight-bold">{{ $activeShop ? $activeShop->name : 'Select shop' }}</span>
+                                            </div>
+                                        </div>
+                                    </a>
+                                @else
+                                    <div class="d-flex align-items-center" style="cursor: default;">
+                                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+                                            <i class="fa-solid fa-store"></i>
+                                        </div>
+                                        <div class="ml-2 text-left">
+                                            <!--<small class="text-muted d-block">Active Shop</small>-->
+                                            <span class="font-weight-bold">{{ $activeShop ? $activeShop->name : 'Select shop' }}</span>
+                                        </div>
+                                    </div>
+                                @endif
+                                @if($canSwitchShop && $switchableShops->isNotEmpty())
+                                    <div class="iq-sub-dropdown dropdown-menu" aria-labelledby="dropdownActiveShop">
+                                        <div class="card shadow-none m-0">
+                                            <div class="card-body p-0">
+                                                <div class="list-group list-group-flush">
+                                                    @foreach($switchableShops as $shopOption)
+                                                        <form action="{{ route('active-shop.update') }}" method="POST">
+                                                            @csrf
+                                                            <input type="hidden" name="shop_id" value="{{ $shopOption->id }}">
+                                                            <button type="submit" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between {{ $activeShop && $activeShop->id === $shopOption->id ? 'active' : '' }}">
+                                                                <span>{{ $shopOption->name }}</span>
+                                                                @if($activeShop && $activeShop->id === $shopOption->id)
+                                                                    <i class="ri-check-line"></i>
+                                                                @elseif($shopOption->parent)
+                                                                    <small class="text-muted">Child of {{ $shopOption->parent->name }}</small>
+                                                                @endif
+                                                            </button>
+                                                        </form>
+                                                    @endforeach
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endif
+                            </li>
+                        @endauth
                         <li class="nav-item nav-icon search-content">
                             <a href="#" class="search-toggle rounded" id="dropdownSearch" data-toggle="dropdown"
                                 aria-haspopup="true" aria-expanded="false">

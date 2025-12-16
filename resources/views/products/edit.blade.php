@@ -71,7 +71,8 @@
                                 </div>
                                 @enderror
                             </div>
-                            <div class="form-group col-md-6">
+                            {{-- Supplier field removed - now optional --}}
+                            {{-- <div class="form-group col-md-6">
                                 <label for="supplier_id">Supplier <span class="text-danger">*</span></label>
                                 <select class="form-control" name="supplier_id" required>
                                     <option selected="" disabled>-- Select Supplier --</option>
@@ -84,7 +85,7 @@
                                     {{ $message }}
                                 </div>
                                 @enderror
-                            </div>
+                            </div> --}}
                             <div class="form-group col-md-6">
                                 <label for="product_garage">Product Garage</label>
                                 <input type="text" class="form-control @error('product_garage') is-invalid @enderror" id="product_garage" name="product_garage" value="{{ old('product_garage', $product->product_garage) }}">
@@ -104,6 +105,16 @@
                                 @enderror
                             </div>
                             <div class="form-group col-md-6">
+                                <label for="low_stock_warning">Low Stock Warning</label>
+                                <input type="number" class="form-control @error('low_stock_warning') is-invalid @enderror" id="low_stock_warning" name="low_stock_warning" value="{{ old('low_stock_warning', $product->low_stock_warning ?? 10) }}" min="0">
+                                <small class="form-text text-muted">Alert when stock falls below this number</small>
+                                @error('low_stock_warning')
+                                <div class="invalid-feedback">
+                                    {{ $message }}
+                                </div>
+                                @enderror
+                            </div>
+                            <div class="form-group col-md-6">
                                 <label for="buying_date">Buying Date</label>
                                 <input id="buying_date" class="form-control @error('buying_date') is-invalid @enderror" name="buying_date" value="{{ old('buying_date', $product->buying_date) }}" />
                                 @error('buying_date')
@@ -112,7 +123,8 @@
                                 </div>
                                 @enderror
                             </div>
-                            <div class="form-group col-md-6">
+                            {{-- Expire Date field removed --}}
+                            {{-- <div class="form-group col-md-6">
                                 <label for="expire_date">Expire Date</label>
                                 <input id="expire_date" class="form-control @error('expire_date') is-invalid @enderror" name="expire_date" value="{{ old('expire_date', $product->expire_date) }}" />
                                 @error('expire_date')
@@ -120,7 +132,7 @@
                                     {{ $message }}
                                 </div>
                                 @enderror
-                            </div>
+                            </div> --}}
                             <div class="form-group col-md-6">
                                 <label for="buying_price">Buying Price <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control @error('buying_price') is-invalid @enderror" id="buying_price" name="buying_price" value="{{ old('buying_price', $product->buying_price) }}" required>
@@ -159,11 +171,12 @@
         format: 'yyyy-mm-dd'
         // https://gijgo.com/datetimepicker/configuration/format
     });
-    $('#expire_date').datepicker({
+    {{-- Expire date datepicker removed --}}
+    {{-- $('#expire_date').datepicker({
         uiLibrary: 'bootstrap4',
         format: 'yyyy-mm-dd'
         // https://gijgo.com/datetimepicker/configuration/format
-    });
+    }); --}}
 </script>
 
 @include('components.preview-img-form')

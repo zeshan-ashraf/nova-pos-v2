@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Redirect;
 use Gloudemans\Shoppingcart\Facades\Cart;
+use App\Support\ActiveShop;
 
 class PosController extends Controller
 {
@@ -21,13 +22,44 @@ class PosController extends Controller
             abort(400, 'The per-page parameter must be an integer between 1 and 100.');
         }
 
+        $authUser = auth()->user();
+        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+
+        $productsQuery = Product::where('status', 'active')
+            ->filter(request(['search']))
+            ->sortable();
+
+        // Apply shop filtering
+        if ($authUser->shop_id) {
+            // Child shop or parent shop user - only see their allowed shops
+            $productsQuery->whereIn('shop_id', $visibleShopIds);
+        } else {
+            // Super admin - can see all products
+            $productsQuery->where(function ($query) use ($visibleShopIds) {
+                $query->whereNull('shop_id');
+                if ($visibleShopIds->isNotEmpty()) {
+                    $query->orWhereIn('shop_id', $visibleShopIds);
+                }
+            });
+        }
+
+        // Filter customers by shop
+        $customersQuery = Customer::query();
+        if ($authUser->shop_id) {
+            $customersQuery->whereIn('shop_id', $visibleShopIds);
+        } else {
+            $customersQuery->where(function ($query) use ($visibleShopIds) {
+                $query->whereNull('shop_id');
+                if ($visibleShopIds->isNotEmpty()) {
+                    $query->orWhereIn('shop_id', $visibleShopIds);
+                }
+            });
+        }
+
         return view('pos.index', [
-            'customers' => Customer::all()->sortBy('name'),
+            'customers' => $customersQuery->orderBy('name')->get(),
             'productItem' => Cart::content(),
-            'products' => Product::where('expire_date', '>', $todayDate)->filter(request(['search']))
-                ->sortable()
-                ->paginate($row)
-                ->appends(request()->query()),
+            'products' => $productsQuery->paginate($row)->appends(request()->query()),
         ]);
     }
 

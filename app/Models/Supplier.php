@@ -25,12 +25,12 @@ class Supplier extends Model
         'city',
     ];
     public $sortable = [
-        'name',
+        // 'name', // Removed from UI - may be needed in future
         'email',
         'phone',
         'shopname',
         'type',
-        'city',
+        // 'city', // Removed from UI - may be needed in future
     ];
 
     protected $guarded = [
@@ -40,7 +40,7 @@ class Supplier extends Model
     public function scopeFilter($query, array $filters)
     {
         $query->when($filters['search'] ?? false, function ($query, $search) {
-            return $query->where('name', 'like', '%' . $search . '%')->orWhere('shopname', 'like', '%' . $search . '%');
+            return $query->where('shopname', 'like', '%' . $search . '%');
         });
     }
 }

@@ -31,7 +31,7 @@
                     <div class="form-group row">
                         <label for="row" class="col-sm-3 align-self-center">Row:</label>
                         <div class="col-sm-9">
-                            <select class="form-control" name="row">
+                            <select class="form-control" name="row" onchange="this.form.submit()">
                                 <option value="10" @if(request('row') == '10')selected="selected"@endif>10</option>
                                 <option value="25" @if(request('row') == '25')selected="selected"@endif>25</option>
                                 <option value="50" @if(request('row') == '50')selected="selected"@endif>50</option>
@@ -62,24 +62,30 @@
                         <tr class="ligth ligth-data">
                             <th>No.</th>
                             <th>Photo</th>
-                            <th>@sortablelink('name')</th>
+                            {{-- <th>@sortablelink('name')</th> --}} {{-- Name column removed from UI - may be needed in future --}}
+                            <th>@sortablelink('shopname', 'Shop Name')</th>
                             <th>@sortablelink('email')</th>
                             <th>@sortablelink('phone')</th>
-                            <th>@sortablelink('shopname')</th>
+                            <th>Credit Limit</th>
+                            <th>Credit Amount</th>
+                            <th>Credit Days</th>
                             <th>Action</th>
                         </tr>
                     </thead>
                     <tbody class="ligth-body">
                         @foreach ($customers as $customer)
                         <tr>
-                            <td>{{ (($customers->currentPage() * 10) - 10) + $loop->iteration  }}</td>
+                            <td>{{ (($customers->currentPage() * $customers->perPage()) - $customers->perPage()) + $loop->iteration  }}</td>
                             <td>
                                 <img class="avatar-60 rounded" src="{{ $customer->photo ? asset('storage/customers/'.$customer->photo) : asset('assets/images/user/1.png') }}">
                             </td>
-                            <td>{{ $customer->name }}</td>
+                            {{-- <td>{{ $customer->name }}</td> --}} {{-- Name column removed from UI - may be needed in future --}}
+                            <td>{{ $customer->shopname }}</td>
                             <td>{{ $customer->email }}</td>
                             <td>{{ $customer->phone }}</td>
-                            <td>{{ $customer->shopname }}</td>
+                            <td>{{ number_format($customer->credit_limit ?? 0, 2) }}</td>
+                            <td>{{ number_format($customer->credit_amount ?? 0, 2) }}</td>
+                            <td>{{ $customer->credit_days ?? 0 }}</td>
                             <td>
                                 <div class="d-flex align-items-center list-action">
                                     <a class="badge badge-info mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="View"
@@ -87,6 +93,9 @@
                                     </a>
                                     <a class="badge bg-success mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Edit"
                                         href="{{ route('customers.edit', $customer->id) }}""><i class="ri-pencil-line mr-0"></i>
+                                    </a>
+                                    <a class="badge badge-warning mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Credit Log"
+                                        href="{{ route('customers.creditLog', $customer->id) }}"><i class="ri-file-list-line mr-0"></i>
                                     </a>
                                     <form action="{{ route('customers.destroy', $customer->id) }}" method="POST" style="margin-bottom: 5px">
                                         @method('delete')
@@ -100,7 +109,7 @@
                     </tbody>
                 </table>
             </div>
-            {{ $customers->links() }}
+            {{ $customers->appends(request()->query())->links() }}
         </div>
     </div>
     <!-- Page end  -->

@@ -14,14 +14,17 @@ class Product extends Model
         'product_name',
         'category_id',
         'supplier_id',
+        'shop_id',
         'product_code',
         'product_garage',
         'product_image',
         'product_store',
+        'low_stock_warning',
         'buying_date',
         'expire_date',
         'buying_price',
         'selling_price',
+        'status',
     ];
 
     public $sortable = [
@@ -35,7 +38,7 @@ class Product extends Model
 
     protected $with = [
         'category',
-        'supplier'
+        'shop'
     ];
 
     public function category(){
@@ -44,6 +47,10 @@ class Product extends Model
 
     public function supplier(){
         return $this->belongsTo(Supplier::class, 'supplier_id');
+    }
+
+    public function shop(){
+        return $this->belongsTo(Shop::class, 'shop_id');
     }
 
     public function scopeFilter($query, array $filters)

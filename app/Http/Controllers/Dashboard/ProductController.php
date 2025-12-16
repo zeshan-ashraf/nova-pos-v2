@@ -7,12 +7,14 @@ use App\Models\StockLog;
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\Supplier;
+use App\Models\Shop;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Intervention\Image\Facades\Image;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Illuminate\Support\Facades\Redirect;
+use App\Support\ActiveShop;
 
 use PhpOffice\PhpSpreadsheet\Writer\Xls;
 use Picqer\Barcode\BarcodeGeneratorHTML;
@@ -32,12 +34,37 @@ class ProductController extends Controller
             abort(400, 'The per-page parameter must be an integer between 1 and 100.');
         }
 
+        $authUser = auth()->user();
+        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+        $isSuperAdmin = !$authUser->shop_id;
+
+        $productsQuery = Product::with(['category', 'supplier', 'shop.parent'])
+            ->filter(request(['search']))
+            ->sortable();
+
+        // Apply shop filtering
+        if ($authUser->shop_id) {
+            // Child shop or parent shop user - only see their allowed shops
+            $productsQuery->whereIn('shop_id', $visibleShopIds);
+        } else {
+            // Super admin - can see all, but can filter by shop
+            if (request()->has('shop_id') && request('shop_id')) {
+                $productsQuery->where('shop_id', request('shop_id'));
+            } else {
+                // Show all products (including unassigned)
+                $productsQuery->where(function ($query) use ($visibleShopIds) {
+                    $query->whereNull('shop_id');
+                    if ($visibleShopIds->isNotEmpty()) {
+                        $query->orWhereIn('shop_id', $visibleShopIds);
+                    }
+                });
+            }
+        }
+
         return view('products.index', [
-            'products' => Product::with(['category', 'supplier'])
-                ->filter(request(['search']))
-                ->sortable()
-                ->paginate($row)
-                ->appends(request()->query()),
+            'products' => $productsQuery->paginate($row)->appends(request()->query()),
+            'isSuperAdmin' => $isSuperAdmin,
+            'shops' => $isSuperAdmin ? Shop::orderBy('name')->get() : collect(),
         ]);
     }
 
@@ -48,7 +75,7 @@ class ProductController extends Controller
     {
         return view('products.create', [
             'categories' => Category::all(),
-            'suppliers' => Supplier::all(),
+            // 'suppliers' => Supplier::all(), // Supplier field removed from UI
         ]);
     }
 
@@ -68,11 +95,11 @@ class ProductController extends Controller
             'product_image' => 'image|file|max:1024',
             'product_name' => 'required|string',
             'category_id' => 'required|integer',
-            'supplier_id' => 'required|integer',
+            'supplier_id' => 'nullable|integer',
             'product_garage' => 'string|nullable',
             'product_store' => 'string|nullable',
+            'low_stock_warning' => 'nullable|integer|min:0',
             'buying_date' => 'date_format:Y-m-d|max:10|nullable',
-            'expire_date' => 'date_format:Y-m-d|max:10|nullable',
             'buying_price' => 'required|integer',
             'selling_price' => 'required|integer',
         ];
@@ -81,6 +108,14 @@ class ProductController extends Controller
 
         // save product code value
         $validatedData['product_code'] = $product_code;
+        
+        // Set status to valid by default
+        $validatedData['status'] = 'valid';
+        
+        // Set default low_stock_warning if not provided
+        if (!isset($validatedData['low_stock_warning']) || $validatedData['low_stock_warning'] === null) {
+            $validatedData['low_stock_warning'] = 10;
+        }
 
         /**
          * Handle upload image with Storage.
@@ -91,6 +126,18 @@ class ProductController extends Controller
 
             $file->storeAs($path, $fileName);
             $validatedData['product_image'] = $fileName;
+        }
+
+        // Auto-assign shop_id based on user's shop
+        $authUser = auth()->user();
+        if ($authUser->shop_id) {
+            $validatedData['shop_id'] = $authUser->shop_id;
+        } else {
+            // Super admin - use active shop if available
+            $activeShop = ActiveShop::current();
+            if ($activeShop) {
+                $validatedData['shop_id'] = $activeShop->id;
+            }
         }
 
         Product::create($validatedData);
@@ -119,9 +166,11 @@ class ProductController extends Controller
      */
     public function edit(Product $product)
     {
+        $this->ensureShopAccess($product);
+
         return view('products.edit', [
             'categories' => Category::all(),
-            'suppliers' => Supplier::all(),
+            // 'suppliers' => Supplier::all(), // Supplier field removed from UI
             'product' => $product
         ]);
     }
@@ -131,15 +180,16 @@ class ProductController extends Controller
      */
     public function update(Request $request, Product $product)
     {
+        $this->ensureShopAccess($product);
         $rules = [
             'product_image' => 'image|file|max:1024',
             'product_name' => 'required|string',
             'category_id' => 'required|integer',
-            'supplier_id' => 'required|integer',
+            'supplier_id' => 'nullable|integer',
             'product_garage' => 'string|nullable',
             'product_store' => 'string|nullable',
+            'low_stock_warning' => 'nullable|integer|min:0',
             'buying_date' => 'date_format:Y-m-d|max:10|nullable',
-            // 'expire_date' => 'nullable|date|date_format:Y-m-d',
             'buying_price' => 'required|integer',
             'selling_price' => 'required|integer',
         ];
@@ -164,28 +214,38 @@ class ProductController extends Controller
             $validatedData['product_image'] = $fileName;
         }
             $oldStockQty = $product->product_store;
+            // Ensure status is set to valid if not provided
+            if (!isset($validatedData['status'])) {
+                $validatedData['status'] = 'valid';
+            }
             Product::where('id', $product->id)->update($validatedData);
             $newStockQty = $validatedData['product_store'] ?? $product->product_store;
             $stockChange = $newStockQty - $oldStockQty;
-            $this->logStockUpdate($product, $validatedData, $stockChange);
+            // Only log stock update if supplier_id exists
+            if (isset($validatedData['supplier_id']) && $validatedData['supplier_id']) {
+                $this->logStockUpdate($product, $validatedData, $stockChange);
+            }
             
         return Redirect::route('products.index')->with('success', 'Product has been updated!');
     }
     public function logStockUpdate(Product $product, $validatedData, $stockChange)
 {
-    // dd($product, $validatedData, $stockChange);
-    StockLog::create([
-        'product_id' => $product->id,
-        'supplier_id' => $validatedData['supplier_id'],
-        'stock_qty' => $stockChange, 
-        'price' => $validatedData['buying_price'],
-    ]);
+    // Only create log if supplier_id exists
+    if (isset($validatedData['supplier_id']) && $validatedData['supplier_id']) {
+        StockLog::create([
+            'product_id' => $product->id,
+            'supplier_id' => $validatedData['supplier_id'],
+            'stock_qty' => $stockChange, 
+            'price' => $validatedData['buying_price'],
+        ]);
+    }
 }
     /**
      * Remove the specified resource from storage.
      */
     public function destroy(Product $product)
     {
+        $this->ensureShopAccess($product);
         /**
          * Delete photo if exists.
          */
@@ -218,35 +278,81 @@ class ProductController extends Controller
             $spreadsheet = IOFactory::load($the_file->getRealPath());
             $sheet        = $spreadsheet->getActiveSheet();
             $row_limit    = $sheet->getHighestDataRow();
-            $column_limit = $sheet->getHighestDataColumn();
+            
+            if ($row_limit < 2) {
+                return Redirect::route('products.importView')->with('error', 'The Excel file is empty or has no data rows!');
+            }
+            
             $row_range    = range( 2, $row_limit );
-            $column_range = range( 'J', $column_limit );
-            $startcount = 2;
             $data = array();
+            $authUser = auth()->user();
+            
+            // Get shop_id for assignment
+            $shopId = null;
+            if ($authUser->shop_id) {
+                $shopId = $authUser->shop_id;
+            } else {
+                // Super admin - use active shop if available
+                $activeShop = ActiveShop::current();
+                if ($activeShop) {
+                    $shopId = $activeShop->id;
+                }
+            }
+            
+            $now = now();
             foreach ( $row_range as $row ) {
-                $data[] = [
-                    'product_name' => $sheet->getCell( 'A' . $row )->getValue(),
-                    'category_id' => $sheet->getCell( 'B' . $row )->getValue(),
-                    'supplier_id' => $sheet->getCell( 'C' . $row )->getValue(),
+                $productName = $sheet->getCell( 'A' . $row )->getValue();
+                $categoryId = $sheet->getCell( 'B' . $row )->getValue();
+                
+                // Skip empty rows
+                if (empty($productName) || empty($categoryId)) {
+                    continue;
+                }
+                
+                $rowData = [
+                    'product_name' => $productName,
+                    'category_id' => $categoryId,
                     'product_code' => $sheet->getCell( 'D' . $row )->getValue(),
                     'product_garage' => $sheet->getCell( 'E' . $row )->getValue(),
                     'product_image' => $sheet->getCell( 'F' . $row )->getValue(),
-                    'product_store' =>$sheet->getCell( 'G' . $row )->getValue(),
-                    'buying_date' =>$sheet->getCell( 'H' . $row )->getValue(),
-                    'expire_date' =>$sheet->getCell( 'I' . $row )->getValue(),
-                    'buying_price' =>$sheet->getCell( 'J' . $row )->getValue(),
-                    'selling_price' =>$sheet->getCell( 'K' . $row )->getValue(),
+                    'product_store' => $sheet->getCell( 'G' . $row )->getValue(),
+                    'buying_date' => $sheet->getCell( 'H' . $row )->getValue(),
+                    'buying_price' => $sheet->getCell( 'J' . $row )->getValue(),
+                    'selling_price' => $sheet->getCell( 'K' . $row )->getValue(),
+                    'status' => 'valid',
+                    'created_at' => $now,
+                    'updated_at' => $now,
                 ];
-                $startcount++;
+                
+                // Assign shop_id if available
+                if ($shopId) {
+                    $rowData['shop_id'] = $shopId;
+                }
+                
+                // Optional fields - only add if they have values
+                $supplierId = $sheet->getCell( 'C' . $row )->getValue();
+                if ($supplierId) {
+                    $rowData['supplier_id'] = $supplierId;
+                }
+                
+                $expireDate = $sheet->getCell( 'I' . $row )->getValue();
+                if ($expireDate) {
+                    $rowData['expire_date'] = $expireDate;
+                }
+                
+                $data[] = $rowData;
+            }
+            
+            if (empty($data)) {
+                return Redirect::route('products.importView')->with('error', 'No valid data found in the Excel file. Please check that product name and category are provided.');
             }
 
             Product::insert($data);
 
         } catch (Exception $e) {
-            // $error_code = $e->errorInfo[1];
-            return Redirect::route('products.index')->with('error', 'There was a problem uploading the data!');
+            return Redirect::route('products.importView')->with('error', 'There was a problem uploading the data: ' . $e->getMessage());
         }
-        return Redirect::route('products.index')->with('success', 'Data has been successfully imported!');
+        return Redirect::route('products.importView')->with('success', 'Data has been successfully imported! ' . count($data) . ' product(s) added.');
     }
 
     public function exportExcel($products){
@@ -308,5 +414,22 @@ class ProductController extends Controller
         }
 
         $this->ExportExcel($product_array);
+    }
+
+    /**
+     * Ensure the current user has access to the product based on shop.
+     */
+    protected function ensureShopAccess(Product $product): void
+    {
+        $authUser = auth()->user();
+        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+
+        if ($authUser->shop_id) {
+            // Child shop or parent shop user - must belong to allowed shops
+            if ($product->shop_id && !$visibleShopIds->contains($product->shop_id)) {
+                abort(403, 'You do not have access to this product.');
+            }
+        }
+        // Super admin can access all products
     }
 }

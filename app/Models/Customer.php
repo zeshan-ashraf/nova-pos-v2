@@ -23,13 +23,17 @@ class Customer extends Model
         'bank_name',
         'bank_branch',
         'city',
+        'shop_id',
+        'credit_limit',
+        'credit_amount',
+        'credit_days',
     ];
     public $sortable = [
-        'name',
+        // 'name', // Removed from UI - may be needed in future
         'email',
         'phone',
         'shopname',
-        'city',
+        // 'city', // Removed from UI - may be needed in future
     ];
 
     protected $guarded = [
@@ -39,7 +43,12 @@ class Customer extends Model
     public function scopeFilter($query, array $filters)
     {
         $query->when($filters['search'] ?? false, function ($query, $search) {
-            return $query->where('name', 'like', '%' . $search . '%')->orWhere('shopname', 'like', '%' . $search . '%');
+            return $query->where('shopname', 'like', '%' . $search . '%');
         });
+    }
+
+    public function shop()
+    {
+        return $this->belongsTo(Shop::class, 'shop_id');
     }
 }

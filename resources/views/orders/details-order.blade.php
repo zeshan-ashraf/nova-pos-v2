@@ -57,6 +57,20 @@
                             <label>Due Amount</label>
                             <input type="text" class="form-control bg-white" value="{{ $order->due }}" readonly>
                         </div>
+                        @if ($order->payment_status === 'Bank')
+                            <div class="form-group col-md-12">
+                                <label>Bank Information</label>
+                                @if ($order->shop && $order->shop->banks->isNotEmpty())
+                                    <div class="d-flex flex-wrap">
+                                        @foreach ($order->shop->banks as $bank)
+                                            <span class="badge badge-primary mr-2 mb-2">{{ $bank->name }}</span>
+                                        @endforeach
+                                    </div>
+                                @else
+                                    <p class="text-muted mb-0">No bank information available for this shop.</p>
+                                @endif
+                            </div>
+                        @endif
                     </div>
                     <!-- end: Show Data -->
 

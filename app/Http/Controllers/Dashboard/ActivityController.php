@@ -7,6 +7,7 @@ use App\Models\Customer;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Redirect;
+use App\Support\ActiveShop;
 
 class ActivityController extends Controller
 {
@@ -37,7 +38,22 @@ class ActivityController extends Controller
      */
     public function create()
     {
-        $customers = Customer::all(); // Assuming you want to show all customers for selection
+        $authUser = auth()->user();
+        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+
+        $customersQuery = Customer::query();
+        if ($authUser->shop_id) {
+            $customersQuery->whereIn('shop_id', $visibleShopIds);
+        } else {
+            $customersQuery->where(function ($query) use ($visibleShopIds) {
+                $query->whereNull('shop_id');
+                if ($visibleShopIds->isNotEmpty()) {
+                    $query->orWhereIn('shop_id', $visibleShopIds);
+                }
+            });
+        }
+
+        $customers = $customersQuery->orderBy('name')->get();
         return view('activities.create', compact('customers'));
     }
 
@@ -93,7 +109,22 @@ class ActivityController extends Controller
      */
     public function edit(Activity $activity)
     {
-        $customers = Customer::all();
+        $authUser = auth()->user();
+        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+
+        $customersQuery = Customer::query();
+        if ($authUser->shop_id) {
+            $customersQuery->whereIn('shop_id', $visibleShopIds);
+        } else {
+            $customersQuery->where(function ($query) use ($visibleShopIds) {
+                $query->whereNull('shop_id');
+                if ($visibleShopIds->isNotEmpty()) {
+                    $query->orWhereIn('shop_id', $visibleShopIds);
+                }
+            });
+        }
+
+        $customers = $customersQuery->orderBy('name')->get();
         return view('activities.edit', compact('activity','customers'));
     }
 

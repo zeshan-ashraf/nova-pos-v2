@@ -55,6 +55,7 @@ class DatabaseSeeder extends Seeder
         Category::factory(5)->create();
 
         Permission::create(['name' => 'pos.menu', 'group_name' => 'pos']);
+        Permission::create(['name' => 'advance.pos.menu', 'group_name' => 'advance_pos']);
         Permission::create(['name' => 'employee.menu', 'group_name' => 'employee']);
         Permission::create(['name' => 'customer.menu', 'group_name' => 'customer']);
         Permission::create(['name' => 'supplier.menu', 'group_name' => 'supplier']);
@@ -76,5 +77,7 @@ class DatabaseSeeder extends Seeder
 
         $admin->assignRole('SuperAdmin');
         $user->assignRole('Account');
+
+        $this->call(BankSeeder::class);
     }
 }

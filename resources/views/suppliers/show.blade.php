@@ -24,8 +24,8 @@
                             <img src="{{ $supplier->photo ? asset('storage/suppliers/' . $supplier->photo) : asset('assets/images/user/1.png') }}" class="img-fluid rounded avatar-110" alt="profile-image">
                         </div>
                         <div class="ml-3">
-                            <h4 class="mb-1">{{ $supplier->name }}</h4>
-                            <p class="mb-2">{{ $supplier->shopname }}</p>
+                            <h4 class="mb-1">{{ $supplier->shopname }}</h4>
+                            {{-- <p class="mb-2">{{ $supplier->shopname }}</p> --}} {{-- Removed duplicate shopname display --}}
                             <a href="{{ route('suppliers.edit', $supplier->id) }}" class="btn btn-primary font-size-14">Edit</a>
                             <a href="{{ route('suppliers.index') }}" class="btn btn-danger font-size-14">Back</a>
                         </div>
@@ -53,7 +53,8 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                 </svg>
-                                <p class="mb-0">{{ $supplier->city ? $supplier->city : 'Unknown' }}</p>
+                                {{-- City removed from UI - may be needed in future --}}
+                                {{-- <p class="mb-0">{{ $supplier->city ? $supplier->city : 'Unknown' }}</p> --}}
                             </div>
                         </li>
                     </ul>
@@ -72,7 +73,8 @@
                 </div>
                 <div class="card-body p-3">
                     <ul class="list-inline p-0 mb-0">
-                        <li class="col-lg-12">
+                        {{-- Name field removed from UI - may be needed in future --}}
+                        {{-- <li class="col-lg-12">
                             <div class="form-group row">
                                 <div class="col-sm-3 col-4">
                                     <label class="col-form-label">Name</label>
@@ -81,7 +83,7 @@
                                     <input type="text" class="form-control bg-white" value="{{ $supplier->name }}" readonly>
                                 </div>
                             </div>
-                        </li>
+                        </li> --}}
                         <li class="col-lg-12">
                             <div class="form-group row">
                                 <div class="col-sm-3 col-4">
@@ -132,7 +134,8 @@
                                 </div>
                             </div>
                         </li>
-                        <li class="col-lg-12">
+                        {{-- Bank Name field removed from UI - may be needed in future --}}
+                        {{-- <li class="col-lg-12">
                             <div class="form-group row">
                                 <div class="col-sm-3 col-4">
                                     <label class="col-form-label">Bank Name</label>
@@ -141,8 +144,9 @@
                                     <input type="text" class="form-control bg-white" value="{{ $supplier->bank_name }}" readonly>
                                 </div>
                             </div>
-                        </li>
-                        <li class="col-lg-12">
+                        </li> --}}
+                        {{-- Account Number field removed from UI - may be needed in future --}}
+                        {{-- <li class="col-lg-12">
                             <div class="form-group row">
                                 <div class="col-sm-3 col-4">
                                     <label class="col-form-label">Account Number</label>
@@ -151,8 +155,9 @@
                                     <input type="text" class="form-control bg-white" value="{{ $supplier->account_number }}" readonly>
                                 </div>
                             </div>
-                        </li>
-                        <li class="col-lg-12">
+                        </li> --}}
+                        {{-- Bank Branch field removed from UI - may be needed in future --}}
+                        {{-- <li class="col-lg-12">
                             <div class="form-group row">
                                 <div class="col-sm-3 col-4">
                                     <label class="col-form-label">Bank Branch</label>
@@ -161,8 +166,9 @@
                                     <input type="text" class="form-control bg-white" value="{{ $supplier->bank_branch }}" readonly>
                                 </div>
                             </div>
-                        </li>
-                        <li class="col-lg-12">
+                        </li> --}}
+                        {{-- City field removed from UI - may be needed in future --}}
+                        {{-- <li class="col-lg-12">
                             <div class="form-group row">
                                 <div class="col-sm-3 col-4">
                                     <label class="col-form-label">City</label>
@@ -171,7 +177,7 @@
                                     <input type="text" class="form-control bg-white" value="{{ $supplier->city }}" readonly>
                                 </div>
                             </div>
-                        </li>
+                        </li> --}}
                         <li class="col-lg-12">
                             <div class="form-group row">
                                 <div class="col-sm-3 col-4">

@@ -105,7 +105,7 @@
                             <div class="form-group row">
                                 <label for="row" class="align-self-center mx-2">Row:</label>
                                 <div>
-                                    <select class="form-control" name="row">
+                                    <select class="form-control" name="row" onchange="this.form.submit()">
                                         <option value="10" @if(request('row') == '10')selected="selected"@endif>10</option>
                                         <option value="25" @if(request('row') == '25')selected="selected"@endif>25</option>
                                         <option value="50" @if(request('row') == '50')selected="selected"@endif>50</option>
@@ -133,21 +133,17 @@
                             <thead class="bg-white text-uppercase">
                                 <tr class="ligth ligth-data">
                                     <th>No.</th>
-                                    <th>Photo</th>
                                     <th>@sortablelink('product_name', 'name')</th>
-                                    <th>@sortablelink('selling_price', 'price')</th>
+                                    <th>Cost</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody class="ligth-body">
                                 @forelse ($products as $product)
                                 <tr>
-                                    <td>{{ (($products->currentPage() * 10) - 10) + $loop->iteration  }}</td>
-                                    <td>
-                                        <img class="avatar-60 rounded" src="{{ $product->product_image ? asset('storage/products/'.$product->product_image) : asset('assets/images/product/default.webp') }}">
-                                    </td>
+                                    <td>{{ (($products->currentPage() * $products->perPage()) - $products->perPage()) + $loop->iteration  }}</td>
                                     <td>{{ $product->product_name }}</td>
-                                    <td>{{ $product->selling_price }}</td>
+                                    <td>{{ $product->buying_price }}</td>
                                     <td>
                                         <form action="{{ route('pos.addCart') }}" method="POST"  style="margin-bottom: 5px">
                                             @csrf
@@ -171,7 +167,7 @@
                             </tbody>
                         </table>
                     </div>
-                    {{ $products->links() }}
+                    {{ $products->appends(request()->query())->links() }}
                 </div>
             </div>
         </div>

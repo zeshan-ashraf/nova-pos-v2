@@ -35,7 +35,7 @@
                     <div class="form-group row">
                         <label for="row" class="col-sm-3 align-self-center">Row:</label>
                         <div class="col-sm-9">
-                            <select class="form-control" name="row">
+                            <select class="form-control" name="row" onchange="this.form.submit()">
                                 <option value="10" @if(request('row') == '10')selected="selected"@endif>10</option>
                                 <option value="25" @if(request('row') == '25')selected="selected"@endif>25</option>
                                 <option value="50" @if(request('row') == '50')selected="selected"@endif>50</option>
@@ -74,7 +74,7 @@
                         @foreach ($paymentLogs as $paymentLog)
                         <tr>
                             <!-- Serial Number -->
-                            <td>{{ (($paymentLogs->currentPage() * 10) - 10) + $loop->iteration }}</td>
+                            <td>{{ (($paymentLogs->currentPage() * $paymentLogs->perPage()) - $paymentLogs->perPage()) + $loop->iteration }}</td>
 
                             <!-- Customer Name -->
                             <td>{{ $paymentLog->order->customer->name }}</td>
@@ -146,7 +146,7 @@
                     </tbody>
                 </table>
             </div>
-            {{ $paymentLogs->links() }} <!-- Pagination links -->
+            {{ $paymentLogs->appends(request()->query())->links() }} <!-- Pagination links -->
         </div>
 
     </div>

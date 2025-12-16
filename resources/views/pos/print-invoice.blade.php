@@ -3,7 +3,7 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-        <title>PillsPlus</title>
+        <title>Nova POS</title>
 
         <!-- Favicon -->
         <link rel="shortcut icon" href="{{ asset('assets/images/favicon.ico') }}"/>
@@ -108,14 +108,15 @@
                                     <div class="or-detail rounded">
                                         <div class="p-3">
                                             <h5 class="mb-3">Order Details</h5>
-                                            <div class="mb-2">
+                                            {{-- Bank section removed from UI - may be needed in future --}}
+                                            {{-- <div class="mb-2">
                                                 <h6>Bank</h6>
                                                 <p>{{ $customer->bank_name }}</p>
                                             </div>
                                             <div class="mb-2">
                                                 <h6>Acc. No</h6>
                                                 <p>{{ $customer->account_number }}</p>
-                                            </div>
+                                            </div> --}}
                                             <div class="mb-2">
                                                 <h6>Due Date</h6>
                                                 <p>12 August 2020</p>

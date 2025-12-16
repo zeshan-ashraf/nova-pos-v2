@@ -12,6 +12,42 @@
                 </div>
 
                 <div class="card-body">
+                    @if(isset($activeShop) && $activeShop)
+                        <div class="alert alert-light border d-flex align-items-center mb-4">
+                            <div class="mr-3 d-flex align-items-center justify-content-center rounded-circle bg-primary text-white" style="width: 44px; height: 44px;">
+                                <i class="fa-solid fa-store"></i>
+                            </div>
+                            <div>
+                                <div class="font-weight-bold mb-1">Creating user for {{ $activeShop->name }}</div>
+                                <small class="text-muted">
+                                    @if($activeShop->is_parent)
+                                        Parent shop context
+                                    @elseif($activeShop->parent)
+                                        Child shop of {{ $activeShop->parent->name }}
+                                    @else
+                                        Child shop context
+                                    @endif
+                                </small>
+                            </div>
+                            <a href="{{ route('shops.index') }}" class="btn btn-sm btn-outline-primary ml-auto">Switch shop</a>
+                        </div>
+                    @else
+                        <div class="alert alert-warning d-flex align-items-center mb-4">
+                            <div>
+                                <div class="font-weight-bold mb-1">No active shop selected</div>
+                                <small class="text-muted">Set an active shop before creating users to keep data isolated.</small>
+                            </div>
+                            <a href="{{ route('shops.index') }}" class="btn btn-sm btn-outline-dark ml-auto">Choose shop</a>
+                        </div>
+                    @endif
+
+                    @error('active_shop')
+                        <div class="alert alert-danger d-flex justify-content-between align-items-center">
+                            <span>{{ $message }}</span>
+                            <small class="text-muted">Use the header shop selector to change context.</small>
+                        </div>
+                    @enderror
+
                     <form action="{{ route('users.store') }}" method="POST" enctype="multipart/form-data">
                     @csrf
                         <!-- begin: Input Image -->
@@ -101,6 +137,30 @@
                                 </div>
                                 @enderror
                             </div>
+                            @if(isset($canSelectShop) && $canSelectShop && $availableShops->isNotEmpty())
+                            <div class="form-group col-md-6">
+                                <label for="shop_id">Shop <span class="text-danger">*</span></label>
+                                <select class="form-control @error('shop_id') is-invalid @enderror" name="shop_id" required>
+                                    <option value="">-- Select Shop --</option>
+                                    @foreach ($availableShops as $shop)
+                                        <option value="{{ $shop->id }}" {{ old('shop_id', $activeShop?->id) == $shop->id ? 'selected' : '' }}>
+                                            {{ $shop->name }}
+                                            @if($shop->is_parent)
+                                                (Parent Shop)
+                                            @elseif($shop->parent)
+                                                (Child of {{ $shop->parent->name }})
+                                            @endif
+                                        </option>
+                                    @endforeach
+                                </select>
+                                @error('shop_id')
+                                <div class="invalid-feedback">
+                                    {{ $message }}
+                                </div>
+                                @enderror
+                                <small class="form-text text-muted">Select which shop this user will belong to.</small>
+                            </div>
+                            @endif
                         </div>
                         <!-- end: Input Data -->
                         <div class="mt-2">

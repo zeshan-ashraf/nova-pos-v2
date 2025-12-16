@@ -31,7 +31,7 @@
                     <div class="form-group row">
                         <label for="row" class="col-sm-3 align-self-center">Row:</label>
                         <div class="col-sm-9">
-                            <select class="form-control" name="row">
+                            <select class="form-control" name="row" onchange="this.form.submit()">
                                 <option value="10" @if(request('row') == '10')selected="selected"@endif>10</option>
                                 <option value="25" @if(request('row') == '25')selected="selected"@endif>25</option>
                                 <option value="50" @if(request('row') == '50')selected="selected"@endif>50</option>
@@ -74,7 +74,7 @@
                     <tbody class="ligth-body">
                         @forelse ($employees as $employee)
                         <tr>
-                            <td>{{ (($employees->currentPage() * 10) - 10) + $loop->iteration  }}</td>
+                            <td>{{ (($employees->currentPage() * $employees->perPage()) - $employees->perPage()) + $loop->iteration  }}</td>
                             <td>
                                 <img class="avatar-60 rounded" src="{{ $employee->photo ? asset('storage/employees/'.$employee->photo) : asset('assets/images/user/1.png') }}">
                             </td>
@@ -111,7 +111,7 @@
                     </tbody>
                 </table>
             </div>
-            {{ $employees->links() }}
+            {{ $employees->appends(request()->query())->links() }}
         </div>
     </div>
     <!-- Page end  -->

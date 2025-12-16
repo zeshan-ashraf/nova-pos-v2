@@ -11,12 +11,14 @@ use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Dashboard\PaySalaryController;
 use App\Http\Controllers\Dashboard\AttendenceController;
 use App\Http\Controllers\Dashboard\AdvanceSalaryController;
+use App\Http\Controllers\Dashboard\ShopController;
 use App\Http\Controllers\Dashboard\DatabaseBackupController;
 use App\Http\Controllers\Dashboard\OrderController;
 use App\Http\Controllers\Dashboard\PosController;
 use App\Http\Controllers\Dashboard\RoleController;
 use App\Http\Controllers\Dashboard\UserController;
 use App\Http\Controllers\Dashboard\ActivityController;
+use App\Http\Controllers\Dashboard\ActiveShopController;
 
 /*
 |--------------------------------------------------------------------------
@@ -42,6 +44,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile/edit', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::get('/profile/change-password', [ProfileController::class, 'changePassword'])->name('profile.change-password');
+
+    Route::post('/active-shop', [ActiveShopController::class, 'update'])->name('active-shop.update');
 });
 
 // ====== USERS ======
@@ -107,6 +111,19 @@ Route::middleware(['permission:pos.menu'])->group(function () {
     Route::post('/pos/order', [OrderController::class, 'storeOrder'])->name('pos.storeOrder');
 });
 
+// ====== ADVANCE POS ======
+Route::middleware(['permission:advance.pos.menu'])->group(function () {
+    // Invoice Creation
+    Route::get('/invoice/create', [OrderController::class, 'createInvoice'])->name('invoice.create');
+    Route::post('/invoice/store', [OrderController::class, 'storeInvoice'])->name('invoice.store');
+});
+
+// ====== SHOPS ======
+Route::resource('/shops', ShopController::class);
+
+// ====== CUSTOMER CREDIT LOG ======
+Route::get('/customers/{customer}/credit-log', [CustomerController::class, 'creditLog'])->name('customers.creditLog');
+
 // ====== ORDERS ======
 Route::middleware(['permission:orders.menu'])->group(function () {
     Route::get('/orders/all', [OrderController::class, 'index'])->name('order.index');
@@ -115,6 +132,8 @@ Route::middleware(['permission:orders.menu'])->group(function () {
     Route::get('/orders/details/{order_id}', [OrderController::class, 'orderDetails'])->name('order.orderDetails');
     Route::put('/orders/update/status', [OrderController::class, 'updateStatus'])->name('order.updateStatus');
     Route::get('/orders/invoice/download/{order_id}', [OrderController::class, 'invoiceDownload'])->name('order.invoiceDownload');
+
+    Route::get('/api/products/search', [OrderController::class, 'searchProducts'])->name('api.products.search');
 
     // Pending Due
     Route::get('/pending/due', [OrderController::class, 'pendingDue'])->name('order.pendingDue');

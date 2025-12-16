@@ -67,7 +67,7 @@
                     <tbody class="ligth-body">
                         @foreach ($roles as $role)
                         <tr>
-                            <td>{{ (($roles->currentPage() * 10) - 10) + $loop->iteration  }}</td>
+                            <td>{{ (($roles->currentPage() * $roles->perPage()) - $roles->perPage()) + $loop->iteration  }}</td>
                             <td>{{ $role->name }}</td>
                             <td>
                                 <form action="{{ route('role.destroy', $role->id) }}" method="POST" style="margin-bottom: 5px">
@@ -86,7 +86,7 @@
                     </tbody>
                 </table>
             </div>
-            {{ $roles->links() }}
+            {{ $roles->appends(request()->query())->links() }}
         </div>
     </div>
     <!-- Page end  -->

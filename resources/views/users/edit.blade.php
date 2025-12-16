@@ -12,6 +12,25 @@
                 </div>
 
                 <div class="card-body">
+                    <div class="alert alert-light border d-flex align-items-center mb-4">
+                        <div class="mr-3 d-flex align-items-center justify-content-center rounded-circle bg-primary text-white" style="width: 44px; height: 44px;">
+                            <i class="fa-solid fa-store"></i>
+                        </div>
+                        <div>
+                            <div class="font-weight-bold mb-1">
+                                @if($userData->shop)
+                                    User belongs to {{ $userData->shop->name }}
+                                @else
+                                    No shop assigned
+                                @endif
+                            </div>
+                            @if($userData->shop && $userData->shop->parent)
+                                <small class="text-muted">Child of {{ $userData->shop->parent->name }}</small>
+                            @elseif(!$userData->shop)
+                                <small class="text-muted">Assign this user to a shop to limit visibility.</small>
+                            @endif
+                        </div>
+                    </div>
                     <form action="{{ route('users.update', $userData->username) }}" method="POST" enctype="multipart/form-data">
                     @csrf
                     @method('put')
@@ -103,6 +122,30 @@
                                 </div>
                                 @enderror
                             </div>
+                            @if(isset($canSelectShop) && $canSelectShop && $availableShops->isNotEmpty())
+                            <div class="form-group col-md-6">
+                                <label for="shop_id">Shop</label>
+                                <select class="form-control @error('shop_id') is-invalid @enderror" name="shop_id">
+                                    <option value="">-- No Shop (Unassigned) --</option>
+                                    @foreach ($availableShops as $shop)
+                                        <option value="{{ $shop->id }}" {{ old('shop_id', $userData->shop_id) == $shop->id ? 'selected' : '' }}>
+                                            {{ $shop->name }}
+                                            @if($shop->is_parent)
+                                                (Parent Shop)
+                                            @elseif($shop->parent)
+                                                (Child of {{ $shop->parent->name }})
+                                            @endif
+                                        </option>
+                                    @endforeach
+                                </select>
+                                @error('shop_id')
+                                <div class="invalid-feedback">
+                                    {{ $message }}
+                                </div>
+                                @enderror
+                                <small class="form-text text-muted">Change which shop this user belongs to.</small>
+                            </div>
+                            @endif
                         </div>
                         <!-- end: Input Data -->
                         <div class="mt-2">

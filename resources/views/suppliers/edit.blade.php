@@ -42,7 +42,8 @@
                         <!-- end: Input Image -->
                         <!-- begin: Input Data -->
                         <div class=" row align-items-center">
-                            <div class="form-group col-md-6">
+                            {{-- Supplier Name field removed from UI - may be needed in future --}}
+                            {{-- <div class="form-group col-md-6">
                                 <label for="name">Supplier Name <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control @error('name') is-invalid @enderror" id="name" name="name" value="{{ old('name', $supplier->name) }}" required>
                                 @error('name')
@@ -50,7 +51,7 @@
                                     {{ $message }}
                                 </div>
                                 @enderror
-                            </div>
+                            </div> --}}
                             <div class="form-group col-md-6">
                                 <label for="shopname">Shop Name <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control @error('shopname') is-invalid @enderror" id="shopname" name="shopname" value="{{ old('shopname', $supplier->shopname) }}" required>
@@ -61,8 +62,8 @@
                                 @enderror
                             </div>
                             <div class="form-group col-md-6">
-                                <label for="email">Supplier Email <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control @error('email') is-invalid @enderror" id="email" name="email" value="{{ old('email', $supplier->email) }}" required>
+                                <label for="email">Supplier Email</label>
+                                <input type="text" class="form-control @error('email') is-invalid @enderror" id="email" name="email" value="{{ old('email', $supplier->email) }}">
                                 @error('email')
                                 <div class="invalid-feedback">
                                     {{ $message }}
@@ -87,7 +88,8 @@
                                 </div>
                                 @enderror
                             </div>
-                            <div class="form-group col-md-6">
+                            {{-- Bank Name field removed from UI - may be needed in future --}}
+                            {{-- <div class="form-group col-md-6">
                                 <label for="bank_name">Bank Name</label>
                                 <select class="form-control @error('bank_name') is-invalid @enderror" name="bank_name">
                                     <option value="">Select Year..</option>
@@ -102,8 +104,9 @@
                                     {{ $message }}
                                 </div>
                                 @enderror
-                            </div>
-                            <div class="form-group col-md-6">
+                            </div> --}}
+                            {{-- Account Number field removed from UI - may be needed in future --}}
+                            {{-- <div class="form-group col-md-6">
                                 <label for="account_number">Account Number</label>
                                 <input type="text" class="form-control @error('account_number') is-invalid @enderror" id="account_number" name="account_number" value="{{ old('account_number', $supplier->account_number) }}">
                                 @error('account_number')
@@ -111,8 +114,9 @@
                                     {{ $message }}
                                 </div>
                                 @enderror
-                            </div>
-                            <div class="form-group col-md-6">
+                            </div> --}}
+                            {{-- Bank Branch field removed from UI - may be needed in future --}}
+                            {{-- <div class="form-group col-md-6">
                                 <label for="bank_branch">Bank Branch</label>
                                 <input type="text" class="form-control @error('bank_branch') is-invalid @enderror" id="bank_branch" name="bank_branch" value="{{ old('bank_branch', $supplier->bank_branch) }}">
                                 @error('bank_branch')
@@ -120,8 +124,9 @@
                                     {{ $message }}
                                 </div>
                                 @enderror
-                            </div>
-                            <div class="form-group col-md-6">
+                            </div> --}}
+                            {{-- City field removed from UI - may be needed in future --}}
+                            {{-- <div class="form-group col-md-6">
                                 <label for="city">Supplier City <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control @error('city') is-invalid @enderror" id="city" name="city" value="{{ old('city', $supplier->city) }}" required>
                                 @error('city')
@@ -129,7 +134,7 @@
                                     {{ $message }}
                                 </div>
                                 @enderror
-                            </div>
+                            </div> --}}
                             <div class="form-group col-md-6">
                                 <label for="type">Type of Supplier <span class="text-danger">*</span></label>
                                 <select class="form-control @error('type') is-invalid @enderror" name="type" required>

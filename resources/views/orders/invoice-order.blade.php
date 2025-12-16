@@ -46,9 +46,11 @@
                                     </div>
                                 </div>
                                 <div class="col-sm-6 text-end mb-50">
-                                    <h4 class="inv-title-1">POS</h4>
-                                    <p class="inv-from-1">pos@example.com</p>
-                                    <p class="inv-from-2">Cirebon, Indonesia</p>
+                                    <h4 class="inv-title-1">@php
+                                        $shop = auth()->user()->shop ?? null;
+                                    @endphp</h4>
+                                    <p class="inv-from-1">{{ $shop->phone ?? 'POS' }}</p>
+                                    <p class="inv-from-2">{{ $shop->owner_name ?? auth()->user()->name }}</p>
                                 </div>
                             </div>
                             <div class="row">
@@ -66,6 +68,23 @@
                                     <p class="inv-from-1">Due: {{ $order->due }}</p>
                                 </div>
                             </div>
+                            @if ($order->payment_status === 'Bank')
+                            <div class="row">
+                                <div class="col-sm-12 mb-30">
+                                    <h4 class="inv-title-1">Bank Information</h4>
+                                    @if($order->shop && $order->shop->banks->isNotEmpty())
+                                        <p class="inv-from-1 mb-1">Shop: {{ $order->shop->name }}</p>
+                                        <ul class="mb-0">
+                                            @foreach($order->shop->banks as $bank)
+                                                <li>{{ $bank->name }}</li>
+                                            @endforeach
+                                        </ul>
+                                    @else
+                                        <p class="inv-from-1 text-muted mb-0">No bank information available for this shop.</p>
+                                    @endif
+                                </div>
+                            </div>
+                            @endif
                         </div>
                         <div class="order-summary">
                             <div class="table-outer">

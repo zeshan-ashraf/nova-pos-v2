@@ -62,10 +62,11 @@
                             <label>Category</label>
                             <input type="text" class="form-control bg-white" value="{{  $product->category->name }}" readonly>
                         </div>
-                        <div class="form-group col-md-6">
+                        {{-- Supplier field removed --}}
+                        {{-- <div class="form-group col-md-6">
                             <label>Supplier</label>
-                            <input type="text" class="form-control bg-white" value="{{  $product->supplier->name }}" readonly>
-                        </div>
+                            <input type="text" class="form-control bg-white" value="{{  $product->supplier ? $product->supplier->name : 'N/A' }}" readonly>
+                        </div> --}}
                         <div class="form-group col-md-6">
                             <label>Product Garage</label>
                             <input type="text" class="form-control bg-white" value="{{  $product->product_garage }}" readonly>
