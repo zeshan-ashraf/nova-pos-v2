@@ -70,10 +70,8 @@
                     <thead class="bg-white text-uppercase">
                         <tr class="ligth ligth-data">
                             <th>No.</th>
-                            <th>Photo</th>
                             <th>@sortablelink('title', 'Title')</th>
                             <th>@sortablelink('description', 'Description')</th>
-                            <th>@sortablelink('customer.name', 'Customer')</th>
                             <th>@sortablelink('date', 'Date')</th>
                             <th>@sortablelink('activity_cost', 'Activity Cost')</th>
                             <th>Action</th>
@@ -83,18 +81,8 @@
                         @forelse ($activities as $activity)
                             <tr>
                                 <td>{{ (($activities->currentPage() - 1) * $activities->perPage()) + $loop->iteration }}</td> <!-- Correct serial number -->
-                                <td>
-                                    @if (is_array($activity->images))
-                                        @foreach ($activity->images as $image)
-                                            <img class="avatar-60 rounded" src="{{ asset('storage/' . $image) }}" alt="Activity Image">
-                                        @endforeach
-                                    @else
-                                        <img class="avatar-60 rounded" src="{{ asset('assets/images/product/default.webp') }}" alt="Default Image">
-                                    @endif
-                                </td>
                                 <td>{{ $activity->title }}</td>
                                 <td>{{ Str::limit($activity->description, 20) }}</td>
-                                <td>{{ $activity->customer->name }}</td>
                                 <td>{{ $activity->date }}</td>
                                 <td>{{ $activity->activity_cost }}</td>
                                 <td>
@@ -113,7 +101,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="text-center">
+                                <td colspan="5" class="text-center">
                                     <div class="alert text-white bg-danger" role="alert">
                                         <div class="iq-alert-text">No Activities Found.</div>
                                         <button type="button" class="close" data-dismiss="alert" aria-label="Close">
@@ -164,15 +152,6 @@
 
                             var truncatedDescription = activity.description.length > 20 ? activity.description.substring(0, 20) + '...' : activity.description;
 
-                            var imagesHtml = '';
-                            if (activity.images && activity.images.length > 0) {
-                                $.each(activity.images, function(i, image) {
-                                    imagesHtml += `<img class="avatar-60 rounded" src="/storage/${image}" alt="Activity Image" style="margin-right: 5px;">`;
-                                });
-                            } else {
-                                imagesHtml = `<img class="avatar-60 rounded" src="/assets/images/product/default.webp" alt="Default Image">`;
-                            }
-
                             var actionButtons = `
                                 <div class="d-flex align-items-center list-action">
                                     <!-- View Button -->
@@ -195,12 +174,8 @@
                             var row = `
                                 <tr>
                                     <td>${serialNumber}</td> <!-- Serial number adjusted for pagination -->
-                                    <td>
-                                        ${imagesHtml} <!-- Display all images -->
-                                    </td>
                                     <td>${activity.title}</td>
                                     <td>${truncatedDescription}</td> <!-- Truncated description -->
-                                    <td>${activity.customer ? activity.customer.name : 'No Customer'}</td>
                                     <td>${activity.date}</td>
                                     <td>${activity.activity_cost}</td>
                                     <td>
@@ -211,7 +186,7 @@
                             $('#activity-table-body').append(row);
                         });
                     } else {
-                        activityList.append('<tr><td colspan="7" class="text-center">No Activities Found.</td></tr>');
+                        activityList.append('<tr><td colspan="5" class="text-center">No Activities Found.</td></tr>');
                     }
 
                     $('#pagination').html(response.activities.links);

@@ -20,14 +20,6 @@
 
                 <div class="card-body">
                     <!-- View Activity Form (Read-Only) -->
-                    <!-- Customer Name -->
-                    <div class="form-group row">
-                        <div class="col-md-6">
-                            <label for="customer_id">Customer</label>
-                            <input type="text" class="form-control" id="customer_id" value="{{ $activity->customer->name ?? 'N/A' }}" readonly>
-                        </div>
-                    </div>
-
                     <!-- Activity Title -->
                     <div class="form-group row">
                         <div class="col-md-12">

@@ -121,25 +121,6 @@
                         </div>
                         <!-- end: Input Activity Cost -->
 
-                        <!-- begin: Input Customer -->
-                        <div class="form-group row">
-                            <div class="col-md-6">
-                                <label for="customer_id">Customer <span class="text-danger">*</span></label>
-                                <select class="form-control @error('customer_id') is-invalid @enderror" name="customer_id" required>
-                                    <option selected="" disabled>-- Select Customer --</option>
-                                    @foreach ($customers as $customer)
-                                        <option value="{{ $customer->id }}" {{ old('customer_id', $activity->customer_id) == $customer->id ? 'selected' : '' }}>{{ $customer->name }}</option>
-                                    @endforeach
-                                </select>
-                                @error('customer_id')
-                                <div class="invalid-feedback">
-                                    {{ $message }}
-                                </div>
-                                @enderror
-                            </div>
-                        </div>
-                        <!-- end: Input Customer -->
-
                         <!-- Submit Button -->
                         <div class="mt-2">
                             <button type="submit" class="btn btn-primary mr-2">Update</button>

@@ -3,11 +3,9 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Models\Activity;
-use App\Models\Customer;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Redirect;
-use App\Support\ActiveShop;
 
 class ActivityController extends Controller
 {
@@ -38,23 +36,7 @@ class ActivityController extends Controller
      */
     public function create()
     {
-        $authUser = auth()->user();
-        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
-
-        $customersQuery = Customer::query();
-        if ($authUser->shop_id) {
-            $customersQuery->whereIn('shop_id', $visibleShopIds);
-        } else {
-            $customersQuery->where(function ($query) use ($visibleShopIds) {
-                $query->whereNull('shop_id');
-                if ($visibleShopIds->isNotEmpty()) {
-                    $query->orWhereIn('shop_id', $visibleShopIds);
-                }
-            });
-        }
-
-        $customers = $customersQuery->orderBy('name')->get();
-        return view('activities.create', compact('customers'));
+        return view('activities.create');
     }
 
     /**
@@ -67,7 +49,6 @@ class ActivityController extends Controller
             'description' => 'required|string',
             'date' => 'required|date',
             'activity_cost' => 'required|numeric',
-            'customer_id' => 'required|exists:customers,id',
             'image_1' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
             'image_2' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
@@ -89,7 +70,7 @@ class ActivityController extends Controller
             'description' => $request->input('description'),
             'date' => $request->input('date'),
             'activity_cost' => $request->input('activity_cost'),
-            'customer_id' => $request->input('customer_id'),
+            'customer_id' => null,
             'images' => json_encode($images), // Storing images as JSON array
         ]);
 
@@ -109,23 +90,7 @@ class ActivityController extends Controller
      */
     public function edit(Activity $activity)
     {
-        $authUser = auth()->user();
-        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
-
-        $customersQuery = Customer::query();
-        if ($authUser->shop_id) {
-            $customersQuery->whereIn('shop_id', $visibleShopIds);
-        } else {
-            $customersQuery->where(function ($query) use ($visibleShopIds) {
-                $query->whereNull('shop_id');
-                if ($visibleShopIds->isNotEmpty()) {
-                    $query->orWhereIn('shop_id', $visibleShopIds);
-                }
-            });
-        }
-
-        $customers = $customersQuery->orderBy('name')->get();
-        return view('activities.edit', compact('activity','customers'));
+        return view('activities.edit', compact('activity'));
     }
 
     /**
@@ -138,7 +103,6 @@ class ActivityController extends Controller
             'description' => 'required|string',
             'date' => 'required|date',
             'activity_cost' => 'required|numeric',
-            'customer_id' => 'required|exists:customers,id',
             'images' => 'nullable|array',
             'images.*' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
@@ -156,7 +120,7 @@ class ActivityController extends Controller
             'description' => $request->input('description'),
             'date' => $request->input('date'),
             'activity_cost' => $request->input('activity_cost'),
-            'customer_id' => $request->input('customer_id'),
+            'customer_id' => null,
             'images' => $images, // Store as an array, not JSON
         ]);
 
@@ -176,14 +140,10 @@ class ActivityController extends Controller
     {
         $searchTerm = $request->get('search');
 
-        $activities = Activity::with('customer')
-            ->where('title', 'like', "%{$searchTerm}%")
+        $activities = Activity::where('title', 'like', "%{$searchTerm}%")
             ->orWhere('description', 'like', "%{$searchTerm}%")
             ->orWhere('date', 'like', "%{$searchTerm}%")
             ->orWhere('activity_cost', 'like', "%{$searchTerm}%")
-            ->orWhereHas('customer', function ($query) use ($searchTerm) {
-                $query->where('name', 'like', "%{$searchTerm}%");
-            })
             ->paginate(10);
 
         if ($request->ajax()) {
