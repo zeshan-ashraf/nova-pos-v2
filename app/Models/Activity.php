@@ -18,6 +18,7 @@ class Activity extends Model
         'images',
         'activity_cost',
         'customer_id',
+        'shop_id',
     ];
 
     public function getImagesAttribute($value)
@@ -28,6 +29,11 @@ class Activity extends Model
     public function customer()
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function shop()
+    {
+        return $this->belongsTo(Shop::class, 'shop_id');
     }
 }
 

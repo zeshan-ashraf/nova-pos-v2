@@ -6,6 +6,7 @@ use App\Models\Activity;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Redirect;
+use App\Support\ActiveShop;
 
 class ActivityController extends Controller
 {
@@ -22,8 +23,17 @@ class ActivityController extends Controller
             abort(400, 'The per-page parameter must be an integer between 1 and 100.');
         }
 
+        $authUser = auth()->user();
+        $activitiesQuery = Activity::query();
+
+        // Apply shop filtering - super admin can see all activities, others only their shop
+        if ($authUser && $authUser->shop_id) {
+            $activitiesQuery->where('shop_id', $authUser->shop_id);
+        }
+        // Super admin (no shop_id) can see all activities, no filtering needed
+
         // Paginate activities with the specified number of rows per page
-        $activities = Activity::paginate($row);
+        $activities = $activitiesQuery->paginate($row);
 
         return view('activities.index', [
             'activities' => $activities,
@@ -65,12 +75,14 @@ class ActivityController extends Controller
             $images[] = $image2Path;
         }
 
+        $authUser = auth()->user();
         Activity::create([
             'title' => $request->input('title'),
             'description' => $request->input('description'),
             'date' => $request->input('date'),
             'activity_cost' => $request->input('activity_cost'),
             'customer_id' => null,
+            'shop_id' => $authUser ? $authUser->shop_id : null, // Set shop_id from logged in user
             'images' => json_encode($images), // Storing images as JSON array
         ]);
 
@@ -82,6 +94,7 @@ class ActivityController extends Controller
      */
     public function show(Activity $activity)
     {
+        $this->ensureShopAccess($activity);
         return view('activities.show', compact('activity'));
     }
 
@@ -90,6 +103,7 @@ class ActivityController extends Controller
      */
     public function edit(Activity $activity)
     {
+        $this->ensureShopAccess($activity);
         return view('activities.edit', compact('activity'));
     }
 
@@ -98,6 +112,8 @@ class ActivityController extends Controller
      */
     public function update(Request $request, Activity $activity)
     {
+        $this->ensureShopAccess($activity);
+        
         $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'required|string',
@@ -133,24 +149,58 @@ class ActivityController extends Controller
      */
     public function destroy(Activity $activity)
     {
+        $this->ensureShopAccess($activity);
         $activity->delete();
         return Redirect::route('activities.index')->with('success', 'Activity has been deleted!');
     }
     public function activitySearch(Request $request)
     {
         $searchTerm = $request->get('search');
+        $authUser = auth()->user();
 
-        $activities = Activity::where('title', 'like', "%{$searchTerm}%")
-            ->orWhere('description', 'like', "%{$searchTerm}%")
-            ->orWhere('date', 'like', "%{$searchTerm}%")
-            ->orWhere('activity_cost', 'like', "%{$searchTerm}%")
-            ->paginate(10);
+        $activitiesQuery = Activity::where(function ($query) use ($searchTerm) {
+            $query->where('title', 'like', "%{$searchTerm}%")
+                ->orWhere('description', 'like', "%{$searchTerm}%")
+                ->orWhere('date', 'like', "%{$searchTerm}%")
+                ->orWhere('activity_cost', 'like', "%{$searchTerm}%");
+        });
+
+        // Apply shop filtering - super admin can see all activities, others only their shop
+        if ($authUser && $authUser->shop_id) {
+            $activitiesQuery->where('shop_id', $authUser->shop_id);
+        }
+        // Super admin (no shop_id) can see all activities, no filtering needed
+
+        $activities = $activitiesQuery->paginate(10);
 
         if ($request->ajax()) {
             return response()->json(['activities' => $activities]);
         }
 
         return view('activities.index', compact('activities'));
+    }
+
+    /**
+     * Ensure the current user has access to the activity based on shop.
+     */
+    protected function ensureShopAccess(Activity $activity): void
+    {
+        $authUser = auth()->user();
+
+        // If user is not authenticated, deny access
+        if (!$authUser) {
+            abort(403, 'You must be authenticated to access this activity.');
+        }
+
+        // Super admin can access all activities
+        if (!$authUser->shop_id) {
+            return;
+        }
+
+        // Users with shop_id can only access activities from their shop
+        if ($activity->shop_id !== $authUser->shop_id) {
+            abort(403, 'You do not have access to this activity.');
+        }
     }
 
 }
