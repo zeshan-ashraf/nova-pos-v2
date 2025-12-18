@@ -500,6 +500,96 @@ class OrderController extends Controller
     }
 
     /**
+     * Get order information for delete confirmation.
+     */
+    public function getOrderInfoForDelete(int $order_id)
+    {
+        $order = Order::with(['customer', 'orderDetails.product', 'paymentLogs'])
+            ->findOrFail($order_id);
+        $this->ensureShopAccess($order);
+
+        $totalStockToReverse = $order->orderDetails->sum('quantity');
+        $totalPayments = $order->paymentLogs->count();
+        $totalPaymentAmount = $order->paymentLogs->sum('amount_paid');
+
+        return response()->json([
+            'order' => [
+                'id' => $order->id,
+                'invoice_no' => $order->invoice_no,
+                'customer_name' => $order->customer->name ?? 'N/A',
+                'total' => $order->total,
+                'due' => $order->due ?? 0,
+                'pay' => $order->pay ?? 0,
+                'order_date' => $order->order_date,
+                'order_status' => $order->order_status,
+            ],
+            'total_products' => $order->orderDetails->count(),
+            'total_stock_to_reverse' => $totalStockToReverse,
+            'total_payments' => $totalPayments,
+            'total_payment_amount' => $totalPaymentAmount,
+        ]);
+    }
+
+    /**
+     * Delete (soft delete) an order and reverse all related operations.
+     */
+    public function destroy(int $order_id)
+    {
+        $order = Order::with(['customer', 'orderDetails.product', 'paymentLogs'])
+            ->findOrFail($order_id);
+        $this->ensureShopAccess($order);
+
+        $creditService = new CustomerCreditService();
+        $customer = $order->customer;
+
+        try {
+            DB::transaction(function () use ($order, $customer, $creditService) {
+                // 1. Reverse stock for all order details
+                foreach ($order->orderDetails as $orderDetail) {
+                    $product = $orderDetail->product;
+                    
+                    if (!$product) {
+                        throw new \Exception("Product with ID {$orderDetail->product_id} not found. Cannot reverse stock.");
+                    }
+
+                    // Add back the stock quantity
+                    Product::where('id', $orderDetail->product_id)
+                        ->update(['product_store' => DB::raw('product_store + ' . $orderDetail->quantity)]);
+                }
+
+                // 2. Reverse customer credit for pending amount (due)
+                if ($customer && $order->due > 0) {
+                    $creditService->removePending($customer, $order->due);
+                }
+
+                // 3. Reverse customer credit for all payments made
+                if ($customer) {
+                    foreach ($order->paymentLogs as $paymentLog) {
+                        $creditService->reversePayment($customer, $paymentLog->amount_paid);
+                    }
+                }
+
+                // 4. Soft delete payment logs
+                foreach ($order->paymentLogs as $paymentLog) {
+                    $paymentLog->delete();
+                }
+
+                // 5. Soft delete order details
+                foreach ($order->orderDetails as $orderDetail) {
+                    $orderDetail->delete();
+                }
+
+                // 6. Soft delete order
+                $order->delete();
+            });
+
+            return Redirect::route('order.index')->with('success', 'Order has been deleted successfully! Stock has been reversed and payments have been removed.');
+        } catch (\Exception $e) {
+            return Redirect::route('order.index')->with('error', 'Failed to delete order: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Ensure the current user has access to the order based on shop.
      */
     protected function ensureShopAccess(Order $order): void

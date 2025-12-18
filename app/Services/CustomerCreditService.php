@@ -64,5 +64,48 @@ class CustomerCreditService
         $current = $customer->credit_amount ?? 0;
         return ($current + max(0, $pendingAmount)) > $limit;
     }
+
+    /**
+     * Decrease customer's credit balance by pending amount (reverse of addPending).
+     * Used when deleting an order that had a due amount.
+     * Returns the new credit_amount.
+     */
+    public function removePending(Customer $customer, float $pendingAmount): float
+    {
+        if ($pendingAmount <= 0) {
+            return $customer->credit_amount;
+        }
+
+        return DB::transaction(function () use ($customer, $pendingAmount) {
+            /** @var Customer $locked */
+            $locked = Customer::whereKey($customer->getKey())->lockForUpdate()->firstOrFail();
+            $newAmount = max(0, ($locked->credit_amount ?? 0) - $pendingAmount);
+            $locked->credit_amount = $newAmount;
+            $locked->save();
+
+            return $locked->credit_amount;
+        });
+    }
+
+    /**
+     * Increase customer's credit balance by payment amount (reverse of applyPayment).
+     * Used when deleting an order to reverse payments that were made.
+     * Returns the new credit_amount.
+     */
+    public function reversePayment(Customer $customer, float $paymentAmount): float
+    {
+        if ($paymentAmount <= 0) {
+            return $customer->credit_amount;
+        }
+
+        return DB::transaction(function () use ($customer, $paymentAmount) {
+            /** @var Customer $locked */
+            $locked = Customer::whereKey($customer->getKey())->lockForUpdate()->firstOrFail();
+            $locked->credit_amount = ($locked->credit_amount ?? 0) + $paymentAmount;
+            $locked->save();
+
+            return $locked->credit_amount;
+        });
+    }
 }
 

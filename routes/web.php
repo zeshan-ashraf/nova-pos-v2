@@ -151,6 +151,10 @@ Route::middleware(['permission:orders.menu'])->group(function () {
     Route::get('paymentLogs/search/{orderId}', [OrderController::class, 'paymentSearch'])->name('paymentlog.search');
     Route::post('/payment-log/{paymentLogId}/upload-invoice', [OrderController::class, 'uploadInvoice'])->name('paymentlog.uploadInvoice');
 
+    // Order Delete
+    Route::get('/orders/{order_id}/delete-info', [OrderController::class, 'getOrderInfoForDelete'])->name('order.deleteInfo');
+    Route::delete('/orders/{order_id}', [OrderController::class, 'destroy'])->name('order.destroy');
+
 });
 
 // ====== ACTIVITY CONTROLLER ======
