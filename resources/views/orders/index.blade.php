@@ -148,52 +148,60 @@
                 <div class="card">
                     <div class="card-body">
                         <h6 class="card-title mb-3">Order Information:</h6>
-                        <table class="table table-sm table-borderless">
-                            <tr>
-                                <td width="40%"><strong>Invoice No:</strong></td>
-                                <td id="modal-invoice-no">-</td>
-                            </tr>
-                            <tr>
-                                <td><strong>Customer:</strong></td>
-                                <td id="modal-customer-name">-</td>
-                            </tr>
-                            <tr>
-                                <td><strong>Order Date:</strong></td>
-                                <td id="modal-order-date">-</td>
-                            </tr>
-                            <tr>
-                                <td><strong>Order Status:</strong></td>
-                                <td id="modal-order-status">-</td>
-                            </tr>
-                            <tr>
-                                <td><strong>Total Amount:</strong></td>
-                                <td id="modal-total">-</td>
-                            </tr>
-                            <tr>
-                                <td><strong>Paid Amount:</strong></td>
-                                <td id="modal-pay">-</td>
-                            </tr>
-                            <tr>
-                                <td><strong>Due Amount:</strong></td>
-                                <td id="modal-due">-</td>
-                            </tr>
-                            <tr>
-                                <td><strong>Number of Products:</strong></td>
-                                <td id="modal-total-products">-</td>
-                            </tr>
-                            <tr>
-                                <td><strong>Total Stock to Reverse:</strong></td>
-                                <td><span class="badge badge-info" id="modal-total-stock">-</span></td>
-                            </tr>
-                            <tr>
-                                <td><strong>Number of Payments:</strong></td>
-                                <td><span class="badge badge-warning" id="modal-total-payments">-</span></td>
-                            </tr>
-                            <tr>
-                                <td><strong>Total Payment Amount:</strong></td>
-                                <td><span class="badge badge-success" id="modal-total-payment-amount">-</span></td>
-                            </tr>
-                        </table>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <table class="table table-sm table-borderless mb-0">
+                                    <tr>
+                                        <td width="50%"><strong>Invoice No:</strong></td>
+                                        <td id="modal-invoice-no">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Customer:</strong></td>
+                                        <td id="modal-customer-name">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Order Date:</strong></td>
+                                        <td id="modal-order-date">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Order Status:</strong></td>
+                                        <td id="modal-order-status">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Total Amount:</strong></td>
+                                        <td id="modal-total">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Paid Amount:</strong></td>
+                                        <td id="modal-pay">-</td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <table class="table table-sm table-borderless mb-0">
+                                    <tr>
+                                        <td width="50%"><strong>Due Amount:</strong></td>
+                                        <td id="modal-due">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Number of Products:</strong></td>
+                                        <td id="modal-total-products">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Total Stock to Reverse:</strong></td>
+                                        <td><span class="badge badge-info" id="modal-total-stock">-</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Number of Payments:</strong></td>
+                                        <td><span class="badge badge-warning" id="modal-total-payments">-</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Total Payment Amount:</strong></td>
+                                        <td><span class="badge badge-success" id="modal-total-payment-amount">-</span></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

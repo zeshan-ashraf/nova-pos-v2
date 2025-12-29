@@ -52,6 +52,7 @@
                             <th>Date</th>
                             <th>Type</th>
                             <th>Invoice / Order</th>
+                            <th class="text-right">Total Amount</th>
                             <th class="text-right">Amount</th>
                         </tr>
                     </thead>
@@ -78,6 +79,13 @@
                                     @endif
                                 </td>
                                 <td class="text-right">
+                                    @if(!empty($event['total']))
+                                        {{ number_format($event['total'], 2) }}
+                                    @else
+                                        —
+                                    @endif
+                                </td>
+                                <td class="text-right">
                                     @if($event['direction'] === 'increase')
                                         +{{ number_format($event['amount'], 2) }}
                                     @else
@@ -87,7 +95,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="text-center text-muted py-4">No credit activity found for this customer.</td>
+                                <td colspan="6" class="text-center text-muted py-4">No credit activity found for this customer.</td>
                             </tr>
                         @endforelse
                     </tbody>

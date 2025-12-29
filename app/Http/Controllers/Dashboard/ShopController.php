@@ -68,6 +68,7 @@ class ShopController extends Controller
             'is_parent' => 'required|boolean',
             'parent_shop_id' => 'nullable|exists:shops,id|required_unless:is_parent,1',
             'status' => 'required|boolean',
+            'invoice_policy' => 'nullable|string',
             'bank_ids' => 'array',
             'bank_ids.*' => 'exists:banks,id',
         ];
@@ -128,6 +129,7 @@ class ShopController extends Controller
             'is_parent' => 'required|boolean',
             'parent_shop_id' => 'nullable|exists:shops,id|required_unless:is_parent,1',
             'status' => 'required|boolean',
+            'invoice_policy' => 'nullable|string',
             'bank_ids' => 'array',
             'bank_ids.*' => 'exists:banks,id',
         ];

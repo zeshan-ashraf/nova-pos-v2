@@ -7,38 +7,39 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Kyslik\ColumnSortable\Sortable;
 
-class Order extends Model
+class SaleReturn extends Model
 {
     use HasFactory, Sortable, SoftDeletes;
 
     protected $fillable = [
+        'order_id',
         'customer_id',
         'shop_id',
-        'order_date',
-        'order_status',
+        'return_date',
+        'return_status',
+        'return_no',
         'total_products',
         'sub_total',
         'invoice_discount',
         'vat',
-        'invoice_no',
         'total',
-        'payment_status',
-        'pay',
-        'due',
-        'comment',
+        'reason',
     ];
 
     public $sortable = [
-        'customer_id',
-        'order_date',
-        'pay',
-        'due',
+        'return_date',
+        'return_no',
         'total',
     ];
 
     protected $guarded = [
         'id',
     ];
+
+    public function order()
+    {
+        return $this->belongsTo(Order::class, 'order_id', 'id');
+    }
 
     public function customer()
     {
@@ -50,18 +51,8 @@ class Order extends Model
         return $this->belongsTo(Shop::class, 'shop_id');
     }
 
-    public function orderDetails()
+    public function returnDetails()
     {
-        return $this->hasMany(OrderDetails::class, 'order_id', 'id');
-    }
-
-    public function paymentLogs()
-    {
-        return $this->hasMany(PaymentLog::class, 'order_id', 'id');
-    }
-
-    public function saleReturns()
-    {
-        return $this->hasMany(SaleReturn::class, 'order_id', 'id');
+        return $this->hasMany(SaleReturnDetail::class, 'return_id', 'id');
     }
 }

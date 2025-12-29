@@ -6,12 +6,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class OrderDetails extends Model
+class PurchaseDetail extends Model
 {
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'order_id',
+        'purchase_id',
         'product_id',
         'quantity',
         'unitcost',
@@ -22,15 +22,16 @@ class OrderDetails extends Model
     protected $guarded = [
         'id',
     ];
+
     protected $with = ['product'];
+
+    public function purchase()
+    {
+        return $this->belongsTo(Purchase::class, 'purchase_id', 'id');
+    }
 
     public function product()
     {
         return $this->belongsTo(Product::class, 'product_id', 'id');
-    }
-
-    public function returnDetails()
-    {
-        return $this->hasMany(SaleReturnDetail::class, 'order_detail_id', 'id');
     }
 }

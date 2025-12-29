@@ -52,6 +52,12 @@
                                     <label>Address</label>
                                     <textarea class="form-control bg-white" rows="2" readonly>{{ $shop->address }}</textarea>
                                 </div>
+                                @if($shop->invoice_policy)
+                                <div class="form-group col-md-12">
+                                    <label>Invoice Policy</label>
+                                    <textarea class="form-control bg-white" rows="4" readonly>{{ $shop->invoice_policy }}</textarea>
+                                </div>
+                                @endif
                             </div>
                         </div>
                     </div>

@@ -8,7 +8,7 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between">
                     <div class="header-title">
-                        <h4 class="card-title">Information Order Details</h4>
+                        <h4 class="card-title">Purchase Details</h4>
                     </div>
                 </div>
 
@@ -18,7 +18,7 @@
                         <div class="col-md-12">
                             <div class="profile-img-edit">
                                 <div class="crm-profile-img-edit">
-                                    <img class="crm-profile-pic rounded-circle avatar-100" id="image-preview" src="{{ $order->customer->photo ? asset('storage/customers/'.$order->customer->photo) : asset('storage/customers/default.png') }}" alt="profile-pic">
+                                    <img class="crm-profile-pic rounded-circle avatar-100" id="image-preview" src="{{ $purchase->supplier->photo ? asset('storage/suppliers/'.$purchase->supplier->photo) : asset('storage/suppliers/default.png') }}" alt="profile-pic">
                                 </div>
                             </div>
                         </div>
@@ -26,43 +26,43 @@
 
                     <div class="row align-items-center">
                         <div class="form-group col-md-12">
-                            <label>Customer Name</label>
-                            <input type="text" class="form-control bg-white" value="{{ $order->customer->name }}" readonly>
+                            <label>Supplier Name</label>
+                            <input type="text" class="form-control bg-white" value="{{ $purchase->supplier->shopname ?? $purchase->supplier->name }}" readonly>
                         </div>
                         <div class="form-group col-md-6">
-                            <label>Customer Email</label>
-                            <input type="text" class="form-control bg-white" value="{{ $order->customer->email }}" readonly>
+                            <label>Supplier Email</label>
+                            <input type="text" class="form-control bg-white" value="{{ $purchase->supplier->email ?? 'N/A' }}" readonly>
                         </div>
                         <div class="form-group col-md-6">
-                            <label>Customer Phone</label>
-                            <input type="text" class="form-control bg-white" value="{{ $order->customer->phone }}" readonly>
+                            <label>Supplier Phone</label>
+                            <input type="text" class="form-control bg-white" value="{{ $purchase->supplier->phone ?? 'N/A' }}" readonly>
                         </div>
                         <div class="form-group col-md-6">
-                            <label>Order Date</label>
-                            <input type="text" class="form-control bg-white" value="{{ $order->order_date }}" readonly>
+                            <label>Purchase Date</label>
+                            <input type="text" class="form-control bg-white" value="{{ $purchase->purchase_date }}" readonly>
                         </div>
                         <div class="form-group col-md-6">
-                            <label>Order Invoice</label>
-                            <input class="form-control bg-white" id="buying_date" value="{{ $order->invoice_no }}" readonly/>
+                            <label>Purchase Number</label>
+                            <input class="form-control bg-white" value="{{ $purchase->purchase_no }}" readonly/>
                         </div>
                         <div class="form-group col-md-6">
                             <label>Payment Status</label>
-                            <input class="form-control bg-white" id="expire_date" value="{{ $order->payment_status }}" readonly />
+                            <input class="form-control bg-white" value="{{ $purchase->payment_status }}" readonly />
                         </div>
                         <div class="form-group col-md-6">
                             <label>Paid Amount</label>
-                            <input type="text" class="form-control bg-white" value="{{ $order->pay }}" readonly>
+                            <input type="text" class="form-control bg-white" value="{{ number_format($purchase->pay ?? 0, 2) }}" readonly>
                         </div>
                         <div class="form-group col-md-6">
                             <label>Due Amount</label>
-                            <input type="text" class="form-control bg-white" value="{{ $order->due }}" readonly>
+                            <input type="text" class="form-control bg-white" value="{{ number_format($purchase->due ?? 0, 2) }}" readonly>
                         </div>
-                        @if ($order->payment_status === 'Bank')
+                        @if ($purchase->payment_status === 'bank')
                             <div class="form-group col-md-12">
                                 <label>Bank Information</label>
-                                @if ($order->shop && $order->shop->banks->isNotEmpty())
+                                @if ($purchase->shop && $purchase->shop->banks->isNotEmpty())
                                     <div class="d-flex flex-wrap">
-                                        @foreach ($order->shop->banks as $bank)
+                                        @foreach ($purchase->shop->banks as $bank)
                                             <span class="badge badge-primary mr-2 mb-2">{{ $bank->name }}</span>
                                         @endforeach
                                     </div>
@@ -74,17 +74,17 @@
                     </div>
                     <!-- end: Show Data -->
 
-                    @if ($order->order_status == 'pending')
+                    @if ($purchase->purchase_status == 'pending')
                         <div class="row">
                             <div class="col-lg-12">
                                 <div class="d-flex align-items-center list-action">
-                                    <form action="{{ route('order.updateStatus') }}" method="POST" style="margin-bottom: 5px">
+                                    <form action="{{ route('purchases.updateStatus') }}" method="POST" style="margin-bottom: 5px">
                                         @method('put')
                                         @csrf
-                                        <input type="hidden" name="id" value="{{ $order->id }}">
-                                        <button type="submit" class="btn btn-success mr-2 border-none" data-toggle="tooltip" data-placement="top" title="" data-original-title="Complete">Complete Order</button>
+                                        <input type="hidden" name="id" value="{{ $purchase->id }}">
+                                        <button type="submit" class="btn btn-success mr-2 border-none" data-toggle="tooltip" data-placement="top" title="" data-original-title="Complete">Complete Purchase</button>
 
-                                        <a class="btn btn-danger mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Cancel" href="{{ route('order.pendingOrders') }}">Cancel</a>
+                                        <a class="btn btn-danger mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Cancel" href="{{ route('purchases.pending') }}">Cancel</a>
                                     </form>
                                 </div>
                             </div>
@@ -93,7 +93,6 @@
                 </div>
             </div>
         </div>
-
 
         <!-- end: Show Data -->
         <div class="col-lg-12">
@@ -106,18 +105,18 @@
                             <th>Product Code</th>
                             <th>Quantity</th>
                             <th>Price</th>
-                            <th>Total(+vat)</th>
+                            <th>Total</th>
                         </tr>
                     </thead>
                     <tbody class="ligth-body">
-                        @foreach ($orderDetails as $item)
+                        @foreach ($purchaseDetails as $item)
                         <tr>
-                            <td>{{ $loop->iteration  }}</td>
-                            <td>{{ $item->product->product_name }}</td>
-                            <td>{{ $item->product->product_code }}</td>
+                            <td>{{ $loop->iteration }}</td>
+                            <td>{{ $item->product->product_name ?? 'N/A' }}</td>
+                            <td>{{ $item->product->product_code ?? 'N/A' }}</td>
                             <td>{{ $item->quantity }}</td>
-                            <td>{{ $item->unitcost }}</td>
-                            <td>{{ $item->total }}</td>
+                            <td>{{ number_format($item->unitcost, 2) }}</td>
+                            <td>{{ number_format($item->total, 2) }}</td>
                         </tr>
                         @endforeach
                     </tbody>

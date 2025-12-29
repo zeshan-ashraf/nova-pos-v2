@@ -64,7 +64,6 @@
                             <th>Photo</th>
                             {{-- <th>@sortablelink('name')</th> --}} {{-- Name column removed from UI - may be needed in future --}}
                             <th>@sortablelink('shopname', 'Shop Name')</th>
-                            <th>@sortablelink('email')</th>
                             <th>@sortablelink('phone')</th>
                             <th>Credit Limit</th>
                             <th>Credit Amount</th>
@@ -81,7 +80,6 @@
                             </td>
                             {{-- <td>{{ $customer->name }}</td> --}} {{-- Name column removed from UI - may be needed in future --}}
                             <td>{{ $customer->shopname }}</td>
-                            <td>{{ $customer->email }}</td>
                             <td>{{ $customer->phone }}</td>
                             <td>{{ number_format($customer->credit_limit ?? 0, 2) }}</td>
                             <td>{{ number_format($customer->credit_amount ?? 0, 2) }}</td>

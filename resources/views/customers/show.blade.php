@@ -1,19 +1,7 @@
 @extends('dashboard.body.main')
 
 @section('container')
-<div class="container-fluid mb-3">
-    <div class="row">
-        <div class="col-lg-12">
-            <div class="card car-transparent">
-                <div class="card-body p-0">
-                    <div class="profile-image position-relative">
-                        <img src="{{ asset('assets/images/page-img/profile.png') }}" class="img-fluid rounded h-30 w-100" alt="profile-image">
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
+<div class="container-fluid mb-3" style="padding-top: 90px;">
     <div class="row px-3">
         <!-- begin: Left Detail Employee -->
         <div class="col-lg-4 card-profile mb-5 h-50">
@@ -28,6 +16,7 @@
                             {{-- <p class="mb-2">{{ $customer->shopname }}</p> --}} {{-- Removed duplicate shopname display --}}
                             <a href="{{ route('customers.edit', $customer->id) }}" class="btn btn-primary font-size-14">Edit</a>
                             <a href="{{ route('customers.creditLog', $customer->id) }}" class="btn btn-info font-size-14">Credit Log</a>
+                            <a href="{{ route('customers.ledger', $customer->id) }}" class="btn btn-success font-size-14">Ledger</a>
                             <a href="{{ route('customers.index') }}" class="btn btn-danger font-size-14">Back</a>
                         </div>
                     </div>

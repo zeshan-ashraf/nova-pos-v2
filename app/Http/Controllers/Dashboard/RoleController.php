@@ -44,7 +44,7 @@ class RoleController extends Controller
 
     public function permissionEdit(Int $id)
     {
-        $permission = Permission::findById($id);
+        $permission = Permission::findOrFail($id);
 
         return view('roles.permission-edit', [
             'permission' => $permission,

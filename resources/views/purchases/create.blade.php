@@ -100,11 +100,6 @@
         .btn-add-row {
             margin: 15px 0;
         }
-        .stock-warning {
-            color: #dc3545;
-            font-size: 12px;
-            font-weight: bold;
-        }
         .stock-label {
             font-weight: 600;
             color: #495057;
@@ -156,7 +151,7 @@
 
             <div class="invoice-form-container">
                 <div class="invoice-header">
-                    <h4>Create New Invoice</h4>
+                    <h4>Create New Purchase</h4>
                 </div>
                 
                 <!-- Credit Limit Warning -->
@@ -166,78 +161,34 @@
                     </div>
                 </div>
 
-                <form id="invoiceForm" method="POST" action="{{ route('invoice.store') }}">
+                <form id="purchaseForm" method="POST" action="{{ route('purchases.store') }}">
                     @csrf
 
-                    <!-- Customer/Shop and Date Section -->
+                    <!-- Supplier and Date Section -->
                     <div class="form-row-invoice">
                         <div class="row">
                             <div class="col-md-6">
-                                @if($childShops->isNotEmpty())
-                                    <!-- Parent Shop: Show both Customer and Shop dropdowns -->
-                                    <div class="form-group">
-                                        <label>Select Type <span class="text-danger">*</span></label>
-                                        <div class="btn-group btn-group-toggle w-100" data-toggle="buttons">
-                                            <label class="btn btn-outline-primary active" id="btn-customer-type">
-                                                <input type="radio" name="select_type" value="customer" checked> Customer
-                                            </label>
-                                            <label class="btn btn-outline-primary" id="btn-shop-type">
-                                                <input type="radio" name="select_type" value="shop"> Shop Transfer
-                                            </label>
-                                        </div>
-                                    </div>
-                                    <div class="form-group" id="customer-group">
-                                        <label for="customer_id">Customer <span class="text-danger">*</span></label>
-                                        <select class="form-control" id="customer_id" name="customer_id">
-                                            <option value="">Select Customer</option>
-                                            @foreach($customers as $customer)
-                                                <option value="{{ $customer->id }}" 
-                                                    data-credit-limit="{{ $customer->credit_limit ?? 0 }}" 
-                                                    data-credit-amount="{{ $customer->credit_amount ?? 0 }}">
-                                                    {{ $customer->shopname ?: $customer->name }}
-                                                </option>
-                                            @endforeach
-                                        </select>
-                                        @error('customer_id')
-                                            <div class="text-danger">{{ $message }}</div>
-                                        @enderror
-                                    </div>
-                                    <div class="form-group" id="shop-group" style="display: none;">
-                                        <label for="shop_id">Child Shop <span class="text-danger">*</span></label>
-                                        <select class="form-control" id="shop_id" name="shop_id">
-                                            <option value="">Select Child Shop</option>
-                                            @foreach($childShops as $shop)
-                                                <option value="{{ $shop->id }}">{{ $shop->name }}</option>
-                                            @endforeach
-                                        </select>
-                                        @error('shop_id')
-                                            <div class="text-danger">{{ $message }}</div>
-                                        @enderror
-                                    </div>
-                                @else
-                                    <!-- Regular Shop: Show only Customer dropdown -->
-                                    <div class="form-group">
-                                        <label for="customer_id">Customer <span class="text-danger">*</span></label>
-                                        <select class="form-control" id="customer_id" name="customer_id" required>
-                                            <option value="">Select Customer</option>
-                                            @foreach($customers as $customer)
-                                                <option value="{{ $customer->id }}" 
-                                                    data-credit-limit="{{ $customer->credit_limit ?? 0 }}" 
-                                                    data-credit-amount="{{ $customer->credit_amount ?? 0 }}">
-                                                    {{ $customer->shopname ?: $customer->name }}
-                                                </option>
-                                            @endforeach
-                                        </select>
-                                        @error('customer_id')
-                                            <div class="text-danger">{{ $message }}</div>
-                                        @enderror
-                                    </div>
-                                @endif
+                                <div class="form-group">
+                                    <label for="supplier_id">Supplier <span class="text-danger">*</span></label>
+                                    <select class="form-control" id="supplier_id" name="supplier_id" required>
+                                        <option value="">Select Supplier</option>
+                                        @foreach($suppliers as $supplier)
+                                            <option value="{{ $supplier->id }}" 
+                                                data-credit-limit="{{ $supplier->credit_limit ?? 0 }}" 
+                                                data-credit-amount="{{ $supplier->credit_amount ?? 0 }}">
+                                                {{ $supplier->shopname ?: $supplier->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @error('supplier_id')
+                                        <div class="text-danger">{{ $message }}</div>
+                                    @enderror
+                                </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label for="order_date">Date & Time <span class="text-danger">*</span></label>
-                                    <input type="datetime-local" class="form-control" id="order_date" name="order_date" required>
+                                    <label for="purchase_date">Date <span class="text-danger">*</span></label>
+                                    <input type="date" class="form-control" id="purchase_date" name="purchase_date" required>
                                 </div>
                             </div>
                         </div>
@@ -270,7 +221,7 @@
                                                 <option value="">Select Product</option>
                                                 @foreach($products as $product)
                                                     <option value="{{ $product->id }}" 
-                                                        data-price="{{ $product->selling_price ?? 0 }}" 
+                                                        data-price="{{ $product->buying_price ?? 0 }}" 
                                                         data-stock="{{ $product->product_store ?? 0 }}">
                                                         {{ $product->product_name }} (Stock: {{ $product->product_store ?? 0 }})
                                                     </option>
@@ -286,7 +237,6 @@
                                         </td>
                                         <td>
                                             <input type="number" class="form-control quantity" name="products[0][quantity]" value="1" data-row="0" min="1">
-                                            <span class="stock-warning stock-warning-msg" data-row="0" style="display: none;"></span>
                                         </td>
                                         <td>
                                             <span class="discount-display" data-row="0">0.00</span>
@@ -309,7 +259,7 @@
                         </button>
                     </div>
 
-                    <!-- Invoice Summary -->
+                    <!-- Purchase Summary -->
                     <div class="invoice-summary">
                         <div class="row">
                             <div class="col-md-6 offset-md-6">
@@ -322,13 +272,13 @@
                                     <input type="number" step="0.01" class="form-control d-inline-block" id="vat" name="vat" value="0" min="0" style="width: 150px; display: inline-block;">
                                 </div>
                                 <div class="summary-row">
-                                    <span class="summary-label">Discount on Invoice:</span>
+                                    <span class="summary-label">Discount on Purchase:</span>
                                     <input type="number" step="0.01" class="form-control d-inline-block" id="invoice_discount" name="invoice_discount" value="0" min="0" style="width: 150px; display: inline-block;">
                                 </div>
                                 <div class="summary-row total">
-                                    <span class="summary-label">Invoice Total:</span>
-                                    <span class="summary-value" id="invoice_total">0.00</span>
-                                    <input type="hidden" name="invoice_total" id="invoice_total_hidden" value="0">
+                                    <span class="summary-label">Purchase Total:</span>
+                                    <span class="summary-value" id="purchase_total">0.00</span>
+                                    <input type="hidden" name="purchase_total" id="purchase_total_hidden" value="0">
                                 </div>
                                 <div class="summary-row" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #dee2e6;">
                                     <span class="summary-label">Payment Method <span class="text-danger">*</span>:</span>
@@ -363,10 +313,10 @@
 
                     <!-- Submit Button -->
                     <div class="mt-4">
-                        <button type="submit" class="btn btn-primary btn-lg" id="createInvoiceBtn">
-                            <i class="ri-file-add-line"></i> Create Invoice
+                        <button type="submit" class="btn btn-primary btn-lg" id="createPurchaseBtn">
+                            <i class="ri-file-add-line"></i> Create Purchase
                         </button>
-                        <a href="{{ route('order.index') }}" class="btn btn-secondary btn-lg">Cancel</a>
+                        <a href="{{ route('purchases.index') }}" class="btn btn-secondary btn-lg">Cancel</a>
                     </div>
                 </form>
             </div>
@@ -383,39 +333,13 @@
     $(document).ready(function() {
         let rowCount = 0;
 
-    // Initialize date/time with current date/time
+    // Initialize date with current date
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const formattedDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
-    $('#order_date').val(formattedDateTime);
-
-    // Handle customer/shop type toggle (if exists)
-    @if($childShops->isNotEmpty())
-    $('input[name="select_type"]').on('change', function() {
-        const selectedType = $(this).val();
-        if (selectedType === 'customer') {
-            $('#customer-group').show();
-            $('#shop-group').hide();
-            $('#customer_id').prop('required', true);
-            $('#shop_id').prop('required', false).val('');
-            $('#btn-customer-type').addClass('active');
-            $('#btn-shop-type').removeClass('active');
-        } else if (selectedType === 'shop') {
-            $('#customer-group').hide();
-            $('#shop-group').show();
-            $('#customer_id').prop('required', false).val('');
-            $('#shop_id').prop('required', true);
-            $('#btn-shop-type').addClass('active');
-            $('#btn-customer-type').removeClass('active');
-            // Hide credit warning for shop transfers
-            $('#credit_warning_row').hide();
-        }
-    });
-    @endif
+    const formattedDate = `${year}-${month}-${day}`;
+    $('#purchase_date').val(formattedDate);
 
     // Handle product selection change
     $(document).on('change', '.product-select', function() {
@@ -442,19 +366,6 @@
     // Handle quantity change
     $(document).on('input', '.quantity', function() {
         const rowIndex = $(this).data('row');
-        let quantity = parseFloat($(this).val()) || 0;
-        const stock = parseFloat($(this).closest('tr').find('.stock-display').text()) || 0;
-        
-        // Check stock validation
-        const $warning = $(this).closest('tr').find('.stock-warning-msg');
-        if (quantity > stock) {
-            $warning.text('Quantity exceeds available stock!').show();
-            $(this).val(stock);
-            quantity = stock;
-        } else {
-            $warning.hide();
-        }
-        
         calculateRowTotal(rowIndex);
     });
 
@@ -474,17 +385,17 @@
         $row.find('.discount-display').text(discountDisplay);
         $row.find('.item-discount-value').val(discount > 0 ? discount.toFixed(2) : '0.00');
         
-        calculateInvoiceTotal();
+        calculatePurchaseTotal();
     }
 
     // Handle VAT change
     $(document).on('input', '#vat', function() {
-        calculateInvoiceTotal();
+        calculatePurchaseTotal();
     });
 
-    // Handle invoice discount change
+    // Handle purchase discount change
     $(document).on('input', '#invoice_discount', function() {
-        calculateInvoiceTotal();
+        calculatePurchaseTotal();
     });
 
     // Handle payment amount change
@@ -492,8 +403,8 @@
         calculateDue();
     });
 
-    // Calculate invoice total
-    function calculateInvoiceTotal() {
+    // Calculate purchase total
+    function calculatePurchaseTotal() {
         let subtotal = 0;
         
         $('.total-value').each(function() {
@@ -502,20 +413,20 @@
         
         const vat = parseFloat($('#vat').val()) || 0;
         const invoiceDiscount = parseFloat($('#invoice_discount').val()) || 0;
-        const invoiceTotal = Math.max(0, subtotal + vat - invoiceDiscount);
+        const purchaseTotal = Math.max(0, subtotal + vat - invoiceDiscount);
         
         $('#subtotal').text(subtotal.toFixed(2));
-        $('#invoice_total').text(invoiceTotal.toFixed(2));
-        $('#invoice_total_hidden').val(invoiceTotal.toFixed(2));
+        $('#purchase_total').text(purchaseTotal.toFixed(2));
+        $('#purchase_total_hidden').val(purchaseTotal.toFixed(2));
         
         calculateDue();
     }
 
     // Calculate due amount
     function calculateDue() {
-        const invoiceTotal = parseFloat($('#invoice_total_hidden').val()) || 0;
+        const purchaseTotal = parseFloat($('#purchase_total_hidden').val()) || 0;
         const pay = parseFloat($('#pay').val()) || 0;
-        const due = Math.max(0, invoiceTotal - pay);
+        const due = Math.max(0, purchaseTotal - pay);
         
         $('#due_display').text(due.toFixed(2));
         $('#due_hidden').val(due.toFixed(2));
@@ -526,13 +437,13 @@
     
     // Check credit limit and show warning
     function checkCreditLimit(dueAmount) {
-        const customerId = $('#customer_id').val();
-        if (!customerId) {
+        const supplierId = $('#supplier_id').val();
+        if (!supplierId) {
             $('#credit_warning_row').hide();
             return;
         }
         
-        const selectedOption = $('#customer_id option:selected');
+        const selectedOption = $('#supplier_id option:selected');
         const creditLimit = parseFloat(selectedOption.data('credit-limit')) || 0;
         const creditAmount = parseFloat(selectedOption.data('credit-amount')) || 0;
         
@@ -557,13 +468,13 @@
             return;
         }
         
-        // Calculate new credit amount after this order
+        // Calculate new credit amount after this purchase
         const newCreditAmount = creditAmount + dueAmount;
         
         // Show warning if credit limit would be exceeded
         if (newCreditAmount > creditLimit) {
             const exceededBy = newCreditAmount - creditLimit;
-            const warningText = `Credit limit will be exceeded! Current: ${creditAmount.toFixed(2)}, After this order: ${newCreditAmount.toFixed(2)} (Limit: ${creditLimit.toFixed(2)}). Exceeded by: ${exceededBy.toFixed(2)}`;
+            const warningText = `Credit limit will be exceeded! Current: ${creditAmount.toFixed(2)}, After this purchase: ${newCreditAmount.toFixed(2)} (Limit: ${creditLimit.toFixed(2)}). Exceeded by: ${exceededBy.toFixed(2)}`;
             $('#credit_warning_text').text(warningText);
             $('#credit_warning_row').show();
         } else {
@@ -571,11 +482,11 @@
         }
     }
     
-    // Handle customer change - show warning immediately when customer is selected
-    $(document).on('change', '#customer_id', function() {
+    // Handle supplier change - show warning immediately when supplier is selected
+    $(document).on('change', '#supplier_id', function() {
         // Check credit limit immediately (with 0 due amount to check current status)
         checkCreditLimit(0);
-        // Also recalculate due if there's already an invoice total
+        // Also recalculate due if there's already a purchase total
         calculateDue();
     });
     
@@ -591,7 +502,7 @@
         // Build product options HTML
         let productOptions = '<option value="">Select Product</option>';
         @foreach($products as $product)
-            productOptions += '<option value="{{ $product->id }}" data-price="{{ $product->selling_price ?? 0 }}" data-stock="{{ $product->product_store ?? 0 }}">{{ $product->product_name }} (Stock: {{ $product->product_store ?? 0 }})</option>';
+            productOptions += '<option value="{{ $product->id }}" data-price="{{ $product->buying_price ?? 0 }}" data-stock="{{ $product->product_store ?? 0 }}">{{ $product->product_name }} (Stock: {{ $product->product_store ?? 0 }})</option>';
         @endforeach
         
         const newRow = `
@@ -610,7 +521,6 @@
                 </td>
                 <td>
                     <input type="number" class="form-control quantity" name="products[${rowCount}][quantity]" value="1" data-row="${rowCount}" min="1">
-                    <span class="stock-warning stock-warning-msg" data-row="${rowCount}" style="display: none;"></span>
                 </td>
                 <td>
                     <span class="discount-display" data-row="${rowCount}">0.00</span>
@@ -645,44 +555,23 @@
     $(document).on('click', '.delete-row-btn', function() {
         const rowIndex = $(this).data('row');
         $('tr[data-row-index="' + rowIndex + '"]').remove();
-        calculateInvoiceTotal();
+        calculatePurchaseTotal();
     });
 
     // Form submission
-    $('#invoiceForm').on('submit', function(e) {
+    $('#purchaseForm').on('submit', function(e) {
         // Validation
-        @if($childShops->isNotEmpty())
-        // Parent shop: check if customer or shop is selected
-        const selectedType = $('input[name="select_type"]:checked').val();
-        if (selectedType === 'customer') {
-            const customerId = $('#customer_id').val();
-            if (!customerId) {
-                e.preventDefault();
-                alert('Please select a customer');
-                return false;
-            }
-        } else if (selectedType === 'shop') {
-            const shopId = $('#shop_id').val();
-            if (!shopId) {
-                e.preventDefault();
-                alert('Please select a child shop');
-                return false;
-            }
-        }
-        @else
-        // Regular shop: must select customer
-        const customerId = $('#customer_id').val();
-        if (!customerId) {
+        const supplierId = $('#supplier_id').val();
+        if (!supplierId) {
             e.preventDefault();
-            alert('Please select a customer');
+            alert('Please select a supplier');
             return false;
         }
-        @endif
 
-        const orderDate = $('#order_date').val();
-        if (!orderDate) {
+        const purchaseDate = $('#purchase_date').val();
+        if (!purchaseDate) {
             e.preventDefault();
-            alert('Please select a date and time');
+            alert('Please select a date');
             return false;
         }
 

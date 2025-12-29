@@ -19,6 +19,8 @@ use App\Http\Controllers\Dashboard\RoleController;
 use App\Http\Controllers\Dashboard\UserController;
 use App\Http\Controllers\Dashboard\ActivityController;
 use App\Http\Controllers\Dashboard\ActiveShopController;
+use App\Http\Controllers\Dashboard\SaleReturnController;
+use App\Http\Controllers\Dashboard\PurchaseController;
 
 /*
 |--------------------------------------------------------------------------
@@ -123,6 +125,11 @@ Route::resource('/shops', ShopController::class);
 
 // ====== CUSTOMER CREDIT LOG ======
 Route::get('/customers/{customer}/credit-log', [CustomerController::class, 'creditLog'])->name('customers.creditLog');
+Route::get('/customers/{customer}/ledger', [CustomerController::class, 'ledger'])->name('customers.ledger');
+Route::get('/customers/{customer}/ledger/pdf', [CustomerController::class, 'ledgerPdf'])->name('customers.ledgerPdf');
+
+Route::get('/suppliers/{supplier}/ledger', [SupplierController::class, 'ledger'])->name('suppliers.ledger');
+Route::get('/suppliers/{supplier}/ledger/pdf', [SupplierController::class, 'ledgerPdf'])->name('suppliers.ledgerPdf');
 
 // ====== ORDERS ======
 Route::middleware(['permission:orders.menu'])->group(function () {
@@ -155,6 +162,29 @@ Route::middleware(['permission:orders.menu'])->group(function () {
     Route::get('/orders/{order_id}/delete-info', [OrderController::class, 'getOrderInfoForDelete'])->name('order.deleteInfo');
     Route::delete('/orders/{order_id}', [OrderController::class, 'destroy'])->name('order.destroy');
 
+});
+
+// ====== SALE RETURNS ======
+Route::middleware(['permission:sale-returns.menu'])->group(function () {
+    Route::get('/sale-returns', [SaleReturnController::class, 'index'])->name('sale-returns.index');
+    Route::get('/sale-returns/create', [SaleReturnController::class, 'create'])->name('sale-returns.create');
+    Route::post('/sale-returns', [SaleReturnController::class, 'store'])->name('sale-returns.store');
+    Route::get('/sale-returns/{return_id}', [SaleReturnController::class, 'show'])->name('sale-returns.show');
+    Route::delete('/sale-returns/{return_id}', [SaleReturnController::class, 'destroy'])->name('sale-returns.destroy');
+    Route::get('/sale-returns/customer/{customerId}/orders', [SaleReturnController::class, 'getCustomerOrders'])->name('sale-returns.getCustomerOrders');
+    Route::get('/sale-returns/order/{orderId}/details', [SaleReturnController::class, 'getOrderDetails'])->name('sale-returns.getOrderDetails');
+});
+
+// ====== PURCHASES ======
+Route::middleware(['permission:purchases.menu'])->group(function () {
+    Route::get('/purchases', [PurchaseController::class, 'index'])->name('purchases.index');
+    Route::get('/purchases/create', [PurchaseController::class, 'create'])->name('purchases.create');
+    Route::post('/purchases', [PurchaseController::class, 'store'])->name('purchases.store');
+    Route::get('/purchases/pending', [PurchaseController::class, 'pending'])->name('purchases.pending');
+    Route::get('/purchases/complete', [PurchaseController::class, 'complete'])->name('purchases.complete');
+    Route::get('/purchases/{purchase_id}', [PurchaseController::class, 'show'])->name('purchases.show');
+    Route::put('/purchases/update/status', [PurchaseController::class, 'updateStatus'])->name('purchases.updateStatus');
+    Route::delete('/purchases/{purchase_id}', [PurchaseController::class, 'destroy'])->name('purchases.destroy');
 });
 
 // ====== ACTIVITY CONTROLLER ======

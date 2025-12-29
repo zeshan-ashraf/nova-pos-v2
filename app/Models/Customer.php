@@ -27,6 +27,7 @@ class Customer extends Model
         'credit_limit',
         'credit_amount',
         'credit_days',
+        'is_system',
     ];
     public $sortable = [
         // 'name', // Removed from UI - may be needed in future
@@ -38,6 +39,10 @@ class Customer extends Model
 
     protected $guarded = [
         'id',
+    ];
+
+    protected $casts = [
+        'is_system' => 'boolean',
     ];
 
     public function scopeFilter($query, array $filters)

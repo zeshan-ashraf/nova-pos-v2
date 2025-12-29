@@ -22,6 +22,7 @@ class Shop extends Model
         'is_parent',
         'parent_shop_id',
         'status',
+        'invoice_policy',
     ];
 
     protected $casts = [
@@ -70,6 +71,16 @@ class Shop extends Model
     public function banks(): BelongsToMany
     {
         return $this->belongsToMany(Bank::class)->withTimestamps();
+    }
+
+    public function suppliers(): HasMany
+    {
+        return $this->hasMany(Supplier::class, 'shop_id');
+    }
+
+    public function suppliersAsMotherShop(): HasMany
+    {
+        return $this->hasMany(Supplier::class, 'mother_shop_id');
     }
 }
 

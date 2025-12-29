@@ -98,6 +98,44 @@
                 </li>
                 @endif
 
+                @if (auth()->user()->can('sale-returns.menu'))
+                <li class="{{ Request::is('sale-returns*') ? 'active' : '' }}">
+                    <a href="{{ route('sale-returns.index') }}" class="svg-icon">
+                        <i class="fa-solid fa-arrow-rotate-left"></i>
+                        <span class="ml-3">Sale Returns</span>
+                    </a>
+                </li>
+                @endif
+
+                @if (auth()->user()->can('purchases.menu'))
+                <li>
+                    <a href="#purchases" class="collapsed" data-toggle="collapse" aria-expanded="false">
+                        <i class="fa-solid fa-cart-shopping"></i>
+                        <span class="ml-3">Purchases</span>
+                        <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="10 15 15 20 20 15"></polyline><path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
+                        </svg>
+                    </a>
+                    <ul id="purchases" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
+                        <li class="{{ Request::is('purchases') && !Request::is('purchases/pending') && !Request::is('purchases/complete') && !Request::is('purchases/create') ? 'active' : '' }}">
+                            <a href="{{ route('purchases.index') }}">
+                                <i class="fa-solid fa-arrow-right"></i><span>All Purchases</span>
+                            </a>
+                        </li>
+                        <li class="{{ Request::is('purchases/pending*') ? 'active' : '' }}">
+                            <a href="{{ route('purchases.pending') }}">
+                                <i class="fa-solid fa-arrow-right"></i><span>Pending Purchases</span>
+                            </a>
+                        </li>
+                        <li class="{{ Request::is('purchases/complete*') ? 'active' : '' }}">
+                            <a href="{{ route('purchases.complete') }}">
+                                <i class="fa-solid fa-arrow-right"></i><span>Complete Purchases</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                @endif
+
                 @if (auth()->user()->can('product.menu'))
                 <li>
                     <a href="#products" class="collapsed" data-toggle="collapse" aria-expanded="false">

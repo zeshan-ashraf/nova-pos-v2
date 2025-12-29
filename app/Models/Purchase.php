@@ -7,20 +7,20 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Kyslik\ColumnSortable\Sortable;
 
-class Order extends Model
+class Purchase extends Model
 {
     use HasFactory, Sortable, SoftDeletes;
 
     protected $fillable = [
-        'customer_id',
+        'supplier_id',
         'shop_id',
-        'order_date',
-        'order_status',
+        'purchase_date',
+        'purchase_status',
         'total_products',
         'sub_total',
         'invoice_discount',
         'vat',
-        'invoice_no',
+        'purchase_no',
         'total',
         'payment_status',
         'pay',
@@ -29,8 +29,8 @@ class Order extends Model
     ];
 
     public $sortable = [
-        'customer_id',
-        'order_date',
+        'supplier_id',
+        'purchase_date',
         'pay',
         'due',
         'total',
@@ -40,9 +40,9 @@ class Order extends Model
         'id',
     ];
 
-    public function customer()
+    public function supplier()
     {
-        return $this->belongsTo(Customer::class, 'customer_id', 'id');
+        return $this->belongsTo(Supplier::class, 'supplier_id', 'id');
     }
 
     public function shop()
@@ -50,18 +50,13 @@ class Order extends Model
         return $this->belongsTo(Shop::class, 'shop_id');
     }
 
-    public function orderDetails()
+    public function purchaseDetails()
     {
-        return $this->hasMany(OrderDetails::class, 'order_id', 'id');
+        return $this->hasMany(PurchaseDetail::class, 'purchase_id', 'id');
     }
 
     public function paymentLogs()
     {
-        return $this->hasMany(PaymentLog::class, 'order_id', 'id');
-    }
-
-    public function saleReturns()
-    {
-        return $this->hasMany(SaleReturn::class, 'order_id', 'id');
+        return $this->hasMany(PurchasePaymentLog::class, 'purchase_id', 'id');
     }
 }

@@ -47,7 +47,7 @@
                                 </div>
                                 <div class="col-sm-6 text-end mb-50">
                                     <h4 class="inv-title-1">@php
-                                        $shop = auth()->user()->shop ?? null;
+                                        $shop = $order->shop ?? auth()->user()->shop ?? null;
                                     @endphp</h4>
                                     <p class="inv-from-1">{{ $shop->phone ?? 'POS' }}</p>
                                     <p class="inv-from-2">{{ $shop->owner_name ?? auth()->user()->name }}</p>
@@ -82,6 +82,14 @@
                                     @else
                                         <p class="inv-from-1 text-muted mb-0">No bank information available for this shop.</p>
                                     @endif
+                                </div>
+                            </div>
+                            @endif
+                            @if($shop && $shop->invoice_policy)
+                            <div class="row">
+                                <div class="col-sm-12 mb-30">
+                                    <h4 class="inv-title-1">Invoice Policy</h4>
+                                    <p class="inv-from-1" style="white-space: pre-wrap;">{{ $shop->invoice_policy }}</p>
                                 </div>
                             </div>
                             @endif

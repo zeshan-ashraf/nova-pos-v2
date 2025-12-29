@@ -89,6 +89,15 @@
                                 @enderror
                             </div>
                             <div class="form-group col-md-12">
+                                <label for="invoice_policy">Invoice Policy</label>
+                                <textarea class="form-control @error('invoice_policy') is-invalid @enderror" id="invoice_policy" name="invoice_policy" rows="4">{{ old('invoice_policy', $shop->invoice_policy) }}</textarea>
+                                @error('invoice_policy')
+                                <div class="invalid-feedback">
+                                    {{ $message }}
+                                </div>
+                                @enderror
+                            </div>
+                            <div class="form-group col-md-12">
                                 <label class="mb-3">Banks <small class="text-muted">(optional, click to select multiple)</small></label>
                                 @error('bank_ids')
                                 <div class="alert alert-danger">

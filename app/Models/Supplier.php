@@ -23,6 +23,11 @@ class Supplier extends Model
         'bank_name',
         'bank_branch',
         'city',
+        'shop_id',
+        'mother_shop_id',
+        'credit_limit',
+        'credit_amount',
+        'credit_days',
     ];
     public $sortable = [
         // 'name', // Removed from UI - may be needed in future
@@ -42,5 +47,20 @@ class Supplier extends Model
         $query->when($filters['search'] ?? false, function ($query, $search) {
             return $query->where('shopname', 'like', '%' . $search . '%');
         });
+    }
+
+    public function shop()
+    {
+        return $this->belongsTo(Shop::class, 'shop_id');
+    }
+
+    public function motherShop()
+    {
+        return $this->belongsTo(Shop::class, 'mother_shop_id');
+    }
+
+    public function purchases()
+    {
+        return $this->hasMany(Purchase::class, 'supplier_id', 'id');
     }
 }

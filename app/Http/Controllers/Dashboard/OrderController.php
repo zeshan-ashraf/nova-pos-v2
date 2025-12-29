@@ -9,6 +9,10 @@ use App\Models\Category;
 use App\Models\Supplier;
 use App\Models\OrderDetails;
 use App\Models\Customer;
+use App\Models\Shop;
+use App\Models\Purchase;
+use App\Models\PurchaseDetail;
+use App\Models\PurchasePaymentLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -20,6 +24,7 @@ use Haruncpi\LaravelIdGenerator\IdGenerator;
 use App\Models\PaymentLog;
 use App\Support\ActiveShop;
 use App\Services\CustomerCreditService;
+use App\Services\SupplierCreditService;
 
 class OrderController extends Controller
 {
@@ -205,7 +210,9 @@ class OrderController extends Controller
         $order_id = null;
         // Wrap creation + credit update in a transaction to keep balances consistent
         DB::transaction(function () use (&$order_id, $validatedData, $creditService, $customer) {
-            $order_id = Order::insertGetId($validatedData);
+            // Use create() instead of insertGetId() to properly handle SoftDeletes
+            $order = Order::create($validatedData);
+            $order_id = $order->id;
 
             // Increase customer credit by pending amount (if any)
             $creditService->addPending($customer, $validatedData['due']);
@@ -614,8 +621,8 @@ class OrderController extends Controller
         $authUser = auth()->user();
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
 
-        // Filter customers by shop
-        $customersQuery = Customer::query();
+        // Filter customers by shop, exclude system customers
+        $customersQuery = Customer::query()->where('is_system', false);
         if ($authUser->shop_id) {
             $customersQuery->whereIn('shop_id', $visibleShopIds);
         } else {
@@ -644,9 +651,22 @@ class OrderController extends Controller
             });
         }
 
+        // Get child shops if user belongs to a parent shop
+        $childShops = collect();
+        if ($authUser->shop_id) {
+            $userShop = Shop::find($authUser->shop_id);
+            if ($userShop && $userShop->is_parent) {
+                $childShops = Shop::where('parent_shop_id', $userShop->id)
+                    ->where('status', true)
+                    ->orderBy('name')
+                    ->get();
+            }
+        }
+
         return view('orders.create-invoice', [
             'customers' => $customersQuery->orderBy('shopname')->get(),
             'products' => $productsQuery->orderBy('product_name')->get(),
+            'childShops' => $childShops,
         ]);
     }
 
@@ -694,10 +714,11 @@ class OrderController extends Controller
     /**
      * Store a newly created invoice.
      */
-    public function storeInvoice(Request $request, CustomerCreditService $creditService)
+    public function storeInvoice(Request $request, CustomerCreditService $creditService, SupplierCreditService $supplierCreditService)
     {
         $rules = [
-            'customer_id' => 'required|numeric',
+            'customer_id' => 'required_without:shop_id|nullable|numeric',
+            'shop_id' => 'required_without:customer_id|nullable|numeric|exists:shops,id',
             'order_date' => 'required|date',
             'payment_status' => 'required|string|in:cash,bank,cheque,credit',
             'pay' => 'numeric|nullable|min:0',
@@ -713,129 +734,400 @@ class OrderController extends Controller
 
         $validatedData = $request->validate($rules);
         $payAmount = $validatedData['pay'] ?? 0;
-
-        // Validate that customer belongs to the same shop as logged-in user
         $authUser = auth()->user();
-        $customer = Customer::findOrFail($validatedData['customer_id']);
-        
-        if ($authUser->shop_id) {
-            // For users with shop_id, customer must belong to the same shop
-            if ($customer->shop_id !== $authUser->shop_id) {
-                return back()->withErrors(['customer_id' => 'The selected customer does not belong to your shop.'])
-                    ->withInput();
-            }
-        } else {
-            // For SuperAdmin, customer should have a shop_id (not null)
-            if (!$customer->shop_id) {
-                return back()->withErrors(['customer_id' => 'The selected customer is not assigned to any shop.'])
-                    ->withInput();
-            }
-        }
 
-        // Generate invoice number
-        $invoice_no = IdGenerator::generate([
-            'table' => 'orders',
-            'field' => 'invoice_no',
-            'length' => 10,
-            'prefix' => 'INV-'
-        ]);
-
-        // Calculate totals
-        $subtotal = 0;
-        $totalProducts = 0;
-        foreach ($validatedData['products'] as $product) {
-            if (!empty($product['product_id'])) {
-                $subtotal += $product['total'];
-                $totalProducts++;
-            }
-        }
-
-        $vat = $validatedData['vat'] ?? 0;
-        $invoiceDiscount = $validatedData['invoice_discount'] ?? 0;
-        $total = max(0, $subtotal + $vat - $invoiceDiscount);
-        $pay = $payAmount;
-        $due = max(0, $total - $pay);
-
-        // Prepare order data
-        $orderData = [
-            'customer_id' => $validatedData['customer_id'],
-            'shop_id' => $authUser->shop_id,
-            'order_date' => Carbon::parse($validatedData['order_date'])->format('Y-m-d H:i:s'),
-            'order_status' => 'pending',
-            'total_products' => $totalProducts,
-            'sub_total' => $subtotal,
-            'invoice_discount' => $invoiceDiscount,
-            'vat' => $vat,
-            'invoice_no' => $invoice_no,
-            'total' => $total,
-            'payment_status' => $validatedData['payment_status'],
-            'pay' => $pay,
-            'due' => $due,
-            'comment' => $request->input('comment'),
-            'created_at' => Carbon::now(),
-            'updated_at' => Carbon::now(),
-        ];
-
-        $order_id = null;
-        // Create order and adjust credit in one transaction
-        DB::transaction(function () use (&$order_id, $orderData, $creditService, $customer, $validatedData, $due) {
-            $order_id = Order::insertGetId($orderData);
-
-            // Increase customer credit by pending amount (unpaid portion)
-            $creditService->addPending($customer, $due);
-        });
-
-        // Create order details and reduce stock
-        foreach ($validatedData['products'] as $product) {
-            if (empty($product['product_id'])) {
-                continue;
-            }
-
-            $productModel = Product::findOrFail($product['product_id']);
+        // Route logic: Customer flow OR Shop transfer flow
+        if (isset($validatedData['customer_id']) && $validatedData['customer_id']) {
+            // ========== EXISTING CUSTOMER FLOW ==========
+            $customer = Customer::findOrFail($validatedData['customer_id']);
             
-            // Validate stock
-            if ($productModel->product_store < $product['quantity']) {
-                // Rollback order creation
-                Order::where('id', $order_id)->delete();
-                return back()->withErrors(['products' => "Insufficient stock for product: {$productModel->product_name}. Available: {$productModel->product_store}"])
-                    ->withInput();
+            if ($authUser->shop_id) {
+                if ($customer->shop_id !== $authUser->shop_id) {
+                    return back()->withErrors(['customer_id' => 'The selected customer does not belong to your shop.'])
+                        ->withInput();
+                }
+            } else {
+                if (!$customer->shop_id) {
+                    return back()->withErrors(['customer_id' => 'The selected customer is not assigned to any shop.'])
+                        ->withInput();
+                }
             }
 
-            // Validate shop access for product
-            if ($authUser->shop_id && $productModel->shop_id !== $authUser->shop_id) {
-                Order::where('id', $order_id)->delete();
-                return back()->withErrors(['products' => "Product {$productModel->product_name} does not belong to your shop."])
-                    ->withInput();
+            // Generate invoice number
+            $invoice_no = IdGenerator::generate([
+                'table' => 'orders',
+                'field' => 'invoice_no',
+                'length' => 10,
+                'prefix' => 'INV-'
+            ]);
+
+            // Calculate totals
+            $subtotal = 0;
+            $totalProducts = 0;
+            foreach ($validatedData['products'] as $product) {
+                if (!empty($product['product_id'])) {
+                    $subtotal += $product['total'];
+                    $totalProducts++;
+                }
             }
 
-            // Create order detail
-            $orderDetailData = [
-                'order_id' => $order_id,
-                'product_id' => $product['product_id'],
-                'quantity' => $product['quantity'],
-                'unitcost' => $product['unit_price'],
-                'item_discount' => $product['item_discount'] ?? 0,
-                'total' => $product['total'],
-                'created_at' => Carbon::now(),
-                'updated_at' => Carbon::now(),
+            $vat = $validatedData['vat'] ?? 0;
+            $invoiceDiscount = $validatedData['invoice_discount'] ?? 0;
+            $total = max(0, $subtotal + $vat - $invoiceDiscount);
+            $pay = $payAmount;
+            $due = max(0, $total - $pay);
+
+            // Prepare order data
+            $orderData = [
+                'customer_id' => $validatedData['customer_id'],
+                'shop_id' => $authUser->shop_id,
+                'order_date' => Carbon::parse($validatedData['order_date'])->format('Y-m-d H:i:s'),
+                'order_status' => 'pending',
+                'total_products' => $totalProducts,
+                'sub_total' => $subtotal,
+                'invoice_discount' => $invoiceDiscount,
+                'vat' => $vat,
+                'invoice_no' => $invoice_no,
+                'total' => $total,
+                'payment_status' => $validatedData['payment_status'],
+                'pay' => $pay,
+                'due' => $due,
+                'comment' => $request->input('comment'),
             ];
 
-            OrderDetails::insert($orderDetailData);
+            $order_id = null;
+            // Create order and adjust credit in one transaction
+            DB::transaction(function () use (&$order_id, $orderData, $creditService, $customer, $due) {
+                $order = Order::create($orderData);
+                $order_id = $order->id;
+                $creditService->addPending($customer, $due);
+            });
 
-            // Reduce stock
-            Product::where('id', $product['product_id'])
-                ->update(['product_store' => DB::raw('product_store - ' . $product['quantity'])]);
+            // Create order details and reduce stock
+            foreach ($validatedData['products'] as $product) {
+                if (empty($product['product_id'])) {
+                    continue;
+                }
+
+                $productModel = Product::findOrFail($product['product_id']);
+                
+                // Validate stock
+                if ($productModel->product_store < $product['quantity']) {
+                    Order::where('id', $order_id)->delete();
+                    return back()->withErrors(['products' => "Insufficient stock for product: {$productModel->product_name}. Available: {$productModel->product_store}"])
+                        ->withInput();
+                }
+
+                // Validate shop access for product
+                if ($authUser->shop_id && $productModel->shop_id !== $authUser->shop_id) {
+                    Order::where('id', $order_id)->delete();
+                    return back()->withErrors(['products' => "Product {$productModel->product_name} does not belong to your shop."])
+                        ->withInput();
+                }
+
+                // Create order detail
+                $orderDetailData = [
+                    'order_id' => $order_id,
+                    'product_id' => $product['product_id'],
+                    'quantity' => $product['quantity'],
+                    'unitcost' => $product['unit_price'],
+                    'item_discount' => $product['item_discount'] ?? 0,
+                    'total' => $product['total'],
+                    'created_at' => Carbon::now(),
+                    'updated_at' => Carbon::now(),
+                ];
+
+                OrderDetails::insert($orderDetailData);
+
+                // Reduce stock
+                Product::where('id', $product['product_id'])
+                    ->update(['product_store' => DB::raw('product_store - ' . $product['quantity'])]);
+            }
+
+            $warning = null;
+            if ($creditService->exceedsLimit($customer, $due)) {
+                $warning = 'Credit limit exceeded for this customer. Invoice saved on credit.';
+            }
+
+            return Redirect::route('order.index')->with([
+                'success' => 'Invoice has been created successfully!',
+                'warning' => $warning,
+            ]);
+
+        } else if (isset($validatedData['shop_id']) && $validatedData['shop_id']) {
+            // ========== SHOP TRANSFER FLOW ==========
+            // Validate user belongs to parent shop
+            if (!$authUser->shop_id) {
+                return back()->withErrors(['shop_id' => 'You must belong to a parent shop to transfer stock.'])
+                    ->withInput();
+            }
+
+            $motherShop = Shop::findOrFail($authUser->shop_id);
+            if (!$motherShop->is_parent) {
+                return back()->withErrors(['shop_id' => 'You must belong to a parent shop to transfer stock.'])
+                    ->withInput();
+            }
+
+            // Validate child shop
+            $childShop = Shop::findOrFail($validatedData['shop_id']);
+            if ($childShop->parent_shop_id !== $motherShop->id) {
+                return back()->withErrors(['shop_id' => 'The selected shop is not a child of your shop.'])
+                    ->withInput();
+            }
+
+            // Ensure mother shop exists as supplier for child shop
+            $supplier = Supplier::where('shop_id', $childShop->id)
+                ->where('mother_shop_id', $motherShop->id)
+                ->first();
+
+            if (!$supplier) {
+                // Create supplier for child shop (mother shop as supplier)
+                // Use child shop ID to ensure phone uniqueness
+                $supplierPhone = $motherShop->phone . '-SUP-' . $childShop->id;
+                $supplier = Supplier::create([
+                    'shop_id' => $childShop->id,
+                    'mother_shop_id' => $motherShop->id,
+                    'shopname' => $motherShop->name,
+                    'name' => $motherShop->name,
+                    'phone' => $supplierPhone,
+                    'email' => null,
+                    'address' => $motherShop->address,
+                    'type' => 'Internal',
+                ]);
+            }
+
+            // Get or create system customer for child shop
+            $systemCustomer = Customer::where('shop_id', $childShop->id)
+                ->where('is_system', true)
+                ->where('shopname', $childShop->name)
+                ->first();
+
+            if (!$systemCustomer) {
+                // Use child shop ID to ensure phone uniqueness
+                $customerPhone = $childShop->phone . '-SYS-' . $childShop->id;
+                $systemCustomer = Customer::create([
+                    'shop_id' => $childShop->id,
+                    'shopname' => $childShop->name,
+                    'name' => $childShop->name,
+                    'phone' => $customerPhone,
+                    'email' => null,
+                    'is_system' => true,
+                    'address' => $childShop->address,
+                ]);
+            }
+
+            // Generate invoice number
+            $invoice_no = IdGenerator::generate([
+                'table' => 'orders',
+                'field' => 'invoice_no',
+                'length' => 10,
+                'prefix' => 'INV-'
+            ]);
+
+            // Calculate totals
+            $subtotal = 0;
+            $totalProducts = 0;
+            foreach ($validatedData['products'] as $product) {
+                if (!empty($product['product_id'])) {
+                    $subtotal += $product['total'];
+                    $totalProducts++;
+                }
+            }
+
+            $vat = $validatedData['vat'] ?? 0;
+            $invoiceDiscount = $validatedData['invoice_discount'] ?? 0;
+            $total = max(0, $subtotal + $vat - $invoiceDiscount);
+            $pay = $payAmount;
+            $due = max(0, $total - $pay);
+
+            $order_id = null;
+            $purchase_id = null;
+
+            // All operations in transaction
+            try {
+                DB::transaction(function () use (
+                    &$order_id, &$purchase_id, $validatedData, $motherShop, $childShop, $supplier, 
+                    $systemCustomer, $invoice_no, $subtotal, $totalProducts, $vat, $invoiceDiscount, 
+                    $total, $pay, $due, $authUser, $request, $creditService, $supplierCreditService
+                ) {
+                    // 1. Create Order (Invoice)
+                    $orderData = [
+                        'customer_id' => $systemCustomer->id,
+                        'shop_id' => $motherShop->id,
+                        'order_date' => Carbon::parse($validatedData['order_date'])->format('Y-m-d H:i:s'),
+                        'order_status' => 'pending',
+                        'total_products' => $totalProducts,
+                        'sub_total' => $subtotal,
+                        'invoice_discount' => $invoiceDiscount,
+                        'vat' => $vat,
+                        'invoice_no' => $invoice_no,
+                        'total' => $total,
+                        'payment_status' => $validatedData['payment_status'],
+                        'pay' => $pay,
+                        'due' => $due,
+                        'comment' => $request->input('comment'),
+                    ];
+
+                    $order = Order::create($orderData);
+                    $order_id = $order->id;
+
+                    // 2. Process products: Reduce mother shop stock, add/update child shop products
+                    foreach ($validatedData['products'] as $product) {
+                        if (empty($product['product_id'])) {
+                            continue;
+                        }
+
+                        $motherProduct = Product::findOrFail($product['product_id']);
+
+                        // Validate product belongs to mother shop
+                        if ($motherProduct->shop_id !== $motherShop->id) {
+                            throw new \Exception("Product {$motherProduct->product_name} does not belong to your shop.");
+                        }
+
+                        // Validate stock
+                        if ($motherProduct->product_store < $product['quantity']) {
+                            throw new \Exception("Insufficient stock for product: {$motherProduct->product_name}. Available: {$motherProduct->product_store}");
+                        }
+
+                        // Create order detail
+                        OrderDetails::insert([
+                            'order_id' => $order_id,
+                            'product_id' => $product['product_id'],
+                            'quantity' => $product['quantity'],
+                            'unitcost' => $product['unit_price'],
+                            'item_discount' => $product['item_discount'] ?? 0,
+                            'total' => $product['total'],
+                            'created_at' => Carbon::now(),
+                            'updated_at' => Carbon::now(),
+                        ]);
+
+                        // Reduce mother shop stock
+                        Product::where('id', $product['product_id'])
+                            ->update(['product_store' => DB::raw('product_store - ' . $product['quantity'])]);
+
+                        // Check if child shop has this product
+                        $childProduct = Product::where('shop_id', $childShop->id)
+                            ->where('product_name', $motherProduct->product_name)
+                            ->first();
+
+                        if ($childProduct) {
+                            // Update stock only (keep existing attributes)
+                            Product::where('id', $childProduct->id)
+                                ->update(['product_store' => DB::raw('product_store + ' . $product['quantity'])]);
+                        } else {
+                            // Create new product for child shop
+                            Product::create([
+                                'product_name' => $motherProduct->product_name,
+                                'category_id' => $motherProduct->category_id,
+                                'supplier_id' => $supplier->id,
+                                'shop_id' => $childShop->id,
+                                'product_code' => $motherProduct->product_code,
+                                'product_garage' => $motherProduct->product_garage,
+                                'product_image' => $motherProduct->product_image,
+                                'product_store' => $product['quantity'],
+                                'low_stock_warning' => $motherProduct->low_stock_warning,
+                                'buying_date' => $motherProduct->buying_date,
+                                'expire_date' => $motherProduct->expire_date,
+                                'buying_price' => $product['unit_price'], // Invoice price
+                                'selling_price' => $product['unit_price'], // Same as buying_price
+                                'status' => $motherProduct->status,
+                            ]);
+                        }
+                    }
+
+                    // 3. Generate purchase invoice number
+                    $purchase_no = IdGenerator::generate([
+                        'table' => 'purchases',
+                        'field' => 'purchase_no',
+                        'length' => 10,
+                        'prefix' => 'PUR-'
+                    ]);
+
+                    // 4. Create Purchase (Purchase Invoice)
+                    $purchaseData = [
+                        'supplier_id' => $supplier->id,
+                        'shop_id' => $childShop->id,
+                        'purchase_date' => Carbon::parse($validatedData['order_date'])->format('Y-m-d'),
+                        'purchase_status' => 'pending',
+                        'total_products' => $totalProducts,
+                        'sub_total' => $subtotal,
+                        'invoice_discount' => $invoiceDiscount,
+                        'vat' => $vat,
+                        'purchase_no' => $purchase_no,
+                        'total' => $total,
+                        'payment_status' => $validatedData['payment_status'],
+                        'pay' => $pay,
+                        'due' => $due,
+                        'comment' => $request->input('comment'),
+                        'created_at' => Carbon::now(),
+                        'updated_at' => Carbon::now(),
+                    ];
+
+                    $purchase = Purchase::create($purchaseData);
+                    $purchase_id = $purchase->id;
+
+                    // 5. Create Purchase Details
+                    foreach ($validatedData['products'] as $product) {
+                        if (empty($product['product_id'])) {
+                            continue;
+                        }
+
+                        // Find child shop's product (already created/updated above)
+                        $motherProduct = Product::findOrFail($product['product_id']);
+                        $childProduct = Product::where('shop_id', $childShop->id)
+                            ->where('product_name', $motherProduct->product_name)
+                            ->firstOrFail();
+
+                        PurchaseDetail::insert([
+                            'purchase_id' => $purchase_id,
+                            'product_id' => $childProduct->id,
+                            'quantity' => $product['quantity'],
+                            'unitcost' => $product['unit_price'], // Invoice unit_price as purchase unitcost
+                            'item_discount' => $product['item_discount'] ?? 0,
+                            'total' => $product['total'],
+                            'created_at' => Carbon::now(),
+                            'updated_at' => Carbon::now(),
+                        ]);
+                    }
+
+                    // 6. Create purchase payment log if payment was made
+                    if ($pay > 0) {
+                        PurchasePaymentLog::create([
+                            'purchase_id' => $purchase_id,
+                            'amount_paid' => $pay,
+                            'type' => 'payment',
+                        ]);
+                    }
+
+                    // 7. Handle supplier credit (if due > 0)
+                    if ($due > 0) {
+                        $supplierCreditService->addPending($supplier, $due);
+                    }
+
+                    // 8. Handle customer credit (system customer - but should be 0 usually)
+                    if ($due > 0) {
+                        $creditService->addPending($systemCustomer, $due);
+                    }
+                });
+
+                return Redirect::route('order.index')->with([
+                    'success' => 'Stock transfer invoice has been created successfully! Purchase invoice has been auto-generated.',
+                ]);
+
+            } catch (\Exception $e) {
+                // Rollback on error
+                if ($order_id) {
+                    Order::where('id', $order_id)->delete();
+                }
+                if ($purchase_id) {
+                    Purchase::where('id', $purchase_id)->delete();
+                }
+                return back()->withErrors(['error' => $e->getMessage()])->withInput();
+            }
         }
 
-        $warning = null;
-        if ($creditService->exceedsLimit($customer, $due)) {
-            $warning = 'Credit limit exceeded for this customer. Invoice saved on credit.';
-        }
-
-        return Redirect::route('order.index')->with([
-            'success' => 'Invoice has been created successfully!',
-            'warning' => $warning,
-        ]);
+        // Should not reach here
+        return back()->withErrors(['error' => 'Please select either a customer or a shop.'])->withInput();
     }
 
 }
