@@ -58,6 +58,15 @@
                                 @enderror
                             </div>
                             <div class="form-group col-md-6">
+                                <label for="product_code">Product Code <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control @error('product_code') is-invalid @enderror" id="product_code" name="product_code" value="{{ old('product_code', $product->product_code) }}" required>
+                                @error('product_code')
+                                <div class="invalid-feedback">
+                                    {{ $message }}
+                                </div>
+                                @enderror
+                            </div>
+                            <div class="form-group col-md-6">
                                 <label for="category_id">Category <span class="text-danger">*</span></label>
                                 <select class="form-control" name="category_id" required>
                                     <option selected="" disabled>-- Select Category --</option>

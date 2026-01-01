@@ -683,7 +683,10 @@ class OrderController extends Controller
                 $query->where('status', 'valid')
                       ->orWhere('status', 'active');
             })
-            ->where('product_name', 'like', '%' . $search . '%');
+            ->where(function($query) use ($search) {
+                $query->where('product_name', 'like', '%' . $search . '%')
+                      ->orWhere('product_code', 'like', '%' . $search . '%');
+            });
 
         // Apply shop filtering
         if ($authUser->shop_id) {

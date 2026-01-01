@@ -10,6 +10,7 @@ use App\Models\Supplier;
 use App\Models\Shop;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use Illuminate\Validation\Rule;
 use Intervention\Image\Facades\Image;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -84,16 +85,29 @@ class ProductController extends Controller
      */
     public function store(Request $request)
     {
-        $product_code = IdGenerator::generate([
-            'table' => 'products',
-            'field' => 'product_code',
-            'length' => 4,
-            'prefix' => 'PC'
-        ]);
+        // Auto-assign shop_id based on user's shop (needed for validation)
+        $authUser = auth()->user();
+        $shopId = null;
+        if ($authUser->shop_id) {
+            $shopId = $authUser->shop_id;
+        } else {
+            // Super admin - use active shop if available
+            $activeShop = ActiveShop::current();
+            if ($activeShop) {
+                $shopId = $activeShop->id;
+            }
+        }
 
         $rules = [
             'product_image' => 'image|file|max:1024',
             'product_name' => 'required|string',
+            'product_code' => [
+                'required',
+                'string',
+                $shopId ? Rule::unique('products', 'product_code')->where(function ($query) use ($shopId) {
+                    return $query->where('shop_id', $shopId);
+                }) : 'unique:products,product_code',
+            ],
             'category_id' => 'required|integer',
             'supplier_id' => 'nullable|integer',
             'product_garage' => 'string|nullable',
@@ -105,12 +119,9 @@ class ProductController extends Controller
         ];
 
         $validatedData = $request->validate($rules);
-
-        // save product code value
-        $validatedData['product_code'] = $product_code;
         
-        // Set status to valid by default
-        $validatedData['status'] = 'valid';
+        // Set status to active by default
+        $validatedData['status'] = 'active';
         
         // Set default low_stock_warning if not provided
         if (!isset($validatedData['low_stock_warning']) || $validatedData['low_stock_warning'] === null) {
@@ -128,16 +139,9 @@ class ProductController extends Controller
             $validatedData['product_image'] = $fileName;
         }
 
-        // Auto-assign shop_id based on user's shop
-        $authUser = auth()->user();
-        if ($authUser->shop_id) {
-            $validatedData['shop_id'] = $authUser->shop_id;
-        } else {
-            // Super admin - use active shop if available
-            $activeShop = ActiveShop::current();
-            if ($activeShop) {
-                $validatedData['shop_id'] = $activeShop->id;
-            }
+        // Set shop_id
+        if ($shopId) {
+            $validatedData['shop_id'] = $shopId;
         }
 
         Product::create($validatedData);
@@ -181,9 +185,20 @@ class ProductController extends Controller
     public function update(Request $request, Product $product)
     {
         $this->ensureShopAccess($product);
+        
+        // Get shop_id for validation
+        $shopId = $product->shop_id;
+
         $rules = [
             'product_image' => 'image|file|max:1024',
             'product_name' => 'required|string',
+            'product_code' => [
+                'required',
+                'string',
+                $shopId ? Rule::unique('products', 'product_code')->where(function ($query) use ($shopId) {
+                    return $query->where('shop_id', $shopId);
+                })->ignore($product->id) : Rule::unique('products', 'product_code')->ignore($product->id),
+            ],
             'category_id' => 'required|integer',
             'supplier_id' => 'nullable|integer',
             'product_garage' => 'string|nullable',
@@ -214,9 +229,9 @@ class ProductController extends Controller
             $validatedData['product_image'] = $fileName;
         }
             $oldStockQty = $product->product_store;
-            // Ensure status is set to valid if not provided
+            // Ensure status is set to active if not provided
             if (!isset($validatedData['status'])) {
-                $validatedData['status'] = 'valid';
+                $validatedData['status'] = 'active';
             }
             Product::where('id', $product->id)->update($validatedData);
             $newStockQty = $validatedData['product_store'] ?? $product->product_store;
@@ -319,7 +334,7 @@ class ProductController extends Controller
                     'buying_date' => $sheet->getCell( 'H' . $row )->getValue(),
                     'buying_price' => $sheet->getCell( 'J' . $row )->getValue(),
                     'selling_price' => $sheet->getCell( 'K' . $row )->getValue(),
-                    'status' => 'valid',
+                    'status' => 'active',
                     'created_at' => $now,
                     'updated_at' => $now,
                 ];
