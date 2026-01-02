@@ -13,6 +13,10 @@
         <link rel="stylesheet" href="{{ asset('assets/vendor/line-awesome/dist/line-awesome/css/line-awesome.min.css') }}">
         <link rel="stylesheet" href="{{ asset('assets/vendor/remixicon/fonts/remixicon.css') }}">
 
+        @if (request()->route()->getName() !== 'dashboard')
+        <link rel="stylesheet" href="{{ asset('assets/css/custom.css') }}">
+        @endif
+
         <style>
             .iq-top-navbar .navbar {
                 min-height: 64px;

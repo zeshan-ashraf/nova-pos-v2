@@ -621,8 +621,8 @@ class OrderController extends Controller
         $authUser = auth()->user();
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
 
-        // Filter customers by shop, exclude system customers
-        $customersQuery = Customer::query()->where('is_system', false);
+        // Filter customers by shop, exclude system customers (is_system = 1)
+        $customersQuery = Customer::query()->where('is_system', '!=', 1);
         if ($authUser->shop_id) {
             $customersQuery->whereIn('shop_id', $visibleShopIds);
         } else {
@@ -634,21 +634,20 @@ class OrderController extends Controller
             });
         }
 
-        // Filter products by shop for dropdown
+        // Filter products by shop for dropdown - only user's specific shop_id (exclude child shops)
+        // For invoice/create page only: show products from user's shop_id only
+        $targetShopId = $authUser->shop_id;
+        
         $productsQuery = Product::where(function($query) {
-                $query->where('status', 'valid')
-                      ->orWhere('status', 'active');
+                $query->where('status', 'active');
             });
 
-        if ($authUser->shop_id) {
-            $productsQuery->whereIn('shop_id', $visibleShopIds);
+        if ($targetShopId) {
+            // Only show products from the user's specific shop_id, not child shops
+            $productsQuery->where('shop_id', $targetShopId);
         } else {
-            $productsQuery->where(function ($query) use ($visibleShopIds) {
-                $query->whereNull('shop_id');
-                if ($visibleShopIds->isNotEmpty()) {
-                    $query->orWhereIn('shop_id', $visibleShopIds);
-                }
-            });
+            // If no shop_id available, show no products
+            $productsQuery->whereRaw('1 = 0'); // Always false condition
         }
 
         // Get child shops if user belongs to a parent shop
@@ -676,42 +675,85 @@ class OrderController extends Controller
     public function searchProducts(Request $request)
     {
         $search = $request->get('q', '');
+        $page = $request->get('page', 1);
         $authUser = auth()->user();
-        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+        
+        // For invoice/create page only: show products from user's shop_id only (exclude child shops)
+        $targetShopId = $authUser->shop_id;
 
-        $productsQuery = Product::where(function($query) {
-                $query->where('status', 'valid')
-                      ->orWhere('status', 'active');
-            })
-            ->where(function($query) use ($search) {
+        // Build base query with status and shop filtering first
+        $productsQuery = Product::where('status', 'active');
+        
+        // Apply shop filtering - only user's specific shop_id (exclude child shops)
+        if ($targetShopId) {
+            // Only show products from the user's specific shop_id, not child shops
+            $productsQuery->where('shop_id', $targetShopId);
+        } else {
+            // If no shop_id available, show no products
+            $productsQuery->whereRaw('1 = 0'); // Always false condition
+        }
+        
+        // Apply search filter (only if search term is provided)
+        if (!empty($search)) {
+            $productsQuery->where(function($query) use ($search) {
                 $query->where('product_name', 'like', '%' . $search . '%')
                       ->orWhere('product_code', 'like', '%' . $search . '%');
             });
-
-        // Apply shop filtering
-        if ($authUser->shop_id) {
-            $productsQuery->whereIn('shop_id', $visibleShopIds);
-        } else {
-            $productsQuery->where(function ($query) use ($visibleShopIds) {
-                $query->whereNull('shop_id');
-                if ($visibleShopIds->isNotEmpty()) {
-                    $query->orWhereIn('shop_id', $visibleShopIds);
-                }
-            });
         }
 
-        $products = $productsQuery->limit(20)->get()->map(function ($product) {
-            return [
-                'id' => $product->id,
-                'text' => $product->product_name,
-                'name' => $product->product_name,
-                'price' => $product->selling_price ?? 0,
-                'stock' => $product->product_store ?? 0,
-                'code' => $product->product_code ?? '',
-            ];
-        });
+        // Get total count for pagination (clone query to avoid affecting the main query)
+        $totalCount = (clone $productsQuery)->count();
+        
+        // Apply pagination (50 items per page)
+        $perPage = 50;
+        $offset = ($page - 1) * $perPage;
+        
+        $products = $productsQuery->orderBy('product_code', 'asc')
+            ->orderBy('product_name', 'asc')
+            ->offset($offset)
+            ->limit($perPage)
+            ->get()
+            ->map(function ($product) {
+                $productCode = $product->product_code ?? '';
+                $displayText = $productCode ? $productCode . ' - ' . $product->product_name : $product->product_name;
+                
+                return [
+                    'id' => $product->id,
+                    'text' => $displayText,
+                    'name' => $product->product_name,
+                    'price' => $product->selling_price ?? 0,
+                    'stock' => $product->product_store ?? 0,
+                    'code' => $productCode,
+                ];
+            });
 
-        return response()->json(['results' => $products]);
+        return response()->json([
+            'results' => $products,
+            'pagination' => [
+                'more' => ($page * $perPage) < $totalCount
+            ]
+        ]);
+    }
+
+    /**
+     * Create payment log entry (isolated function).
+     * 
+     * @param int $orderId
+     * @param float $amountPaid
+     * @param string $paymentMethod
+     * @return void
+     */
+    private function createPaymentLog($orderId, $amountPaid, $paymentMethod)
+    {
+        // Only create payment log if amount is greater than 0 and not null
+        if ($amountPaid > 0 && $amountPaid !== null) {
+            PaymentLog::create([
+                'order_id' => $orderId,
+                'amount_paid' => $amountPaid,
+                'type' => 'payment',
+                'payment_method' => $paymentMethod,
+            ]);
+        }
     }
 
     /**
@@ -780,6 +822,12 @@ class OrderController extends Controller
             $pay = $payAmount;
             $due = max(0, $total - $pay);
 
+            // Validate: If payment method is cash, payment amount must equal invoice total
+            if ($validatedData['payment_status'] === 'cash' && abs($pay - $total) > 0.01) {
+                return back()->withErrors(['pay' => 'Payment amount must equal invoice total when payment method is Cash.'])
+                    ->withInput();
+            }
+
             // Prepare order data
             $orderData = [
                 'customer_id' => $validatedData['customer_id'],
@@ -799,11 +847,15 @@ class OrderController extends Controller
             ];
 
             $order_id = null;
-            // Create order and adjust credit in one transaction
-            DB::transaction(function () use (&$order_id, $orderData, $creditService, $customer, $due) {
+            $paymentMethod = $validatedData['payment_status'];
+            // Create order, adjust credit, and create payment log in one transaction
+            DB::transaction(function () use (&$order_id, $orderData, $creditService, $customer, $due, $pay, $paymentMethod) {
                 $order = Order::create($orderData);
                 $order_id = $order->id;
                 $creditService->addPending($customer, $due);
+                
+                // Create payment log if payment amount > 0 (isolated function)
+                $this->createPaymentLog($order_id, $pay, $paymentMethod);
             });
 
             // Create order details and reduce stock
@@ -943,15 +995,22 @@ class OrderController extends Controller
             $pay = $payAmount;
             $due = max(0, $total - $pay);
 
+            // Validate: If payment method is cash, payment amount must equal invoice total
+            if ($validatedData['payment_status'] === 'cash' && abs($pay - $total) > 0.01) {
+                return back()->withErrors(['pay' => 'Payment amount must equal invoice total when payment method is Cash.'])
+                    ->withInput();
+            }
+
             $order_id = null;
             $purchase_id = null;
+            $paymentMethod = $validatedData['payment_status'];
 
             // All operations in transaction
             try {
                 DB::transaction(function () use (
                     &$order_id, &$purchase_id, $validatedData, $motherShop, $childShop, $supplier, 
                     $systemCustomer, $invoice_no, $subtotal, $totalProducts, $vat, $invoiceDiscount, 
-                    $total, $pay, $due, $authUser, $request, $creditService, $supplierCreditService
+                    $total, $pay, $due, $authUser, $request, $creditService, $supplierCreditService, $paymentMethod
                 ) {
                     // 1. Create Order (Invoice)
                     $orderData = [
@@ -973,6 +1032,9 @@ class OrderController extends Controller
 
                     $order = Order::create($orderData);
                     $order_id = $order->id;
+
+                    // Create payment log if payment amount > 0 (isolated function)
+                    $this->createPaymentLog($order_id, $pay, $paymentMethod);
 
                     // 2. Process products: Reduce mother shop stock, add/update child shop products
                     foreach ($validatedData['products'] as $product) {

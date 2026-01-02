@@ -2,6 +2,9 @@
 
 @section('specificpagestyles')
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Select2 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
     <style>
         .invoice-form-container {
             background: #fff;
@@ -50,13 +53,16 @@
             border-radius: 4px;
         }
         .product-table .product-name-col {
-            width: 30%;
+            width: 25%;
+        }
+        .product-table .product-code-col {
+            width: 10%;
         }
         .product-table .unit-price-col {
-            width: 12%;
+            width: 10%;
         }
         .product-table .stock-col {
-            width: 10%;
+            width: 8%;
         }
         .product-table .quantity-col {
             width: 10%;
@@ -254,6 +260,7 @@
                                 <thead>
                                     <tr>
                                         <th class="product-name-col">Product</th>
+                                        <th class="product-code-col">Code</th>
                                         <th class="unit-price-col">Unit Price</th>
                                         <th class="stock-col">Stock</th>
                                         <th class="quantity-col">Quantity</th>
@@ -266,17 +273,13 @@
                                     <!-- First row - always present, no delete button -->
                                     <tr class="product-row" data-row-index="0">
                                         <td>
-                                            <select class="form-control product-select" name="products[0][product_id]" data-row="0">
+                                            <select class="form-control product-select" name="products[0][product_id]" data-row="0" style="width: 100%;">
                                                 <option value="">Select Product</option>
-                                                @foreach($products as $product)
-                                                    <option value="{{ $product->id }}" 
-                                                        data-price="{{ $product->selling_price ?? 0 }}" 
-                                                        data-stock="{{ $product->product_store ?? 0 }}">
-                                                        {{ $product->product_name }} (Stock: {{ $product->product_store ?? 0 }})
-                                                    </option>
-                                                @endforeach
                                             </select>
                                             <input type="hidden" class="original-price" name="products[0][original_price]" value="0">
+                                        </td>
+                                        <td>
+                                            <span class="product-code-display" data-row="0">-</span>
                                         </td>
                                         <td>
                                             <input type="number" step="0.01" class="form-control unit-price" name="products[0][unit_price]" value="0" data-row="0" min="0">
@@ -376,12 +379,131 @@
 @endsection
 
 @section('specificpagescripts')
+<!-- Select2 JS -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 (function($) {
     'use strict';
     
     $(document).ready(function() {
         let rowCount = 0;
+
+    // Initialize Select2 on existing product selects
+    function initializeSelect2($select) {
+        const rowIndex = $select.data('row');
+        $select.select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Select Product',
+            allowClear: true,
+            minimumInputLength: 2,
+            ajax: {
+                url: '{{ route("api.products.search") }}',
+                dataType: 'json',
+                delay: 250,
+                data: function (params) {
+                    return {
+                        q: params.term, // search term
+                        page: params.page
+                    };
+                },
+                processResults: function (data, params) {
+                    params.page = params.page || 1;
+                    return {
+                        results: data.results.map(function(item) {
+                            return {
+                                id: item.id,
+                                text: item.text,
+                                name: item.name,
+                                price: item.price,
+                                stock: item.stock,
+                                code: item.code
+                            };
+                        }),
+                        pagination: data.pagination || { more: false }
+                    };
+                },
+                cache: true
+            },
+            templateResult: formatProduct,
+            templateSelection: formatProductSelection
+        }).on('select2:open', function() {
+            // Auto-focus on search input when dropdown opens
+            // Try multiple times with increasing delays to ensure Select2 is ready
+            const focusAttempts = [50, 100, 150, 200];
+            focusAttempts.forEach(function(delay) {
+                setTimeout(function() {
+                    // Find the search input in the opened dropdown
+                    const $searchInput = $('.select2-container--open .select2-search__field');
+                    if ($searchInput.length > 0 && document.activeElement !== $searchInput[0]) {
+                        $searchInput[0].focus();
+                        $searchInput.focus();
+                    }
+                }, delay);
+            });
+        });
+
+        // Handle product selection change
+        $select.on('select2:select', function (e) {
+            const data = e.params.data;
+            const rowIdx = $(this).data('row');
+            const $row = $('tr[data-row-index="' + rowIdx + '"]');
+            
+            $row.find('.original-price').val(data.price);
+            $row.find('.unit-price').val(data.price);
+            $row.find('.stock-display').text(data.stock);
+            $row.find('.product-code-display').text(data.code || '-');
+            
+            calculateRowTotal(rowIdx);
+        });
+
+        // Handle clear selection
+        $select.on('select2:clear', function (e) {
+            const rowIdx = $(this).data('row');
+            const $row = $('tr[data-row-index="' + rowIdx + '"]');
+            
+            $row.find('.original-price').val(0);
+            $row.find('.unit-price').val(0);
+            $row.find('.stock-display').text(0);
+            $row.find('.product-code-display').text('-');
+            
+            calculateRowTotal(rowIdx);
+        });
+
+    }
+
+    // Format product display in dropdown
+    function formatProduct(product) {
+        if (product.loading) {
+            return product.text;
+        }
+        return $('<span>' + product.text + '</span>');
+    }
+
+    // Format selected product display
+    function formatProductSelection(product) {
+        return product.text || product.id;
+    }
+
+    // Initialize Select2 on first product select
+    initializeSelect2($('.product-select[data-row="0"]'));
+
+    // Global event handler for all Select2 product dropdowns (backup method)
+    $(document).on('select2:open', '.product-select', function() {
+        // Try multiple times with increasing delays to ensure Select2 is ready
+        const focusAttempts = [50, 100, 150, 200];
+        focusAttempts.forEach(function(delay) {
+            setTimeout(function() {
+                // Find the search input in the currently open Select2 dropdown
+                const $searchInput = $('.select2-container--open .select2-search__field');
+                if ($searchInput.length > 0 && document.activeElement !== $searchInput[0]) {
+                    // Use native focus for better compatibility
+                    $searchInput[0].focus();
+                    // Also trigger jQuery focus as backup
+                    $searchInput.focus();
+                }
+            }, delay);
+        });
+    });
 
     // Initialize date/time with current date/time
     const now = new Date();
@@ -392,6 +514,9 @@
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const formattedDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
     $('#order_date').val(formattedDateTime);
+
+    // Focus on customer dropdown on page load
+    $('#customer_id').focus();
 
     // Handle customer/shop type toggle (if exists)
     @if($childShops->isNotEmpty())
@@ -417,21 +542,7 @@
     });
     @endif
 
-    // Handle product selection change
-    $(document).on('change', '.product-select', function() {
-        const rowIndex = $(this).data('row');
-        const selectedOption = $(this).find('option:selected');
-        const price = parseFloat(selectedOption.data('price')) || 0;
-        const stock = parseFloat(selectedOption.data('stock')) || 0;
-        
-        const $row = $(this).closest('tr');
-        $row.find('.original-price').val(price);
-        $row.find('.unit-price').val(price);
-        $row.find('.stock-display').text(stock);
-        
-        // Update row calculations
-        calculateRowTotal(rowIndex);
-    });
+    // Product selection change is now handled in initializeSelect2 function
 
     // Handle unit price change
     $(document).on('input', '.unit-price', function() {
@@ -456,6 +567,35 @@
         }
         
         calculateRowTotal(rowIndex);
+    });
+
+    // Handle Enter key on quantity input - add new row if on last row
+    $(document).on('keydown', '.quantity', function(e) {
+        // Check if Enter key is pressed
+        if (e.key === 'Enter' || e.keyCode === 13) {
+            e.preventDefault(); // Prevent form submission
+            
+            const $currentRow = $(this).closest('tr');
+            const $allRows = $('#productTableBody tr.product-row');
+            
+            // Check if current row is the last row in the table
+            const isLastRow = $currentRow.is($allRows.last());
+            
+            if (isLastRow) {
+                // Add new row after current row (same as addRowAfter button)
+                addRow();
+                
+                // Focus on the new row's product dropdown
+                setTimeout(function() {
+                    const $newRow = $('#productTableBody tr.product-row').last();
+                    const $newProductSelect = $newRow.find('.product-select');
+                    if ($newProductSelect.length > 0) {
+                        // Open the Select2 dropdown and focus on search input
+                        $newProductSelect.select2('open');
+                    }
+                }, 150); // Wait a bit longer to ensure Select2 is initialized
+            }
+        }
     });
 
     // Calculate row total and discount
@@ -507,6 +647,12 @@
         $('#subtotal').text(subtotal.toFixed(2));
         $('#invoice_total').text(invoiceTotal.toFixed(2));
         $('#invoice_total_hidden').val(invoiceTotal.toFixed(2));
+        
+        // If payment method is cash, auto-update payment amount
+        const paymentMethod = $('#payment_status').val();
+        if (paymentMethod === 'cash') {
+            $('#pay').val(invoiceTotal.toFixed(2));
+        }
         
         calculateDue();
     }
@@ -581,6 +727,14 @@
     
     // Handle payment status change
     $(document).on('change', '#payment_status', function() {
+        const paymentMethod = $(this).val();
+        
+        // If payment method is cash, auto-populate payment amount with invoice total
+        if (paymentMethod === 'cash') {
+            const invoiceTotal = parseFloat($('#invoice_total_hidden').val()) || 0;
+            $('#pay').val(invoiceTotal.toFixed(2));
+        }
+        
         calculateDue();
     });
 
@@ -588,19 +742,16 @@
     function addRow() {
         rowCount++;
         
-        // Build product options HTML
-        let productOptions = '<option value="">Select Product</option>';
-        @foreach($products as $product)
-            productOptions += '<option value="{{ $product->id }}" data-price="{{ $product->selling_price ?? 0 }}" data-stock="{{ $product->product_store ?? 0 }}">{{ $product->product_name }} (Stock: {{ $product->product_store ?? 0 }})</option>';
-        @endforeach
-        
         const newRow = `
             <tr class="product-row" data-row-index="${rowCount}">
                 <td>
-                    <select class="form-control product-select" name="products[${rowCount}][product_id]" data-row="${rowCount}">
-                        ${productOptions}
+                    <select class="form-control product-select" name="products[${rowCount}][product_id]" data-row="${rowCount}" style="width: 100%;">
+                        <option value="">Select Product</option>
                     </select>
                     <input type="hidden" class="original-price" name="products[${rowCount}][original_price]" value="0">
+                </td>
+                <td>
+                    <span class="product-code-display" data-row="${rowCount}">-</span>
                 </td>
                 <td>
                     <input type="number" step="0.01" class="form-control unit-price" name="products[${rowCount}][unit_price]" value="0" data-row="${rowCount}" min="0">
@@ -629,6 +780,10 @@
         `;
         
         $('#productTableBody').append(newRow);
+        
+        // Initialize Select2 on the newly added select element
+        const $newSelect = $('tr[data-row-index="' + rowCount + '"] .product-select');
+        initializeSelect2($newSelect);
     }
 
     // Add row before
@@ -644,7 +799,15 @@
     // Delete row
     $(document).on('click', '.delete-row-btn', function() {
         const rowIndex = $(this).data('row');
-        $('tr[data-row-index="' + rowIndex + '"]').remove();
+        const $row = $('tr[data-row-index="' + rowIndex + '"]');
+        const $select = $row.find('.product-select');
+        
+        // Destroy Select2 instance before removing
+        if ($select.data('select2')) {
+            $select.select2('destroy');
+        }
+        
+        $row.remove();
         calculateInvoiceTotal();
     });
 
@@ -705,6 +868,19 @@
             e.preventDefault();
             alert('Please select a payment method');
             return false;
+        }
+
+        // Validate: If payment method is cash, payment amount must equal invoice total
+        if (paymentStatus === 'cash') {
+            const invoiceTotal = parseFloat($('#invoice_total_hidden').val()) || 0;
+            const payAmount = parseFloat($('#pay').val()) || 0;
+            
+            if (Math.abs(payAmount - invoiceTotal) > 0.01) {
+                e.preventDefault();
+                alert('Payment amount must equal invoice total when payment method is Cash.');
+                $('#pay').focus();
+                return false;
+            }
         }
 
         // Allow form submission

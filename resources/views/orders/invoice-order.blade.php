@@ -109,7 +109,12 @@
                                     <tbody>
                                         @foreach ($orderDetails as $item)
                                         <tr>
-                                            <td>{{ $item->product->product_name }}</td>
+                                            <td>
+                                                {{ $item->product->product_name }}
+                                                @if($item->product->product_code)
+                                                    <small class="text-muted">({{ $item->product->product_code }})</small>
+                                                @endif
+                                            </td>
                                             <td>{{ $item->unitcost }}</td>
                                             <td>{{ $item->quantity }}</td>
                                             <td>{{ $item->total }}</td>
