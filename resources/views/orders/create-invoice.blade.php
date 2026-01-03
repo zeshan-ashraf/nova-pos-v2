@@ -194,16 +194,21 @@
                                     </div>
                                     <div class="form-group" id="customer-group">
                                         <label for="customer_id">Customer <span class="text-danger">*</span></label>
-                                        <select class="form-control" id="customer_id" name="customer_id">
-                                            <option value="">Select Customer</option>
-                                            @foreach($customers as $customer)
-                                                <option value="{{ $customer->id }}" 
-                                                    data-credit-limit="{{ $customer->credit_limit ?? 0 }}" 
-                                                    data-credit-amount="{{ $customer->credit_amount ?? 0 }}">
-                                                    {{ $customer->shopname ?: $customer->name }}
-                                                </option>
-                                            @endforeach
-                                        </select>
+                                        <div class="d-flex align-items-center">
+                                            <select class="form-control" id="customer_id" name="customer_id" style="max-width: 70%;">
+                                                <option value="">Select Customer</option>
+                                                @foreach($customers as $customer)
+                                                    <option value="{{ $customer->id }}" 
+                                                        data-credit-limit="{{ $customer->credit_limit ?? 0 }}" 
+                                                        data-credit-amount="{{ $customer->credit_amount ?? 0 }}">
+                                                        {{ $customer->shopname ?: $customer->name }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            <button type="button" class="btn btn-success btn-sm ml-2" id="addCustomerBtn" data-toggle="modal" data-target="#addCustomerModal">
+                                                <i class="ri-add-line"></i> Add Customer
+                                            </button>
+                                        </div>
                                         @error('customer_id')
                                             <div class="text-danger">{{ $message }}</div>
                                         @enderror
@@ -224,16 +229,21 @@
                                     <!-- Regular Shop: Show only Customer dropdown -->
                                     <div class="form-group">
                                         <label for="customer_id">Customer <span class="text-danger">*</span></label>
-                                        <select class="form-control" id="customer_id" name="customer_id" required>
-                                            <option value="">Select Customer</option>
-                                            @foreach($customers as $customer)
-                                                <option value="{{ $customer->id }}" 
-                                                    data-credit-limit="{{ $customer->credit_limit ?? 0 }}" 
-                                                    data-credit-amount="{{ $customer->credit_amount ?? 0 }}">
-                                                    {{ $customer->shopname ?: $customer->name }}
-                                                </option>
-                                            @endforeach
-                                        </select>
+                                        <div class="d-flex align-items-center">
+                                            <select class="form-control" id="customer_id" name="customer_id" required style="max-width: 70%;">
+                                                <option value="">Select Customer</option>
+                                                @foreach($customers as $customer)
+                                                    <option value="{{ $customer->id }}" 
+                                                        data-credit-limit="{{ $customer->credit_limit ?? 0 }}" 
+                                                        data-credit-amount="{{ $customer->credit_amount ?? 0 }}">
+                                                        {{ $customer->shopname ?: $customer->name }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            <button type="button" class="btn btn-success btn-sm ml-2" id="addCustomerBtn" data-toggle="modal" data-target="#addCustomerModal">
+                                                <i class="ri-add-line"></i> Add Customer
+                                            </button>
+                                        </div>
                                         @error('customer_id')
                                             <div class="text-danger">{{ $message }}</div>
                                         @enderror
@@ -251,7 +261,7 @@
 
                     <!-- Product Grid Section -->
                     <div class="product-table-wrapper">
-                        <button type="button" class="btn btn-primary btn-add-row" id="addRowBefore">
+                        <button type="button" class="btn btn-success btn-add-row" id="addRowBefore">
                             <i class="ri-add-line"></i> Add Row
                         </button>
 
@@ -307,15 +317,26 @@
                             </table>
                         </div>
 
-                        <button type="button" class="btn btn-primary btn-add-row" id="addRowAfter">
+                        <button type="button" class="btn btn-success btn-add-row" id="addRowAfter">
                             <i class="ri-add-line"></i> Add Row
                         </button>
                     </div>
 
-                    <!-- Invoice Summary -->
+                    <!-- Invoice Summary and Comment Section -->
                     <div class="invoice-summary">
                         <div class="row">
-                            <div class="col-md-6 offset-md-6">
+                            <!-- Comment Section - Left Side -->
+                            <div class="col-md-6">
+                                <div class="comment-section">
+                                    <div class="form-group">
+                                        <label for="comment">Comment (Optional)</label>
+                                        <textarea class="form-control" id="comment" name="comment" rows="8" placeholder="Add any additional notes or comments here..."></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Invoice Summary - Right Side -->
+                            <div class="col-md-6">
                                 <div class="summary-row">
                                     <span class="summary-label">Subtotal:</span>
                                     <span class="summary-value" id="subtotal">0.00</span>
@@ -356,14 +377,6 @@
                         </div>
                     </div>
 
-                    <!-- Comment Section -->
-                    <div class="comment-section">
-                        <div class="form-group">
-                            <label for="comment">Comment (Optional)</label>
-                            <textarea class="form-control" id="comment" name="comment" rows="4" placeholder="Add any additional notes or comments here..."></textarea>
-                        </div>
-                    </div>
-
                     <!-- Submit Button -->
                     <div class="mt-4">
                         <button type="submit" class="btn btn-primary btn-lg" id="createInvoiceBtn">
@@ -373,6 +386,80 @@
                     </div>
                 </form>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Customer Modal -->
+<div class="modal fade" id="addCustomerModal" tabindex="-1" role="dialog" aria-labelledby="addCustomerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-md" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addCustomerModalLabel">Add New Customer</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form id="addCustomerForm">
+                <div class="modal-body">
+                    <div id="customerFormErrors" class="alert alert-danger" style="display: none;"></div>
+                    <div id="customerFormSuccess" class="alert alert-success" style="display: none;"></div>
+                    
+                    <div class="form-group">
+                        <label for="modal_shopname">Customer Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="modal_shopname" name="shopname" required>
+                        <div class="invalid-feedback" id="error_shopname"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="modal_phone">Customer Phone <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="modal_phone" name="phone" required>
+                        <div class="invalid-feedback" id="error_phone"></div>
+                    </div>
+                    
+                    <!-- Credit Fields: Labels Row -->
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label for="modal_credit_limit">Credit Limit <span class="text-danger">*</span></label>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="modal_credit_amount">Credit Amount</label>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="modal_credit_days">Credit Days <span class="text-danger">*</span></label>
+                        </div>
+                    </div>
+                    
+                    <!-- Credit Fields: Inputs Row -->
+                    <div class="row">
+                        <div class="col-md-4 form-group">
+                            <input type="number" step="0.01" min="0" class="form-control" id="modal_credit_limit" name="credit_limit" value="0" required>
+                            <div class="invalid-feedback" id="error_credit_limit"></div>
+                        </div>
+                        <div class="col-md-4 form-group">
+                            <input type="number" step="0.01" min="0" class="form-control" id="modal_credit_amount" name="credit_amount" value="0">
+                            <div class="invalid-feedback" id="error_credit_amount"></div>
+                        </div>
+                        <div class="col-md-4 form-group">
+                            <input type="number" min="0" class="form-control" id="modal_credit_days" name="credit_days" value="0" required>
+                            <div class="invalid-feedback" id="error_credit_days"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="modal_address">Customer Address <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="modal_address" name="address" rows="3" required></textarea>
+                        <div class="invalid-feedback" id="error_address"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="saveCustomerBtn">
+                        <span class="spinner-border spinner-border-sm d-none" id="saveCustomerSpinner" role="status" aria-hidden="true"></span>
+                        <span id="saveCustomerBtnText">Save</span>
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -885,6 +972,144 @@
 
         // Allow form submission
         return true;
+    });
+
+    // Handle Add Customer Modal Form Submission
+    $('#addCustomerForm').on('submit', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        
+        // Ensure this is not the invoice form
+        if ($(e.target).attr('id') !== 'addCustomerForm') {
+            return false;
+        }
+        
+        // Hide previous errors and success messages
+        $('#customerFormErrors').hide().html('');
+        $('#customerFormSuccess').hide();
+        $('.invalid-feedback').hide();
+        $('.form-control').removeClass('is-invalid');
+        
+        // Disable save button and show loading
+        const $saveBtn = $('#saveCustomerBtn');
+        const $saveBtnText = $('#saveCustomerBtnText');
+        const $spinner = $('#saveCustomerSpinner');
+        
+        $saveBtn.prop('disabled', true);
+        $saveBtnText.text('Saving...');
+        $spinner.removeClass('d-none');
+        
+        // Get form data
+        const formData = {
+            shopname: $('#modal_shopname').val(),
+            phone: $('#modal_phone').val(),
+            credit_limit: $('#modal_credit_limit').val() || 0,
+            credit_days: $('#modal_credit_days').val() || 0,
+            credit_amount: $('#modal_credit_amount').val() || 0,
+            address: $('#modal_address').val(),
+        };
+        
+        // Submit via AJAX
+        $.ajax({
+            url: '{{ route("customers.store") }}',
+            method: 'POST',
+            data: formData,
+            headers: {
+                'X-CSRF-TOKEN': $('input[name="_token"]').val() || $('meta[name="csrf-token"]').attr('content')
+            },
+            success: function(response) {
+                if (response.success) {
+                    // Show success message
+                    $('#customerFormSuccess').text(response.message).show();
+                    
+                    // Add new customer to dropdown
+                    const $customerSelect = $('#customer_id');
+                    const newOption = $('<option>', {
+                        value: response.customer.id,
+                        text: response.customer.shopname || response.customer.name,
+                        'data-credit-limit': response.customer.credit_limit,
+                        'data-credit-amount': response.customer.credit_amount,
+                        selected: true
+                    });
+                    $customerSelect.append(newOption);
+                    $customerSelect.val(response.customer.id).trigger('change');
+                    
+                    // Reset form
+                    $('#addCustomerForm')[0].reset();
+                    
+                    // Auto-close modal after 5 seconds
+                    let countdown = 5;
+                    const countdownInterval = setInterval(function() {
+                        countdown--;
+                        if (countdown > 0) {
+                            $('#customerFormSuccess').text(response.message + ' Closing in ' + countdown + ' seconds...');
+                        } else {
+                            clearInterval(countdownInterval);
+                            $('#addCustomerModal').modal('hide');
+                            // Reset form and messages after modal closes
+                            setTimeout(function() {
+                                $('#addCustomerForm')[0].reset();
+                                $('#customerFormSuccess').hide();
+                                $saveBtn.prop('disabled', false);
+                                $saveBtnText.text('Save');
+                                $spinner.addClass('d-none');
+                            }, 300);
+                        }
+                    }, 1000);
+                }
+                
+                return false;
+            },
+            error: function(xhr) {
+                // Re-enable save button
+                $saveBtn.prop('disabled', false);
+                $saveBtnText.text('Save');
+                $spinner.addClass('d-none');
+                
+                if (xhr.status === 422) {
+                    // Validation errors
+                    const errors = xhr.responseJSON.errors;
+                    let errorHtml = '<ul class="mb-0">';
+                    
+                    $.each(errors, function(field, messages) {
+                        const fieldId = 'modal_' + field;
+                        const errorId = 'error_' + field;
+                        
+                        // Show field error
+                        $('#' + fieldId).addClass('is-invalid');
+                        $('#' + errorId).text(messages[0]).show();
+                        
+                        // Add to error list
+                        $.each(messages, function(index, message) {
+                            errorHtml += '<li>' + message + '</li>';
+                        });
+                    });
+                    
+                    errorHtml += '</ul>';
+                    $('#customerFormErrors').html(errorHtml).show();
+                } else {
+                    // Other errors
+                    $('#customerFormErrors').html('<p>An error occurred. Please try again.</p>').show();
+                }
+                
+                return false;
+            }
+        });
+        
+        return false;
+    });
+    
+    // Reset modal when closed
+    $('#addCustomerModal').on('hidden.bs.modal', function() {
+        $('#addCustomerForm')[0].reset();
+        $('#customerFormErrors').hide().html('');
+        $('#customerFormSuccess').hide();
+        $('.invalid-feedback').hide();
+        $('.form-control').removeClass('is-invalid');
+        $('#saveCustomerBtn').prop('disabled', false);
+        $('#saveCustomerBtnText').text('Save');
+        $('#saveCustomerSpinner').addClass('d-none');
     });
     });
 })(jQuery);

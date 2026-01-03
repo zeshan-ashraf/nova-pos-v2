@@ -53,7 +53,7 @@
                                 @enderror
                             </div> --}}
                             <div class="form-group col-md-6">
-                                <label for="shopname">Shop Name <span class="text-danger">*</span></label>
+                                <label for="shopname">Customer Name <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control @error('shopname') is-invalid @enderror" id="shopname" name="shopname" value="{{ old('shopname', $customer->shopname) }}" required>
                                 @error('shopname')
                                 <div class="invalid-feedback">

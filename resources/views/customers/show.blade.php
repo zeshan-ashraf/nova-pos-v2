@@ -97,7 +97,7 @@
                         <li class="col-lg-12">
                             <div class="form-group row">
                                 <div class="col-sm-3 col-4">
-                                    <label class="col-form-label">Shop Name</label>
+                                    <label class="col-form-label">Customer Name</label>
                                 </div>
                                 <div class="col-sm-9 col-8">
                                     <input type="text" class="form-control bg-white" value="{{ $customer->shopname }}" readonly>

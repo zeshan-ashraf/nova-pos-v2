@@ -111,7 +111,23 @@ class CustomerController extends Controller
         // Set shop_id from logged-in user
         $validatedData['shop_id'] = auth()->user()->shop_id;
 
-        Customer::create($validatedData);
+        $customer = Customer::create($validatedData);
+
+        // If AJAX request, return JSON response
+        if ($request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Customer has been created successfully!',
+                'customer' => [
+                    'id' => $customer->id,
+                    'shopname' => $customer->shopname,
+                    'name' => $customer->name,
+                    'phone' => $customer->phone,
+                    'credit_limit' => $customer->credit_limit ?? 0,
+                    'credit_amount' => $customer->credit_amount ?? 0,
+                ]
+            ]);
+        }
 
         return Redirect::route('customers.index')->with('success', 'Customer has been created!');
     }

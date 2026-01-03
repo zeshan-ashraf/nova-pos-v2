@@ -63,7 +63,7 @@
                             <th>No.</th>
                             <th>Photo</th>
                             {{-- <th>@sortablelink('name')</th> --}} {{-- Name column removed from UI - may be needed in future --}}
-                            <th>@sortablelink('shopname', 'Shop Name')</th>
+                            <th>@sortablelink('shopname', 'Customer Name')</th>
                             <th>@sortablelink('phone')</th>
                             <th>Credit Limit</th>
                             <th>Credit Amount</th>
