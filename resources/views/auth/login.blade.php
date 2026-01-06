@@ -1,5 +1,25 @@
 @extends('auth.body.main')
 
+@section('specificpagestyles')
+<style>
+    /* Login page specific styles - Input fields height 60px */
+    .login-content form .floating-input,
+    .login-content form .form-control {
+        height: 60px !important;
+    }
+    
+    /* Adjust label position for larger input height */
+    .login-content form .floating-label label {
+        top: 30px;
+    }
+    
+    .login-content form .floating-input:focus ~ label,
+    .login-content form .floating-input:not(:placeholder-shown) ~ label {
+        top: 0;
+    }
+</style>
+@endsection
+
 @section('container')
 <div class="row align-items-center justify-content-center height-self-center">
     <div class="col-lg-8">

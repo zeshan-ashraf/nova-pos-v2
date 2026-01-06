@@ -666,6 +666,7 @@ class OrderController extends Controller
             'customers' => $customersQuery->orderBy('shopname')->get(),
             'products' => $productsQuery->orderBy('product_name')->get(),
             'childShops' => $childShops,
+            'categories' => Category::orderBy('name')->get(),
         ]);
     }
 
@@ -732,6 +733,19 @@ class OrderController extends Controller
             'pagination' => [
                 'more' => ($page * $perPage) < $totalCount
             ]
+        ]);
+    }
+
+    /**
+     * Get all categories for dropdown (API endpoint).
+     */
+    public function getCategories()
+    {
+        $categories = Category::orderBy('name')->get(['id', 'name']);
+        
+        return response()->json([
+            'success' => true,
+            'categories' => $categories
         ]);
     }
 

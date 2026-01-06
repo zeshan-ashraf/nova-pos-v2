@@ -111,7 +111,7 @@ class ProductController extends Controller
             'category_id' => 'required|integer',
             'supplier_id' => 'nullable|integer',
             'product_garage' => 'string|nullable',
-            'product_store' => 'string|nullable',
+            'product_store' => 'required|integer|min:0',
             'low_stock_warning' => 'nullable|integer|min:0',
             'buying_date' => 'date_format:Y-m-d|max:10|nullable',
             'buying_price' => 'required|integer',
@@ -144,7 +144,36 @@ class ProductController extends Controller
             $validatedData['shop_id'] = $shopId;
         }
 
-        Product::create($validatedData);
+        // Set default values for buying_price and selling_price if not provided
+        if (!isset($validatedData['buying_price']) || $validatedData['buying_price'] === null) {
+            $validatedData['buying_price'] = 0;
+        }
+        if (!isset($validatedData['selling_price']) || $validatedData['selling_price'] === null) {
+            $validatedData['selling_price'] = 0;
+        }
+        
+        // Set default product_store if not provided
+        if (!isset($validatedData['product_store']) || $validatedData['product_store'] === null) {
+            $validatedData['product_store'] = 0;
+        }
+
+        $product = Product::create($validatedData);
+
+        // If AJAX request, return JSON response
+        if ($request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Product has been created successfully!',
+                'product' => [
+                    'id' => $product->id,
+                    'product_name' => $product->product_name,
+                    'product_code' => $product->product_code,
+                    'buying_price' => $product->buying_price,
+                    'selling_price' => $product->selling_price,
+                    'product_store' => $product->product_store ?? 0,
+                ]
+            ]);
+        }
 
         return Redirect::route('products.index')->with('success', 'Product has been created!');
     }

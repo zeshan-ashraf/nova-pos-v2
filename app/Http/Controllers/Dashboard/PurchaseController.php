@@ -108,6 +108,76 @@ class PurchaseController extends Controller
     }
 
     /**
+     * Search products for autocomplete in purchase (filtered by shop).
+     */
+    public function searchProducts(Request $request)
+    {
+        $search = $request->get('q', '');
+        $page = $request->get('page', 1);
+        $authUser = auth()->user();
+        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+        
+        // Build base query with status filtering
+        $productsQuery = Product::where(function($query) {
+            $query->where('status', 'valid')
+                  ->orWhere('status', 'active');
+        });
+        
+        // Apply shop filtering
+        if ($authUser->shop_id) {
+            $productsQuery->whereIn('shop_id', $visibleShopIds);
+        } else {
+            $productsQuery->where(function ($query) use ($visibleShopIds) {
+                $query->whereNull('shop_id');
+                if ($visibleShopIds->isNotEmpty()) {
+                    $query->orWhereIn('shop_id', $visibleShopIds);
+                }
+            });
+        }
+        
+        // Apply search filter (only if search term is provided)
+        if (!empty($search)) {
+            $productsQuery->where(function($query) use ($search) {
+                $query->where('product_name', 'like', '%' . $search . '%')
+                      ->orWhere('product_code', 'like', '%' . $search . '%');
+            });
+        }
+
+        // Get total count for pagination
+        $totalCount = (clone $productsQuery)->count();
+        
+        // Apply pagination (50 items per page)
+        $perPage = 50;
+        $offset = ($page - 1) * $perPage;
+        
+        $products = $productsQuery->orderBy('product_code', 'asc')
+            ->orderBy('product_name', 'asc')
+            ->offset($offset)
+            ->limit($perPage)
+            ->get()
+            ->map(function ($product) {
+                $productCode = $product->product_code ?? '';
+                $displayText = $productCode ? $productCode . ' - ' . $product->product_name : $product->product_name;
+                
+                return [
+                    'id' => $product->id,
+                    'text' => $displayText,
+                    'name' => $product->product_name,
+                    'price' => $product->buying_price ?? 0,
+                    'stock' => $product->product_store ?? 0,
+                    'code' => $productCode,
+                ];
+            });
+
+        return response()->json([
+            'results' => $products,
+            'pagination' => [
+                'more' => ($page * $perPage) < $totalCount
+            ]
+        ]);
+    }
+
+    /**
      * Store a newly created purchase.
      */
     public function store(Request $request, SupplierCreditService $creditService)

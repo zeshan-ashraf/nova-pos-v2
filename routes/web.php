@@ -141,6 +141,7 @@ Route::middleware(['permission:orders.menu'])->group(function () {
     Route::get('/orders/invoice/download/{order_id}', [OrderController::class, 'invoiceDownload'])->name('order.invoiceDownload');
 
     Route::get('/api/products/search', [OrderController::class, 'searchProducts'])->name('api.products.search');
+    Route::get('/api/categories', [OrderController::class, 'getCategories'])->name('api.categories');
 
     // Pending Due
     Route::get('/pending/due', [OrderController::class, 'pendingDue'])->name('order.pendingDue');
@@ -185,6 +186,7 @@ Route::middleware(['permission:purchases.menu'])->group(function () {
     Route::get('/purchases/{purchase_id}', [PurchaseController::class, 'show'])->name('purchases.show');
     Route::put('/purchases/update/status', [PurchaseController::class, 'updateStatus'])->name('purchases.updateStatus');
     Route::delete('/purchases/{purchase_id}', [PurchaseController::class, 'destroy'])->name('purchases.destroy');
+    Route::get('/api/purchases/products/search', [PurchaseController::class, 'searchProducts'])->name('api.purchases.products.search');
 });
 
 // ====== ACTIVITY CONTROLLER ======

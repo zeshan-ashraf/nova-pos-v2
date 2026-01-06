@@ -261,9 +261,12 @@
 
                     <!-- Product Grid Section -->
                     <div class="product-table-wrapper">
-                        <button type="button" class="btn btn-success btn-add-row" id="addRowBefore">
-                            <i class="ri-add-line"></i> Add Row
-                        </button>
+                        <div class="d-flex align-items-center mb-3">
+                            <button type="button" class="btn btn-success btn-add-row" id="addRowBefore">
+                                <i class="ri-add-line"></i> Add Row
+                            </button>
+                            @include('partials.add-product-modal')
+                        </div>
 
                         <div class="table-responsive">
                             <table class="product-table" id="productTable">
@@ -463,6 +466,7 @@
         </div>
     </div>
 </div>
+
 @endsection
 
 @section('specificpagescripts')
@@ -531,13 +535,21 @@
 
         // Handle product selection change
         $select.on('select2:select', function (e) {
-            const data = e.params.data;
+            let data = e.params.data;
             const rowIdx = $(this).data('row');
             const $row = $('tr[data-row-index="' + rowIdx + '"]');
             
-            $row.find('.original-price').val(data.price);
-            $row.find('.unit-price').val(data.price);
-            $row.find('.stock-display').text(data.stock);
+            // If data doesn't have required properties (manually added option), try to get from stored data
+            if (!data.price && !data.stock && typeof window.newProductData !== 'undefined') {
+                const productId = data.id;
+                if (window.newProductData[productId]) {
+                    data = window.newProductData[productId];
+                }
+            }
+            
+            $row.find('.original-price').val(data.price || 0);
+            $row.find('.unit-price').val(data.price || 0);
+            $row.find('.stock-display').text(data.stock || 0);
             $row.find('.product-code-display').text(data.code || '-');
             
             calculateRowTotal(rowIdx);
@@ -1111,6 +1123,7 @@
         $('#saveCustomerBtnText').text('Save');
         $('#saveCustomerSpinner').addClass('d-none');
     });
+
     });
 })(jQuery);
 </script>
