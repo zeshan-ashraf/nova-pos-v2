@@ -142,6 +142,7 @@ Route::middleware(['permission:orders.menu'])->group(function () {
 
     Route::get('/api/products/search', [OrderController::class, 'searchProducts'])->name('api.products.search');
     Route::get('/api/categories', [OrderController::class, 'getCategories'])->name('api.categories');
+    Route::get('/api/customers/{customerId}/details', [OrderController::class, 'getCustomerDetails'])->name('api.customers.details');
 
     // Pending Due
     Route::get('/pending/due', [OrderController::class, 'pendingDue'])->name('order.pendingDue');

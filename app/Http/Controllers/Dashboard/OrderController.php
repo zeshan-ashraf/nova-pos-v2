@@ -69,6 +69,11 @@ class OrderController extends Controller
             });
         }
 
+        // Apply default ordering by created_at DESC, id DESC if no sort is specified
+        if (!request()->has('sort')) {
+            $ordersQuery->orderBy('created_at', 'desc')->orderBy('id', 'desc');
+        }
+
         return view('orders.index', [
             'orders' => $ordersQuery->paginate($row)->appends(request()->query())
         ]);
@@ -101,6 +106,11 @@ class OrderController extends Controller
             });
         }
 
+        // Apply default ordering by created_at DESC, id DESC if no sort is specified
+        if (!request()->has('sort')) {
+            $ordersQuery->orderBy('created_at', 'desc')->orderBy('id', 'desc');
+        }
+
         return view('orders.pending-orders', [
             'orders' => $ordersQuery->paginate($row)->appends(request()->query())
         ]);
@@ -131,6 +141,11 @@ class OrderController extends Controller
                     $query->orWhereIn('shop_id', $visibleShopIds);
                 }
             });
+        }
+
+        // Apply default ordering by created_at DESC, id DESC if no sort is specified
+        if (!request()->has('sort')) {
+            $ordersQuery->orderBy('created_at', 'desc')->orderBy('id', 'desc');
         }
 
         return view('orders.complete-orders', [
@@ -289,6 +304,12 @@ class OrderController extends Controller
 
         $order->update(['order_status' => 'complete']);
 
+        // Check if request came from pending due page
+        $referer = $request->headers->get('referer');
+        if ($referer && strpos($referer, '/pending/due') !== false) {
+            return Redirect::route('order.pendingDue')->with('success', 'Order has been completed!');
+        }
+
         return Redirect::route('order.pendingOrders')->with('success', 'Order has been completed!');
     }
 
@@ -321,7 +342,11 @@ class OrderController extends Controller
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
 
         $ordersQuery = Order::with(['customer', 'shop.parent'])
-            ->where('due', '>', '0')
+            ->where('order_status', '!=', 'complete')
+            ->where(function($query) {
+                $query->where('due', '>', '0')  // Unpaid or partially paid
+                      ->orWhere('due', '=', '0'); // Fully paid but not completed
+            })
             ->sortable();
 
         // Apply shop filtering
@@ -334,6 +359,11 @@ class OrderController extends Controller
                     $query->orWhereIn('shop_id', $visibleShopIds);
                 }
             });
+        }
+
+        // Apply default ordering by created_at DESC, id DESC if no sort is specified
+        if (!request()->has('sort')) {
+            $ordersQuery->orderBy('created_at', 'desc')->orderBy('id', 'desc');
         }
 
         return view('orders.pending-due', [
@@ -622,16 +652,19 @@ class OrderController extends Controller
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
 
         // Filter customers by shop, exclude system customers (is_system = 1)
-        $customersQuery = Customer::query()->where('is_system', '!=', 1);
-        if ($authUser->shop_id) {
-            $customersQuery->whereIn('shop_id', $visibleShopIds);
-        } else {
-            $customersQuery->where(function ($query) use ($visibleShopIds) {
-                $query->whereNull('shop_id');
-                if ($visibleShopIds->isNotEmpty()) {
-                    $query->orWhereIn('shop_id', $visibleShopIds);
-                }
+        // For invoice/create page only: show customers from user's shop_id only (exclude child shops)
+        $customersQuery = Customer::query()
+            ->where(function($query) {
+                $query->where('is_system', false)
+                      ->orWhere('is_system', 0)
+                      ->orWhereNull('is_system');
             });
+        if ($authUser->shop_id) {
+            // Only show customers from the user's specific shop_id, not child shops
+            $customersQuery->where('shop_id', $authUser->shop_id);
+        } else {
+            // SuperAdmin: show no customers (or show all if needed - adjust as per requirement)
+            $customersQuery->whereRaw('1 = 0'); // Always false condition - no customers for SuperAdmin
         }
 
         // Filter products by shop for dropdown - only user's specific shop_id (exclude child shops)
@@ -667,6 +700,53 @@ class OrderController extends Controller
             'products' => $productsQuery->orderBy('product_name')->get(),
             'childShops' => $childShops,
             'categories' => Category::orderBy('name')->get(),
+        ]);
+    }
+
+    /**
+     * Get customer details via AJAX for invoice creation.
+     */
+    public function getCustomerDetails(Request $request, $customerId)
+    {
+        $authUser = auth()->user();
+        
+        $customer = Customer::findOrFail($customerId);
+        
+        // Ensure shop access
+        if ($authUser->shop_id && $customer->shop_id !== $authUser->shop_id) {
+            return response()->json(['error' => 'You do not have access to this customer.'], 403);
+        }
+        
+        // Get last payment date
+        $lastPayment = PaymentLog::whereHas('order', function($query) use ($customerId) {
+                $query->where('customer_id', $customerId);
+            })
+            ->orderBy('created_at', 'desc')
+            ->first();
+        
+        $lastPaymentDate = $lastPayment ? $lastPayment->created_at->format('Y-m-d H:i:s') : null;
+        
+        // Calculate available credit
+        $creditLimit = $customer->credit_limit ?? 0;
+        $creditAmount = $customer->credit_amount ?? 0;
+        $availableCredit = max(0, $creditLimit - $creditAmount);
+        
+        return response()->json([
+            'success' => true,
+            'customer' => [
+                'id' => $customer->id,
+                'name' => $customer->name ?? '',
+                'shopname' => $customer->shopname ?? '',
+                'phone' => $customer->phone ?? '',
+                'address' => $customer->address ?? '',
+                'email' => $customer->email ?? '',
+                'credit_limit' => $creditLimit,
+                'credit_amount' => $creditAmount,
+                'credit_days' => $customer->credit_days ?? 0,
+                'available_credit' => $availableCredit,
+                'last_payment_date' => $lastPaymentDate,
+                'is_walkin' => $customer->is_walkin ?? 0,
+            ]
         ]);
     }
 
@@ -775,6 +855,14 @@ class OrderController extends Controller
      */
     public function storeInvoice(Request $request, CustomerCreditService $creditService, SupplierCreditService $supplierCreditService)
     {
+        // Log the request for debugging
+        \Log::info('Invoice creation request received', [
+            'customer_id' => $request->input('customer_id'),
+            'shop_id' => $request->input('shop_id'),
+            'products_count' => count($request->input('products', [])),
+            'payment_status' => $request->input('payment_status'),
+        ]);
+        
         $rules = [
             'customer_id' => 'required_without:shop_id|nullable|numeric',
             'shop_id' => 'required_without:customer_id|nullable|numeric|exists:shops,id',
@@ -791,7 +879,27 @@ class OrderController extends Controller
             'products.*.item_discount' => 'nullable|numeric|min:0',
         ];
 
-        $validatedData = $request->validate($rules);
+        try {
+            $validatedData = $request->validate($rules);
+            
+            \Log::info('Invoice validation passed', ['products_count' => count($validatedData['products'])]);
+            
+            // Filter out empty product entries (where product_id is empty or 0)
+            $validatedData['products'] = array_filter($validatedData['products'], function($product) {
+                return !empty($product['product_id']) && $product['product_id'] > 0;
+            });
+            
+            // Re-index array after filtering
+            $validatedData['products'] = array_values($validatedData['products']);
+            
+            // Validate that at least one product remains after filtering
+            if (empty($validatedData['products'])) {
+                return back()->withErrors(['products' => 'Please add at least one product to the invoice.'])
+                    ->withInput();
+            }
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
+        }
         $payAmount = $validatedData['pay'] ?? 0;
         $authUser = auth()->user();
 
@@ -842,12 +950,15 @@ class OrderController extends Controller
                     ->withInput();
             }
 
+            // Determine order status: if due == 0, mark as complete, otherwise pending
+            $orderStatus = ($due == 0) ? 'complete' : 'pending';
+
             // Prepare order data
             $orderData = [
                 'customer_id' => $validatedData['customer_id'],
                 'shop_id' => $authUser->shop_id,
                 'order_date' => Carbon::parse($validatedData['order_date'])->format('Y-m-d H:i:s'),
-                'order_status' => 'pending',
+                'order_status' => $orderStatus,
                 'total_products' => $totalProducts,
                 'sub_total' => $subtotal,
                 'invoice_discount' => $invoiceDiscount,
@@ -866,10 +977,16 @@ class OrderController extends Controller
             DB::transaction(function () use (&$order_id, $orderData, $creditService, $customer, $due, $pay, $paymentMethod) {
                 $order = Order::create($orderData);
                 $order_id = $order->id;
-                $creditService->addPending($customer, $due);
+                
+                // Only add pending credit if due > 0
+                if ($due > 0) {
+                    $creditService->addPending($customer, $due);
+                }
                 
                 // Create payment log if payment amount > 0 (isolated function)
-                $this->createPaymentLog($order_id, $pay, $paymentMethod);
+                if ($pay > 0) {
+                    $this->createPaymentLog($order_id, $pay, $paymentMethod);
+                }
             });
 
             // Create order details and reduce stock
@@ -1015,6 +1132,9 @@ class OrderController extends Controller
                     ->withInput();
             }
 
+            // Determine order status: if due == 0, mark as complete, otherwise pending
+            $orderStatus = ($due == 0) ? 'complete' : 'pending';
+
             $order_id = null;
             $purchase_id = null;
             $paymentMethod = $validatedData['payment_status'];
@@ -1024,14 +1144,14 @@ class OrderController extends Controller
                 DB::transaction(function () use (
                     &$order_id, &$purchase_id, $validatedData, $motherShop, $childShop, $supplier, 
                     $systemCustomer, $invoice_no, $subtotal, $totalProducts, $vat, $invoiceDiscount, 
-                    $total, $pay, $due, $authUser, $request, $creditService, $supplierCreditService, $paymentMethod
+                    $total, $pay, $due, $authUser, $request, $creditService, $supplierCreditService, $paymentMethod, $orderStatus
                 ) {
                     // 1. Create Order (Invoice)
                     $orderData = [
                         'customer_id' => $systemCustomer->id,
                         'shop_id' => $motherShop->id,
                         'order_date' => Carbon::parse($validatedData['order_date'])->format('Y-m-d H:i:s'),
-                        'order_status' => 'pending',
+                        'order_status' => $orderStatus,
                         'total_products' => $totalProducts,
                         'sub_total' => $subtotal,
                         'invoice_discount' => $invoiceDiscount,
@@ -1048,7 +1168,9 @@ class OrderController extends Controller
                     $order_id = $order->id;
 
                     // Create payment log if payment amount > 0 (isolated function)
-                    $this->createPaymentLog($order_id, $pay, $paymentMethod);
+                    if ($pay > 0) {
+                        $this->createPaymentLog($order_id, $pay, $paymentMethod);
+                    }
 
                     // 2. Process products: Reduce mother shop stock, add/update child shop products
                     foreach ($validatedData['products'] as $product) {

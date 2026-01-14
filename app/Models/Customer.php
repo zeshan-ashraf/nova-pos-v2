@@ -28,6 +28,7 @@ class Customer extends Model
         'credit_amount',
         'credit_days',
         'is_system',
+        'is_walkin',
     ];
     public $sortable = [
         // 'name', // Removed from UI - may be needed in future
@@ -43,6 +44,7 @@ class Customer extends Model
 
     protected $casts = [
         'is_system' => 'boolean',
+        'is_walkin' => 'boolean',
     ];
 
     public function scopeFilter($query, array $filters)

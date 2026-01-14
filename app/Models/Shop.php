@@ -82,6 +82,18 @@ class Shop extends Model
     {
         return $this->hasMany(Supplier::class, 'mother_shop_id');
     }
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::created(function ($shop) {
+            // Only setup child shops (non-parent shops)
+            if (!$shop->is_parent) {
+                app(\App\Services\ShopSetupService::class)->setupChildShop($shop);
+            }
+        });
+    }
 }
 
 

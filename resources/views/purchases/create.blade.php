@@ -173,16 +173,21 @@
                             <div class="col-md-6">
                                 <div class="form-group">
                                     <label for="supplier_id">Supplier <span class="text-danger">*</span></label>
-                                    <select class="form-control" id="supplier_id" name="supplier_id" required>
-                                        <option value="">Select Supplier</option>
-                                        @foreach($suppliers as $supplier)
-                                            <option value="{{ $supplier->id }}" 
-                                                data-credit-limit="{{ $supplier->credit_limit ?? 0 }}" 
-                                                data-credit-amount="{{ $supplier->credit_amount ?? 0 }}">
-                                                {{ $supplier->shopname ?: $supplier->name }}
-                                            </option>
-                                        @endforeach
-                                    </select>
+                                    <div class="d-flex align-items-center">
+                                        <select class="form-control" id="supplier_id" name="supplier_id" required style="max-width: 70%;">
+                                            <option value="">Select Supplier</option>
+                                            @foreach($suppliers as $supplier)
+                                                <option value="{{ $supplier->id }}" 
+                                                    data-credit-limit="{{ $supplier->credit_limit ?? 0 }}" 
+                                                    data-credit-amount="{{ $supplier->credit_amount ?? 0 }}">
+                                                    {{ $supplier->shopname ?: $supplier->name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        <button type="button" class="btn btn-success btn-sm ml-2" id="addSupplierBtn" data-toggle="modal" data-target="#addSupplierModal">
+                                            <i class="ri-add-line"></i> Add Supplier
+                                        </button>
+                                    </div>
                                     @error('supplier_id')
                                         <div class="text-danger">{{ $message }}</div>
                                     @enderror
@@ -203,7 +208,10 @@
                             <button type="button" class="btn btn-primary btn-add-row" id="addRowBefore">
                                 <i class="ri-add-line"></i> Add Row
                             </button>
-                            @include('partials.add-product-modal')
+                            {{-- Add Product Button (modal will be included outside the form) --}}
+                            <button type="button" class="btn btn-success btn-add-row ml-2" id="addProductBtn" data-toggle="modal" data-target="#addProductModal">
+                                <i class="ri-add-line"></i> Add Product
+                            </button>
                         </div>
 
                         <div class="table-responsive">
@@ -312,13 +320,112 @@
 
                     <!-- Submit Button -->
                     <div class="mt-4">
-                        <button type="submit" class="btn btn-primary btn-lg" id="createPurchaseBtn">
+                        <button type="button" class="btn btn-primary btn-lg" id="createPurchaseBtn">
                             <i class="ri-file-add-line"></i> Create Purchase
                         </button>
                         <a href="{{ route('purchases.index') }}" class="btn btn-secondary btn-lg">Cancel</a>
                     </div>
                 </form>
             </div>
+        </div>
+    </div>
+</div>
+
+{{-- Add Product Modal - MUST be outside the purchase form to prevent conflicts --}}
+@include('partials.add-product-modal')
+
+<!-- Add Supplier Modal -->
+<div class="modal fade" id="addSupplierModal" tabindex="-1" role="dialog" aria-labelledby="addSupplierModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-md" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addSupplierModalLabel">Add New Supplier</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form id="addSupplierForm">
+                <div class="modal-body">
+                    <div id="supplierFormErrors" class="alert alert-danger" style="display: none;"></div>
+                    <div id="supplierFormSuccess" class="alert alert-success" style="display: none;"></div>
+                    
+                    <div class="form-group">
+                        <label for="modal_shopname">Shop Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="modal_shopname" name="shopname" required>
+                        <div class="invalid-feedback" id="error_shopname"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="modal_phone">Supplier Phone <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="modal_phone" name="phone" required>
+                        <div class="invalid-feedback" id="error_phone"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="modal_email">Supplier Email</label>
+                        <input type="email" class="form-control" id="modal_email" name="email">
+                        <div class="invalid-feedback" id="error_email"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="modal_type">Type of Supplier <span class="text-danger">*</span></label>
+                        <select class="form-control" id="modal_type" name="type" required>
+                            <option value="">Select Type..</option>
+                            <option value="Distributor">Distributor</option>
+                            <option value="Whole Seller">Whole Seller</option>
+                        </select>
+                        <div class="invalid-feedback" id="error_type"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="modal_account_holder">Account Holder</label>
+                        <input type="text" class="form-control" id="modal_account_holder" name="account_holder">
+                        <div class="invalid-feedback" id="error_account_holder"></div>
+                    </div>
+                    
+                    <!-- Credit Fields: Labels Row -->
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label for="modal_credit_limit">Credit Limit <span class="text-danger">*</span></label>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="modal_credit_amount">Credit Amount</label>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="modal_credit_days">Credit Days <span class="text-danger">*</span></label>
+                        </div>
+                    </div>
+                    
+                    <!-- Credit Fields: Inputs Row -->
+                    <div class="row">
+                        <div class="col-md-4 form-group">
+                            <input type="number" step="0.01" min="0" class="form-control" id="modal_credit_limit" name="credit_limit" value="0" required>
+                            <div class="invalid-feedback" id="error_credit_limit"></div>
+                        </div>
+                        <div class="col-md-4 form-group">
+                            <input type="number" step="0.01" min="0" class="form-control" id="modal_credit_amount" name="credit_amount" value="0">
+                            <div class="invalid-feedback" id="error_credit_amount"></div>
+                        </div>
+                        <div class="col-md-4 form-group">
+                            <input type="number" min="0" class="form-control" id="modal_credit_days" name="credit_days" value="0" required>
+                            <div class="invalid-feedback" id="error_credit_days"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="modal_address">Supplier Address <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="modal_address" name="address" rows="3" required></textarea>
+                        <div class="invalid-feedback" id="error_address"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="saveSupplierBtn">
+                        <span class="spinner-border spinner-border-sm d-none" id="saveSupplierSpinner" role="status" aria-hidden="true"></span>
+                        <span id="saveSupplierBtnText">Save</span>
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -693,6 +800,219 @@
 
         // Allow form submission
         return true;
+    });
+
+    // Handle Create Purchase button click
+    $('#createPurchaseBtn').on('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const $purchaseForm = $('#purchaseForm');
+        
+        // Check if form exists
+        if ($purchaseForm.length === 0) {
+            console.error('Purchase form not found!');
+            return false;
+        }
+        
+        // Check if form is already submitting (prevent double submission)
+        if ($purchaseForm.data('submitting')) {
+            console.log('Form is already submitting, ignoring click');
+            return false;
+        }
+        
+        // Check HTML5 validation first
+        if (!$purchaseForm[0].checkValidity()) {
+            console.log('HTML5 validation failed');
+            $purchaseForm[0].reportValidity();
+            return false;
+        }
+        
+        // Manually trigger form submit
+        console.log('Manually triggering purchase form submit...');
+        $purchaseForm.data('submitting', true);
+        
+        // Trigger jQuery submit event (this will call our validation handler)
+        $purchaseForm.submit();
+        
+        // Reset flag after a delay
+        setTimeout(function() {
+            $purchaseForm.data('submitting', false);
+        }, 1000);
+    });
+
+    // Handle Add Supplier Modal Form Submission - prevent form submit
+    $('#addSupplierForm').on('submit', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return false;
+    });
+    
+    // Handle Save Supplier button click
+    $(document).on('click', '#saveSupplierBtn', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        
+        // Hide previous errors and success messages
+        $('#supplierFormErrors').hide().html('');
+        $('#supplierFormSuccess').hide();
+        $('.invalid-feedback').hide();
+        $('.form-control').removeClass('is-invalid');
+        
+        // Disable save button and show loading
+        const $saveBtn = $('#saveSupplierBtn');
+        const $saveBtnText = $('#saveSupplierBtnText');
+        const $spinner = $('#saveSupplierSpinner');
+        
+        $saveBtn.prop('disabled', true);
+        $saveBtnText.text('Saving...');
+        $spinner.removeClass('d-none');
+        
+        // Get form data
+        const formData = {
+            shopname: $('#modal_shopname').val(),
+            phone: $('#modal_phone').val(),
+            email: $('#modal_email').val() || '',
+            type: $('#modal_type').val(),
+            account_holder: $('#modal_account_holder').val() || '',
+            credit_limit: $('#modal_credit_limit').val() || 0,
+            credit_days: $('#modal_credit_days').val() || 0,
+            credit_amount: $('#modal_credit_amount').val() || 0,
+            address: $('#modal_address').val(),
+        };
+        
+        // Submit via AJAX
+        $.ajax({
+            url: '{{ route("suppliers.store") }}',
+            method: 'POST',
+            data: formData,
+            headers: {
+                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') || $('input[name="_token"]').val(),
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            success: function(response) {
+                if (response.success) {
+                    // Show success message
+                    $('#supplierFormSuccess').text(response.message).show();
+                    
+                    // Add new supplier to dropdown and select it
+                    const $supplierSelect = $('#supplier_id');
+                    const newOption = $('<option>', {
+                        value: response.supplier.id,
+                        text: response.supplier.shopname || response.supplier.name,
+                        'data-credit-limit': response.supplier.credit_limit,
+                        'data-credit-amount': response.supplier.credit_amount,
+                        selected: true
+                    });
+                    $supplierSelect.append(newOption);
+                    $supplierSelect.val(response.supplier.id).trigger('change');
+                    
+                    // Reset form fields
+                    $('#modal_shopname').val('');
+                    $('#modal_phone').val('');
+                    $('#modal_email').val('');
+                    $('#modal_type').val('');
+                    $('#modal_account_holder').val('');
+                    $('#modal_credit_limit').val(0);
+                    $('#modal_credit_days').val(0);
+                    $('#modal_credit_amount').val(0);
+                    $('#modal_address').val('');
+                    
+                    // Auto-close modal after 3 seconds
+                    let countdown = 3;
+                    const countdownInterval = setInterval(function() {
+                        countdown--;
+                        if (countdown > 0) {
+                            $('#supplierFormSuccess').text(response.message + ' Closing in ' + countdown + ' seconds...');
+                        } else {
+                            clearInterval(countdownInterval);
+                            // Close modal manually
+                            var $modal = $('#addSupplierModal');
+                            $modal.removeClass('show');
+                            $modal.css('display', 'none');
+                            $modal.attr('aria-hidden', 'true');
+                            $('.modal-backdrop').remove();
+                            $('body').removeClass('modal-open');
+                            $('body').css({'overflow': '', 'padding-right': ''});
+                            // Reset form and messages after modal closes
+                            setTimeout(function() {
+                                $('#modal_shopname').val('');
+                                $('#modal_phone').val('');
+                                $('#modal_email').val('');
+                                $('#modal_type').val('');
+                                $('#modal_account_holder').val('');
+                                $('#modal_credit_limit').val(0);
+                                $('#modal_credit_days').val(0);
+                                $('#modal_credit_amount').val(0);
+                                $('#modal_address').val('');
+                                $('#supplierFormSuccess').hide();
+                                $saveBtn.prop('disabled', false);
+                                $saveBtnText.text('Save');
+                                $spinner.addClass('d-none');
+                            }, 300);
+                        }
+                    }, 1000);
+                }
+                
+                return false;
+            },
+            error: function(xhr) {
+                // Re-enable save button
+                $saveBtn.prop('disabled', false);
+                $saveBtnText.text('Save');
+                $spinner.addClass('d-none');
+                
+                if (xhr.status === 422) {
+                    // Validation errors
+                    const errors = xhr.responseJSON.errors;
+                    let errorHtml = '<ul class="mb-0">';
+                    
+                    $.each(errors, function(field, messages) {
+                        const fieldId = 'modal_' + field;
+                        const errorId = 'error_' + field;
+                        
+                        // Show field error
+                        $('#' + fieldId).addClass('is-invalid');
+                        $('#' + errorId).text(messages[0]).show();
+                        
+                        // Add to error list
+                        $.each(messages, function(index, message) {
+                            errorHtml += '<li>' + message + '</li>';
+                        });
+                    });
+                    
+                    errorHtml += '</ul>';
+                    $('#supplierFormErrors').html(errorHtml).show();
+                } else {
+                    // Other errors
+                    $('#supplierFormErrors').html('<p>An error occurred. Please try again.</p>').show();
+                }
+                
+                return false;
+            }
+        });
+    });
+    
+    // Reset modal when closed
+    $(document).on('hidden.bs.modal', '#addSupplierModal', function() {
+        $('#modal_shopname').val('');
+        $('#modal_phone').val('');
+        $('#modal_email').val('');
+        $('#modal_type').val('');
+        $('#modal_account_holder').val('');
+        $('#modal_credit_limit').val(0);
+        $('#modal_credit_days').val(0);
+        $('#modal_credit_amount').val(0);
+        $('#modal_address').val('');
+        $('#supplierFormErrors').hide().html('');
+        $('#supplierFormSuccess').hide();
+        $('.invalid-feedback').hide();
+        $('.form-control').removeClass('is-invalid');
+        $('#saveSupplierBtn').prop('disabled', false);
+        $('#saveSupplierBtnText').text('Save');
+        $('#saveSupplierSpinner').addClass('d-none');
     });
     });
 })(jQuery);

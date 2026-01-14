@@ -90,7 +90,13 @@
                                     <a class="btn btn-info mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Details" href="{{ route('order.orderDetails', $order->id) }}">
                                         Details
                                     </a>
-                                    <button type="button" class="btn btn-primary-dark mr-2" data-toggle="modal" data-target=".bd-example-modal-lg" id="{{ $order->id }}" onclick="payDue(this.id)">Pay Due</button>
+                                    @if($order->due == 0)
+                                        <button type="button" class="btn btn-success mr-2" data-toggle="modal" data-target="#completeOrderModal" onclick="showCompleteOrderModal({{ $order->id }}, '{{ $order->invoice_no }}')">
+                                            Complete Order
+                                        </button>
+                                    @else
+                                        <button type="button" class="btn btn-primary-dark mr-2" data-toggle="modal" data-target=".bd-example-modal-lg" id="{{ $order->id }}" onclick="payDue(this.id)">Pay Due</button>
+                                    @endif
                                 </div>
                             </td>
                         </tr>
@@ -104,6 +110,7 @@
     <!-- Page end  -->
 </div>
 
+<!-- Pay Due Modal -->
 <div class="modal fade bd-example-modal-lg" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -133,6 +140,40 @@
     </div>
 </div>
 
+<!-- Complete Order Confirmation Modal -->
+<div class="modal fade" id="completeOrderModal" tabindex="-1" role="dialog" aria-labelledby="completeOrderModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="completeOrderModalLabel">
+                    <i class="ri-checkbox-circle-line mr-2"></i>Complete Order
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to complete this order?</p>
+                <div class="alert alert-info">
+                    <strong>Invoice No:</strong> <span id="completeOrderInvoiceNo"></span><br>
+                    <strong>Status:</strong> This order will be marked as completed.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <form action="{{ route('order.updateStatus') }}" method="POST" id="completeOrderForm" style="display: inline;">
+                    @method('put')
+                    @csrf
+                    <input type="hidden" name="id" id="completeOrderId">
+                    <button type="submit" class="btn btn-success">
+                        <i class="ri-check-line mr-1"></i> Complete Order
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     var orderDueUrl = "{{ route('order.orderDueAjax', ':id') }}"; 
     function payDue(id){
@@ -146,6 +187,11 @@
                 $('#order_id').val(data.id);
             }
         });
+    }
+    
+    function showCompleteOrderModal(orderId, invoiceNo) {
+        $('#completeOrderId').val(orderId);
+        $('#completeOrderInvoiceNo').text(invoiceNo);
     }
 </script>
 

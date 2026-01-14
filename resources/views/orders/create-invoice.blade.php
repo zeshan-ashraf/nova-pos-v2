@@ -165,6 +165,17 @@
                     <h4>Create New Invoice</h4>
                 </div>
                 
+                <!-- Error Messages -->
+                @if ($errors->any())
+                    <div class="alert alert-danger mb-3">
+                        <ul class="mb-0">
+                            @foreach ($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+                
                 <!-- Credit Limit Warning -->
                 <div id="credit_warning_row" style="display: none; margin-bottom: 20px;">
                     <div class="alert alert-warning mb-0" id="credit_warning" style="padding: 15px; margin: 0;">
@@ -193,19 +204,25 @@
                                         </div>
                                     </div>
                                     <div class="form-group" id="customer-group">
-                                        <label for="customer_id">Customer <span class="text-danger">*</span></label>
+                                        <div class="d-flex align-items-center justify-content-between mb-2">
+                                            <label for="customer_id" class="mb-0">Customer <span class="text-danger">*</span></label>
+                                            <button type="button" class="btn btn-primary btn-sm" id="selectWalkInBtn">
+                                                <i class="ri-user-line mr-1"></i> Walk-In
+                                            </button>
+                                        </div>
                                         <div class="d-flex align-items-center">
                                             <select class="form-control" id="customer_id" name="customer_id" style="max-width: 70%;">
                                                 <option value="">Select Customer</option>
                                                 @foreach($customers as $customer)
                                                     <option value="{{ $customer->id }}" 
                                                         data-credit-limit="{{ $customer->credit_limit ?? 0 }}" 
-                                                        data-credit-amount="{{ $customer->credit_amount ?? 0 }}">
+                                                        data-credit-amount="{{ $customer->credit_amount ?? 0 }}"
+                                                        data-is-walkin="{{ $customer->is_walkin ?? 0 }}">
                                                         {{ $customer->shopname ?: $customer->name }}
                                                     </option>
                                                 @endforeach
                                             </select>
-                                            <button type="button" class="btn btn-success btn-sm ml-2" id="addCustomerBtn" data-toggle="modal" data-target="#addCustomerModal">
+                                            <button type="button" class="btn btn-success btn-sm ml-auto" id="addCustomerBtn" data-toggle="modal" data-target="#addCustomerModal">
                                                 <i class="ri-add-line"></i> Add Customer
                                             </button>
                                         </div>
@@ -228,19 +245,25 @@
                                 @else
                                     <!-- Regular Shop: Show only Customer dropdown -->
                                     <div class="form-group">
-                                        <label for="customer_id">Customer <span class="text-danger">*</span></label>
+                                        <div class="d-flex align-items-center justify-content-between mb-2">
+                                            <label for="customer_id" class="mb-0">Customer <span class="text-danger">*</span></label>
+                                            <button type="button" class="btn btn-primary btn-sm" id="selectWalkInBtn">
+                                                <i class="ri-user-line mr-1"></i> Walk-In
+                                            </button>
+                                        </div>
                                         <div class="d-flex align-items-center">
                                             <select class="form-control" id="customer_id" name="customer_id" required style="max-width: 70%;">
                                                 <option value="">Select Customer</option>
                                                 @foreach($customers as $customer)
                                                     <option value="{{ $customer->id }}" 
                                                         data-credit-limit="{{ $customer->credit_limit ?? 0 }}" 
-                                                        data-credit-amount="{{ $customer->credit_amount ?? 0 }}">
+                                                        data-credit-amount="{{ $customer->credit_amount ?? 0 }}"
+                                                        data-is-walkin="{{ $customer->is_walkin ?? 0 }}">
                                                         {{ $customer->shopname ?: $customer->name }}
                                                     </option>
                                                 @endforeach
                                             </select>
-                                            <button type="button" class="btn btn-success btn-sm ml-2" id="addCustomerBtn" data-toggle="modal" data-target="#addCustomerModal">
+                                            <button type="button" class="btn btn-success btn-sm ml-auto" id="addCustomerBtn" data-toggle="modal" data-target="#addCustomerModal">
                                                 <i class="ri-add-line"></i> Add Customer
                                             </button>
                                         </div>
@@ -257,6 +280,90 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Customer Information Card -->
+                        <div class="card mt-3 mb-3" id="customerInfoCard" style="display: none;">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="mb-0"><i class="ri-user-line mr-2"></i>Customer Information</h5>
+                            </div>
+                            <div class="card-body">
+                                <!-- Loading State -->
+                                <div id="customerInfoLoading" class="text-center py-4" style="display: none;">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="sr-only">Loading...</span>
+                                    </div>
+                                    <p class="mt-2 text-muted">Loading customer information...</p>
+                                </div>
+
+                                <!-- Warning State -->
+                                <div id="customerInfoWarning" class="alert alert-warning mb-0" style="display: none;">
+                                    <i class="ri-alert-line mr-2"></i>Please select a customer to view information.
+                                </div>
+
+                                <!-- Customer Details -->
+                                <div id="customerInfoContent" style="display: none;">
+                                    <div class="row">
+                                        <!-- Left Side: Customer Information -->
+                                        <div class="col-md-6 col-12 mb-3 mb-md-0">
+                                            <div class="border rounded p-3" style="background-color: #f8f9fa;">
+                                                <h6 class="text-primary mb-3"><i class="ri-user-3-line mr-2"></i>Customer Details</h6>
+                                                <div class="customer-info-item">
+                                                    <strong>Name:</strong> <span id="customerName">-</span>
+                                                </div>
+                                                <div class="customer-info-item">
+                                                    <strong>Shop Name:</strong> <span id="customerShopName">-</span>
+                                                </div>
+                                                <div class="customer-info-item">
+                                                    <strong>Phone:</strong> <span id="customerPhone">-</span>
+                                                </div>
+                                                <div class="customer-info-item">
+                                                    <strong>Address:</strong> <span id="customerAddress">-</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Right Side: Balance Information -->
+                                        <div class="col-md-6 col-12">
+                                            <div class="border rounded p-3" style="background-color: #f8f9fa;">
+                                                <h6 class="text-success mb-3"><i class="ri-wallet-3-line mr-2"></i>Balance Information</h6>
+                                                <div class="row mb-2">
+                                                    <div class="col-6">
+                                                        <div class="balance-info-item">
+                                                            <strong>Credit Limit:</strong> <span id="customerCreditLimit" class="text-primary">-</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <div class="balance-info-item">
+                                                            <strong>Credit Amount:</strong> <span id="customerCreditAmount" class="text-danger">-</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="row mb-2">
+                                                    <div class="col-6">
+                                                        <div class="balance-info-item">
+                                                            <strong>Available Credit:</strong> <span id="customerAvailableCredit" class="text-success">-</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <div class="balance-info-item">
+                                                            <strong>Credit Days:</strong> <span id="customerCreditDays">-</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="row">
+                                                    <div class="col-12">
+                                                        <div class="balance-info-item">
+                                                            <strong>Last Payment Received At:</strong> <span id="customerLastPayment">-</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- End Customer Information Card -->
                     </div>
 
                     <!-- Product Grid Section -->
@@ -265,7 +372,10 @@
                             <button type="button" class="btn btn-success btn-add-row" id="addRowBefore">
                                 <i class="ri-add-line"></i> Add Row
                             </button>
-                            @include('partials.add-product-modal')
+                            {{-- Add Product Button (modal will be included outside the form) --}}
+                            <button type="button" class="btn btn-success btn-add-row ml-2" id="addProductBtn" data-toggle="modal" data-target="#addProductModal">
+                                <i class="ri-add-line"></i> Add Product
+                            </button>
                         </div>
 
                         <div class="table-responsive">
@@ -382,7 +492,7 @@
 
                     <!-- Submit Button -->
                     <div class="mt-4">
-                        <button type="submit" class="btn btn-primary btn-lg" id="createInvoiceBtn">
+                        <button type="button" class="btn btn-primary btn-lg" id="createInvoiceBtn">
                             <i class="ri-file-add-line"></i> Create Invoice
                         </button>
                         <a href="{{ route('order.index') }}" class="btn btn-secondary btn-lg">Cancel</a>
@@ -392,6 +502,9 @@
         </div>
     </div>
 </div>
+
+{{-- Add Product Modal - MUST be outside the invoice form to prevent conflicts --}}
+@include('partials.add-product-modal')
 
 <!-- Add Customer Modal -->
 <div class="modal fade" id="addCustomerModal" tabindex="-1" role="dialog" aria-labelledby="addCustomerModalLabel" aria-hidden="true">
@@ -403,7 +516,7 @@
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <form id="addCustomerForm">
+            <form id="addCustomerForm" onsubmit="return false;">
                 <div class="modal-body">
                     <div id="customerFormErrors" class="alert alert-danger" style="display: none;"></div>
                     <div id="customerFormSuccess" class="alert alert-success" style="display: none;"></div>
@@ -477,7 +590,108 @@
     'use strict';
     
     $(document).ready(function() {
+        console.log('Invoice form page loaded');
         let rowCount = 0;
+        
+        // Test if form exists
+        if ($('#invoiceForm').length === 0) {
+            console.error('Invoice form not found!');
+        } else {
+            console.log('Invoice form found');
+        }
+        
+        // Test if submit button exists
+        if ($('#createInvoiceBtn').length === 0) {
+            console.error('Submit button not found!');
+        } else {
+            console.log('Submit button found');
+            // Add click handler as backup
+            $('#createInvoiceBtn').on('click', function(e) {
+
+
+
+
+
+
+
+
+                const $invoiceForm = $('#invoiceForm');
+               // Check if form validation passes before submitting
+        if ($invoiceForm.length === 0) {
+            console.error('Invoice form not found!');
+            return false;
+        }
+     
+        // Check if form is already submitting (prevent double submission)
+        if ($invoiceForm.data('submitting')) {
+            console.log('Form is already submitting, ignoring click');
+            return false;
+        }
+       
+        // Check HTML5 validation first and log which fields are invalid
+        if (!$invoiceForm[0].checkValidity()) {
+            console.log('HTML5 validation failed');
+            
+            // Find and log all invalid fields
+            const invalidFields = [];
+            $invoiceForm[0].querySelectorAll(':invalid').forEach(function(field) {
+                const fieldInfo = {
+                    name: field.name || field.id,
+                    value: field.value,
+                    validationMessage: field.validationMessage,
+                    type: field.type,
+                    tagName: field.tagName
+                };
+                invalidFields.push(fieldInfo);
+                console.error('Invalid field:', fieldInfo);
+                
+                // Highlight invalid field
+                $(field).addClass('is-invalid').focus();
+            });
+            alert("form found");
+            return;
+            console.error('All invalid fields:', invalidFields);
+            
+            // Also check specific required fields manually
+            console.log('Checking required fields:');
+            console.log('  customer_id:', $('#customer_id').val(), 'Required:', $('#customer_id').prop('required'));
+            console.log('  order_date:', $('#order_date').val(), 'Required:', $('#order_date').prop('required'));
+            console.log('  payment_status:', $('#payment_status').val(), 'Required:', $('#payment_status').prop('required'));
+            
+            // Check products
+            let productCount = 0;
+            $('.product-select').each(function() {
+                const productId = $(this).val();
+                if (productId) {
+                    productCount++;
+                    console.log('  Product found:', productId, 'in select:', $(this).attr('name'));
+                }
+            });
+            console.log('  Total products with ID:', productCount);
+            
+            // Show native validation
+            $invoiceForm[0].reportValidity();
+            return false;
+        }
+        
+        // Prevent default button behavior and manually submit form
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Manually trigger form submit
+        console.log('Manually triggering form submit via jQuery...');
+        $invoiceForm.data('submitting', true);
+        
+        // Trigger jQuery submit event (this will call our validation handler)
+        $invoiceForm.submit();
+        
+        // Reset flag after a delay
+        setTimeout(function() {
+            $invoiceForm.data('submitting', false);
+        }, 1000);
+                // Don't prevent default, let form submit naturally
+            });
+        }
 
     // Initialize Select2 on existing product selects
     function initializeSelect2($select) {
@@ -538,6 +752,7 @@
             let data = e.params.data;
             const rowIdx = $(this).data('row');
             const $row = $('tr[data-row-index="' + rowIdx + '"]');
+            const $selectElement = $(this);
             
             // If data doesn't have required properties (manually added option), try to get from stored data
             if (!data.price && !data.stock && typeof window.newProductData !== 'undefined') {
@@ -547,10 +762,15 @@
                 }
             }
             
+            // Ensure the select element has the value set (Select2 sometimes doesn't set it properly)
+            $selectElement.val(data.id).trigger('change');
+            
             $row.find('.original-price').val(data.price || 0);
             $row.find('.unit-price').val(data.price || 0);
             $row.find('.stock-display').text(data.stock || 0);
             $row.find('.product-code-display').text(data.code || '-');
+            
+            console.log('Product selected - Row:', rowIdx, 'Product ID:', data.id, 'Select value:', $selectElement.val());
             
             calculateRowTotal(rowIdx);
         });
@@ -817,6 +1037,124 @@
     }
     
     // Handle customer change - show warning immediately when customer is selected
+    // Handle customer selection change - fetch customer details
+    $(document).on('change', '#customer_id', function() {
+        const customerId = $(this).val();
+        const $customerInfoCard = $('#customerInfoCard');
+        const $customerInfoLoading = $('#customerInfoLoading');
+        const $customerInfoWarning = $('#customerInfoWarning');
+        const $customerInfoContent = $('#customerInfoContent');
+        
+        if (!customerId) {
+            // No customer selected - hide panel
+            $customerInfoCard.hide();
+            return;
+        }
+        
+        // Show loading state
+        $customerInfoCard.show();
+        $customerInfoLoading.show();
+        $customerInfoWarning.hide();
+        $customerInfoContent.hide();
+        
+        // Fetch customer details via AJAX
+        $.ajax({
+            url: '{{ route("api.customers.details", ":id") }}'.replace(':id', customerId),
+            method: 'GET',
+            success: function(response) {
+                if (response.success && response.customer) {
+                    const customer = response.customer;
+                    
+                    // Check if it's a walk-in customer using is_walkin flag
+                    const isWalkIn = customer.is_walkin === 1 || customer.is_walkin === true;
+                    
+                    if (isWalkIn) {
+                        // Hide customer info panel for walk-in customers
+                        $customerInfoCard.hide();
+                        return;
+                    }
+                    
+                    // Update customer information (left side)
+                    $('#customerName').text(customer.name || '-');
+                    $('#customerShopName').text(customer.shopname || '-');
+                    $('#customerPhone').text(customer.phone || '-');
+                    $('#customerAddress').text(customer.address || '-');
+                    
+                    // Update balance information (right side)
+                    $('#customerCreditLimit').text(formatCurrency(customer.credit_limit || 0));
+                    $('#customerCreditAmount').text(formatCurrency(customer.credit_amount || 0));
+                    $('#customerAvailableCredit').text(formatCurrency(customer.available_credit || 0));
+                    $('#customerCreditDays').text(customer.credit_days || 0);
+                    $('#customerLastPayment').text(customer.last_payment_date ? formatDateTime(customer.last_payment_date) : 'No payment history');
+                    
+                    // Show content, hide loading
+                    $customerInfoLoading.hide();
+                    $customerInfoWarning.hide();
+                    $customerInfoContent.show();
+                } else {
+                    // Error in response
+                    $customerInfoLoading.hide();
+                    $customerInfoWarning.html('<i class="ri-alert-line mr-2"></i>Failed to load customer information.').show();
+                    $customerInfoContent.hide();
+                }
+            },
+            error: function(xhr) {
+                // Handle error
+                $customerInfoLoading.hide();
+                let errorMessage = 'Failed to load customer information.';
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    errorMessage = xhr.responseJSON.error;
+                }
+                $customerInfoWarning.html('<i class="ri-alert-line mr-2"></i>' + errorMessage).show();
+                $customerInfoContent.hide();
+            }
+        });
+    });
+    
+    // Format currency helper function
+    function formatCurrency(amount) {
+        return parseFloat(amount).toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+    
+    // Format date time helper function
+    function formatDateTime(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+    
+    // Handle Walk-In customer button click
+    $(document).on('click', '#selectWalkInBtn', function() {
+        const $customerSelect = $('#customer_id');
+        let walkInCustomerId = null;
+        
+        // Find walk-in customer in dropdown options
+        $customerSelect.find('option').each(function() {
+            const $option = $(this);
+            const isWalkIn = $option.data('is-walkin') == 1 || $option.data('is-walkin') === true;
+            if (isWalkIn && $option.val()) {
+                walkInCustomerId = $option.val();
+                return false; // Break loop
+            }
+        });
+        
+        if (walkInCustomerId) {
+            // Select walk-in customer and trigger change event
+            $customerSelect.val(walkInCustomerId).trigger('change');
+        } else {
+            // Show message if walk-in customer not found
+            alert('Walk-In customer not found. Please create a walk-in customer first.');
+        }
+    });
+
     $(document).on('change', '#customer_id', function() {
         // Check credit limit immediately (with 0 due amount to check current status)
         checkCreditLimit(0);
@@ -910,14 +1248,29 @@
         calculateInvoiceTotal();
     });
 
-    // Form submission
-    $('#invoiceForm').on('submit', function(e) {
+    // Form submission - bind after DOM is ready
+    console.log('Binding form submission handler...');
+    const $invoiceForm = $('#invoiceForm');
+    if ($invoiceForm.length > 0) {
+        console.log('Form found, binding submit handler');
+        $invoiceForm.on('submit', function(e) {
+            // CRITICAL: Make sure this is the invoice form, not a modal form
+            const $form = $(this);
+            if ($form.attr('id') !== 'invoiceForm') {
+                console.log('Form submission handler triggered for non-invoice form, ignoring');
+                return true; // Allow other forms to submit normally
+            }
+            
+            console.log('Form submission handler triggered for invoice form - event:', e);
+        
         // Validation
         @if($childShops->isNotEmpty())
         // Parent shop: check if customer or shop is selected
         const selectedType = $('input[name="select_type"]:checked').val();
+        console.log('Selected type:', selectedType);
         if (selectedType === 'customer') {
             const customerId = $('#customer_id').val();
+            console.log('Customer ID:', customerId);
             if (!customerId) {
                 e.preventDefault();
                 alert('Please select a customer');
@@ -925,6 +1278,7 @@
             }
         } else if (selectedType === 'shop') {
             const shopId = $('#shop_id').val();
+            console.log('Shop ID:', shopId);
             if (!shopId) {
                 e.preventDefault();
                 alert('Please select a child shop');
@@ -934,6 +1288,7 @@
         @else
         // Regular shop: must select customer
         const customerId = $('#customer_id').val();
+        console.log('Customer ID:', customerId);
         if (!customerId) {
             e.preventDefault();
             alert('Please select a customer');
@@ -942,6 +1297,7 @@
         @endif
 
         const orderDate = $('#order_date').val();
+        console.log('Order date:', orderDate);
         if (!orderDate) {
             e.preventDefault();
             alert('Please select a date and time');
@@ -950,7 +1306,9 @@
 
         let hasProducts = false;
         $('.product-select').each(function() {
-            if ($(this).val()) {
+            const productId = $(this).val();
+            if (productId) {
+                console.log('Product found:', productId);
                 hasProducts = true;
                 return false;
             }
@@ -963,6 +1321,7 @@
         }
 
         const paymentStatus = $('#payment_status').val();
+        console.log('Payment status:', paymentStatus);
         if (!paymentStatus) {
             e.preventDefault();
             alert('Please select a payment method');
@@ -973,6 +1332,7 @@
         if (paymentStatus === 'cash') {
             const invoiceTotal = parseFloat($('#invoice_total_hidden').val()) || 0;
             const payAmount = parseFloat($('#pay').val()) || 0;
+            console.log('Invoice total:', invoiceTotal, 'Pay amount:', payAmount);
             
             if (Math.abs(payAmount - invoiceTotal) > 0.01) {
                 e.preventDefault();
@@ -982,10 +1342,27 @@
             }
         }
 
-        // Allow form submission
+        console.log('Form validation passed, submitting...');
+        
+        // Log all form data before submission
+        const formData = new FormData(this);
+        console.log('Form data being submitted:');
+        for (let [key, value] of formData.entries()) {
+            console.log(key + ': ' + value);
+        }
+        
+        // Show loading state
+        const $btn = $('#createInvoiceBtn');
+        $btn.prop('disabled', true).html('<i class="ri-loader-4-line ri-spin"></i> Creating...');
+        
+        // Allow form submission - don't prevent default
         return true;
-    });
-
+        });
+    } else {
+        console.error('Invoice form not found when trying to bind submit handler!');
+    }
+    
+ 
     // Handle Add Customer Modal Form Submission
     $('#addCustomerForm').on('submit', function(e) {
         e.preventDefault();

@@ -97,7 +97,25 @@ class ShopController extends Controller
         $shop = Shop::create($validatedData);
         $shop->banks()->sync($bankIds);
 
-        return Redirect::route('shops.index')->with('success', 'Shop has been created!');
+        // Handle child shop setup messages (from ShopSetupService via model event)
+        $message = 'Shop has been created!';
+        $errors = session('shop_setup_errors', []);
+        $setupUser = session('shop_setup_user');
+
+        if (!empty($errors)) {
+            // Shop created but setup failed - combine error messages
+            $errorMessage = 'Shop created but ' . implode('. ', $errors);
+            return Redirect::route('shops.index')
+                ->with('success', $message)
+                ->with('error', $errorMessage);
+        } elseif ($setupUser && !$shop->is_parent) {
+            // Shop created and setup successful - show credentials (Option C format)
+            $message .= "<br><br>Admin User Credentials:<br>";
+            $message .= "Username: " . e($setupUser->username) . "<br>";
+            $message .= "Password: password";
+        }
+
+        return Redirect::route('shops.index')->with('success', $message);
     }
 
     /**

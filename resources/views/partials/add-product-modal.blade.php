@@ -1,7 +1,4 @@
-{{-- Add Product Button --}}
-<button type="button" class="btn btn-primary btn-add-row ml-2" id="addProductBtn" data-toggle="modal" data-target="#addProductModal">
-    <i class="ri-add-line"></i> Add Product
-</button>
+{{-- Add Product Button - Hidden by default, add your own button in the form --}}
 
 {{-- Add Product Modal --}}
 <div class="modal fade" id="addProductModal" tabindex="-1" role="dialog" aria-labelledby="addProductModalLabel" aria-hidden="true">
@@ -13,7 +10,7 @@
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <form id="addProductForm">
+            <form id="addProductForm" onsubmit="return false;">
                 <div class="modal-body">
                     <div id="productFormErrors" class="alert alert-danger" style="display: none;"></div>
                     <div id="productFormSuccess" class="alert alert-success" style="display: none;"></div>

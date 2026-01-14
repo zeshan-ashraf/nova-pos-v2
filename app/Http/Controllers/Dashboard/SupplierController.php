@@ -86,6 +86,11 @@ class SupplierController extends Controller
         
         // Set email to null if not provided or empty
         $validatedData['email'] = $request->filled('email') && !empty($request->email) ? $request->email : null;
+        
+        // Default numeric credit fields when missing
+        $validatedData['credit_amount'] = $request->input('credit_amount', 0);
+        $validatedData['credit_limit'] = $request->input('credit_limit', 0);
+        $validatedData['credit_days'] = $request->input('credit_days', 0);
 
         // Set shop_id from logged-in user's shop_id (SuperAdmin can have null shop_id)
         $authUser = auth()->user();
@@ -104,7 +109,23 @@ class SupplierController extends Controller
             $validatedData['photo'] = $fileName;
         }
 
-        Supplier::create($validatedData);
+        $supplier = Supplier::create($validatedData);
+
+        // If AJAX request, return JSON response
+        if ($request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Supplier has been created successfully!',
+                'supplier' => [
+                    'id' => $supplier->id,
+                    'shopname' => $supplier->shopname,
+                    'name' => $supplier->name,
+                    'phone' => $supplier->phone,
+                    'credit_limit' => $supplier->credit_limit ?? 0,
+                    'credit_amount' => $supplier->credit_amount ?? 0,
+                ]
+            ]);
+        }
 
         return Redirect::route('suppliers.index')->with('success', 'Supplier has been created!');
     }
