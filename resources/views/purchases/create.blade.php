@@ -267,9 +267,21 @@
                     </div>
 
                     <!-- Purchase Summary -->
+                    <!-- Invoice Summary and Comment Section -->
                     <div class="invoice-summary">
                         <div class="row">
-                            <div class="col-md-6 offset-md-6">
+                            <!-- Comment Section - Left Side -->
+                            <div class="col-md-6">
+                                <div class="comment-section">
+                                    <div class="form-group">
+                                        <label for="comment">Note (Optional)</label>
+                                        <textarea class="form-control" id="comment" name="comment" rows="8" placeholder="Add any additional notes here..."></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Invoice Summary - Right Side -->
+                            <div class="col-md-6">
                                 <div class="summary-row">
                                     <span class="summary-label">Subtotal:</span>
                                     <span class="summary-value" id="subtotal">0.00</span>
@@ -307,14 +319,6 @@
                                     <input type="hidden" name="due" id="due_hidden" value="0">
                                 </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Comment Section -->
-                    <div class="comment-section">
-                        <div class="form-group">
-                            <label for="comment">Comment (Optional)</label>
-                            <textarea class="form-control" id="comment" name="comment" rows="4" placeholder="Add any additional notes or comments here..."></textarea>
                         </div>
                     </div>
 

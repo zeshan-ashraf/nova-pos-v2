@@ -280,7 +280,7 @@ class OrderController extends Controller
                         ->orderBy('id', 'DESC')
                         ->get();
 
-        return view('orders.details-order', [
+        return view('orders.view-invoice', [
             'order' => $order,
             'orderDetails' => $orderDetails,
         ]);
@@ -304,8 +304,13 @@ class OrderController extends Controller
 
         $order->update(['order_status' => 'complete']);
 
-        // Check if request came from pending due page
+        // Check if request came from order details page
         $referer = $request->headers->get('referer');
+        if ($referer && strpos($referer, '/orders/details/') !== false) {
+            return Redirect::route('order.orderDetails', $order->id)->with('success', 'Order has been completed!');
+        }
+        
+        // Check if request came from pending due page
         if ($referer && strpos($referer, '/pending/due') !== false) {
             return Redirect::route('order.pendingDue')->with('success', 'Order has been completed!');
         }
@@ -323,10 +328,17 @@ class OrderController extends Controller
                         ->orderBy('id', 'DESC')
                         ->get();
 
+        // Clear print session flags if they exist
+        $shouldPrint = request('print') == '1' || session('print_order_id') == $order_id;
+        if (session('print_order_id') == $order_id) {
+            session()->forget(['print_order_id', 'open_print_tab']);
+        }
+
         // show data (only for debugging)
         return view('orders.invoice-order', [
             'order' => $order,
             'orderDetails' => $orderDetails,
+            'shouldPrint' => $shouldPrint,
         ]);
     }
 
@@ -1033,6 +1045,18 @@ class OrderController extends Controller
             $warning = null;
             if ($creditService->exceedsLimit($customer, $due)) {
                 $warning = 'Credit limit exceeded for this customer. Invoice saved on credit.';
+            }
+
+            // Check if print was requested
+            if ($request->input('print_after_create') == '1') {
+                // Store order_id in session for opening print tab
+                session(['print_order_id' => $order_id]);
+                
+                return Redirect::route('order.index')->with([
+                    'success' => 'Invoice has been created successfully!',
+                    'warning' => $warning,
+                    'open_print_tab' => true, // Flag to open print tab
+                ]);
             }
 
             return Redirect::route('order.index')->with([

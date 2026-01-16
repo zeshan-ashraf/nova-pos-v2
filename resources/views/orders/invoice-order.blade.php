@@ -102,7 +102,7 @@
                                         <th>Description</th>
                                         <th>Price</th>
                                         <th>Quantity</th>
-                                        <th>Total (+Vat)</th>
+                                        <th>Total</th>
                                     </tr>
                                     </thead>
 
@@ -157,5 +157,23 @@
     <script src="{{ asset('assets/invoice/js/jspdf.min.js') }}"></script>
     <script src="{{ asset('assets/invoice/js/html2canvas.js') }}"></script>
     <script src="{{ asset('assets/invoice/js/app.js') }}"></script>
+    
+    @if(isset($shouldPrint) && $shouldPrint)
+    <script>
+        $(document).ready(function() {
+            // Wait for page to fully render before triggering print
+            setTimeout(function() {
+                // Find and click the Print Invoice button programmatically
+                const $printButton = $('.btn-print');
+                if ($printButton.length > 0) {
+                    $printButton[0].click();
+                } else {
+                    // Fallback: if button not found, trigger print directly
+                    window.print();
+                }
+            }, 1000); // 1 second delay to ensure page is fully rendered
+        });
+    </script>
+    @endif
 </body>
 </html>

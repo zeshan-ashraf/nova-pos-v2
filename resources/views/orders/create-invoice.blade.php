@@ -442,8 +442,8 @@
                             <div class="col-md-6">
                                 <div class="comment-section">
                                     <div class="form-group">
-                                        <label for="comment">Comment (Optional)</label>
-                                        <textarea class="form-control" id="comment" name="comment" rows="8" placeholder="Add any additional notes or comments here..."></textarea>
+                                        <label for="comment">Note (Optional)</label>
+                                        <textarea class="form-control" id="comment" name="comment" rows="8" placeholder="Add any additional notes here..."></textarea>
                                     </div>
                                 </div>
                             </div>
@@ -490,12 +490,18 @@
                         </div>
                     </div>
 
+                    <!-- Hidden input to track print request -->
+                    <input type="hidden" name="print_after_create" id="print_after_create" value="0">
+                    
                     <!-- Submit Button -->
                     <div class="mt-4">
                         <button type="button" class="btn btn-primary btn-lg" id="createInvoiceBtn">
                             <i class="ri-file-add-line"></i> Create Invoice
                         </button>
                         <a href="{{ route('order.index') }}" class="btn btn-secondary btn-lg">Cancel</a>
+                        <button type="button" class="btn btn-success btn-lg" id="createAndPrintInvoiceBtn">
+                            <i class="ri-printer-line"></i> Create and Print
+                        </button>
                     </div>
                 </form>
             </div>
@@ -592,6 +598,22 @@
     $(document).ready(function() {
         console.log('Invoice form page loaded');
         let rowCount = 0;
+        
+        // Re-enable buttons if there are errors on the page
+        // This handles the case when form submission fails and page reloads with errors
+        // Check for Laravel validation errors, invalid form fields, or error alerts
+        const hasErrors = $('.alert-danger').length > 0 || 
+                         $('.is-invalid').length > 0 || 
+                         $('.text-danger').length > 0 ||
+                         $('.invalid-feedback:visible').length > 0 ||
+                         $('#invoiceForm').find('.form-control.is-invalid').length > 0;
+        
+        if (hasErrors) {
+            $('#createInvoiceBtn').prop('disabled', false).html('<i class="ri-file-add-line"></i> Create Invoice');
+            $('#createAndPrintInvoiceBtn').prop('disabled', false).html('<i class="ri-printer-line"></i> Create and Print');
+            $('#invoiceForm').data('submitting', false);
+            console.log('Errors detected on page load, re-enabling buttons');
+        }
         
         // Test if form exists
         if ($('#invoiceForm').length === 0) {
@@ -1357,6 +1379,66 @@
         
         // Allow form submission - don't prevent default
         return true;
+        });
+        
+        // Handle "Create and Print" button click
+        $('#createAndPrintInvoiceBtn').on('click', function(e) {
+            const $invoiceForm = $('#invoiceForm');
+            
+            // Check if form validation passes before submitting
+            if ($invoiceForm.length === 0) {
+                console.error('Invoice form not found!');
+                return false;
+            }
+            
+            // Check if form is already submitting (prevent double submission)
+            if ($invoiceForm.data('submitting')) {
+                console.log('Form is already submitting, ignoring click');
+                return false;
+            }
+            
+            // Check HTML5 validation first
+            if (!$invoiceForm[0].checkValidity()) {
+                // Find and log all invalid fields
+                const invalidFields = [];
+                $invoiceForm[0].querySelectorAll(':invalid').forEach(function(field) {
+                    const fieldInfo = {
+                        name: field.name || field.id,
+                        value: field.value,
+                        validationMessage: field.validationMessage,
+                        type: field.type,
+                        tagName: field.tagName
+                    };
+                    invalidFields.push(fieldInfo);
+                    console.error('Invalid field:', fieldInfo);
+                    $(field).addClass('is-invalid').focus();
+                });
+                
+                // Show native validation
+                $invoiceForm[0].reportValidity();
+                return false;
+            }
+            
+            // Set print flag
+            $('#print_after_create').val('1');
+            
+            // Prevent default button behavior
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Show loading state
+            const $printBtn = $('#createAndPrintInvoiceBtn');
+            $printBtn.prop('disabled', true).html('<i class="ri-loader-4-line ri-spin"></i> Creating...');
+            
+            // Submit form
+            console.log('Submitting form with print flag...');
+            $invoiceForm.data('submitting', true);
+            $invoiceForm.submit();
+            
+            // Reset flag after a delay
+            setTimeout(function() {
+                $invoiceForm.data('submitting', false);
+            }, 1000);
         });
     } else {
         console.error('Invoice form not found when trying to bind submit handler!');

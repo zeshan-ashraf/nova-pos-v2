@@ -271,3 +271,18 @@ function formatCurrency(amount) {
 </script>
 
 @endsection
+
+@section('specificpagescripts')
+@if(session('open_print_tab') && session('print_order_id'))
+<script>
+    (function() {
+        // Get order_id from session (passed via PHP)
+        const orderId = {{ session('print_order_id') }};
+        
+        // Open invoice download page in new tab
+        const printUrl = '{{ route("order.invoiceDownload", ":id") }}'.replace(':id', orderId) + '?print=1';
+        window.open(printUrl, '_blank');
+    })();
+</script>
+@endif
+@endsection

@@ -69,36 +69,29 @@ class PurchaseController extends Controller
     public function create()
     {
         $authUser = auth()->user();
-        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+        $targetShopId = $authUser->shop_id;
 
-        // Filter suppliers by shop
+        // Filter suppliers by user's shop_id only (exclude child shops)
         $suppliersQuery = Supplier::query();
-        if ($authUser->shop_id) {
-            $suppliersQuery->whereIn('shop_id', $visibleShopIds);
+        if ($targetShopId) {
+            $suppliersQuery->where('shop_id', $targetShopId);
         } else {
-            $suppliersQuery->where(function ($query) use ($visibleShopIds) {
-                $query->whereNull('shop_id');
-                if ($visibleShopIds->isNotEmpty()) {
-                    $query->orWhereIn('shop_id', $visibleShopIds);
-                }
-            });
+            // If no shop_id, show no suppliers
+            $suppliersQuery->whereRaw('1 = 0'); // Always false condition
         }
 
-        // Filter products by shop for dropdown
+        // Filter products by user's shop_id only (exclude child shops)
         $productsQuery = Product::where(function($query) {
                 $query->where('status', 'valid')
                       ->orWhere('status', 'active');
             });
 
-        if ($authUser->shop_id) {
-            $productsQuery->whereIn('shop_id', $visibleShopIds);
+        if ($targetShopId) {
+            // Only show products from the user's specific shop_id, not child shops
+            $productsQuery->where('shop_id', $targetShopId);
         } else {
-            $productsQuery->where(function ($query) use ($visibleShopIds) {
-                $query->whereNull('shop_id');
-                if ($visibleShopIds->isNotEmpty()) {
-                    $query->orWhereIn('shop_id', $visibleShopIds);
-                }
-            });
+            // If no shop_id, show no products
+            $productsQuery->whereRaw('1 = 0'); // Always false condition
         }
 
         return view('purchases.create', [
@@ -115,7 +108,9 @@ class PurchaseController extends Controller
         $search = $request->get('q', '');
         $page = $request->get('page', 1);
         $authUser = auth()->user();
-        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+        
+        // For purchase/create page only: show products from user's shop_id only (exclude child shops)
+        $targetShopId = $authUser->shop_id;
         
         // Build base query with status filtering
         $productsQuery = Product::where(function($query) {
@@ -123,16 +118,13 @@ class PurchaseController extends Controller
                   ->orWhere('status', 'active');
         });
         
-        // Apply shop filtering
-        if ($authUser->shop_id) {
-            $productsQuery->whereIn('shop_id', $visibleShopIds);
+        // Apply shop filtering - only user's specific shop_id (exclude child shops)
+        if ($targetShopId) {
+            // Only show products from the user's specific shop_id, not child shops
+            $productsQuery->where('shop_id', $targetShopId);
         } else {
-            $productsQuery->where(function ($query) use ($visibleShopIds) {
-                $query->whereNull('shop_id');
-                if ($visibleShopIds->isNotEmpty()) {
-                    $query->orWhereIn('shop_id', $visibleShopIds);
-                }
-            });
+            // If no shop_id available, show no products
+            $productsQuery->whereRaw('1 = 0'); // Always false condition
         }
         
         // Apply search filter (only if search term is provided)
@@ -204,18 +196,10 @@ class PurchaseController extends Controller
         $authUser = auth()->user();
         $supplier = Supplier::findOrFail($validatedData['supplier_id']);
         
-        if ($authUser->shop_id) {
-            // For users with shop_id, supplier must belong to the same shop
-            if ($supplier->shop_id !== $authUser->shop_id) {
-                return back()->withErrors(['supplier_id' => 'The selected supplier does not belong to your shop.'])
-                    ->withInput();
-            }
-        } else {
-            // For SuperAdmin, supplier should have a shop_id (not null)
-            if (!$supplier->shop_id) {
-                return back()->withErrors(['supplier_id' => 'The selected supplier is not assigned to any shop.'])
-                    ->withInput();
-            }
+        // Supplier must belong to the same shop as the logged-in user
+        if ($supplier->shop_id !== $authUser->shop_id) {
+            return back()->withErrors(['supplier_id' => 'The selected supplier does not belong to your shop.'])
+                ->withInput();
         }
 
         // Generate purchase number
@@ -244,7 +228,7 @@ class PurchaseController extends Controller
         // Prepare purchase data
         $purchaseData = [
             'supplier_id' => $supplier->id,
-            'shop_id' => $authUser->shop_id ?: $supplier->shop_id,
+            'shop_id' => $authUser->shop_id,
             'purchase_date' => Carbon::parse($validatedData['purchase_date'])->format('Y-m-d'),
             'purchase_status' => 'pending',
             'total_products' => $totalProducts,
@@ -277,8 +261,8 @@ class PurchaseController extends Controller
 
                     $productModel = Product::findOrFail($product['product_id']);
 
-                    // Validate shop access for product
-                    if ($authUser->shop_id && $productModel->shop_id !== $authUser->shop_id) {
+                    // Validate shop access for product - must belong to user's shop
+                    if ($productModel->shop_id !== $authUser->shop_id) {
                         throw new \Exception("Product {$productModel->product_name} does not belong to your shop.");
                     }
 
