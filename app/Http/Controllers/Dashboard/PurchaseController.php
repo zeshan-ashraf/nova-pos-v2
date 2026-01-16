@@ -58,6 +58,11 @@ class PurchaseController extends Controller
             });
         }
 
+        // Apply default ordering by id DESC if no sort is specified
+        if (!request()->has('sort')) {
+            $purchasesQuery->orderBy('id', 'desc');
+        }
+
         return view('purchases.index', [
             'purchases' => $purchasesQuery->paginate($row)->appends(request()->query())
         ]);
@@ -382,6 +387,11 @@ class PurchaseController extends Controller
             });
         }
 
+        // Apply default ordering by id DESC if no sort is specified
+        if (!request()->has('sort')) {
+            $purchasesQuery->orderBy('id', 'desc');
+        }
+
         return view('purchases.pending', [
             'purchases' => $purchasesQuery->paginate($row)->appends(request()->query())
         ]);
@@ -415,6 +425,11 @@ class PurchaseController extends Controller
                     $query->orWhereIn('shop_id', $visibleShopIds);
                 }
             });
+        }
+
+        // Apply default ordering by id DESC if no sort is specified
+        if (!request()->has('sort')) {
+            $purchasesQuery->orderBy('id', 'desc');
         }
 
         return view('purchases.complete', [
