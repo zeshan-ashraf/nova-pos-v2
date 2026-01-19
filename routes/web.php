@@ -21,6 +21,17 @@ use App\Http\Controllers\Dashboard\ActivityController;
 use App\Http\Controllers\Dashboard\ActiveShopController;
 use App\Http\Controllers\Dashboard\SaleReturnController;
 use App\Http\Controllers\Dashboard\PurchaseController;
+use App\Http\Controllers\Dashboard\ReportController;
+use App\Http\Controllers\Dashboard\SalesReportController;
+use App\Http\Controllers\Dashboard\PurchaseReportController;
+use App\Http\Controllers\Dashboard\FinancialReportController;
+use App\Http\Controllers\Dashboard\CreditReportController;
+use App\Http\Controllers\Dashboard\InventoryReportController;
+use App\Http\Controllers\Dashboard\PaymentReportController;
+use App\Http\Controllers\Dashboard\ReturnReportController;
+use App\Http\Controllers\Dashboard\EmployeeReportController;
+use App\Http\Controllers\Dashboard\ComparativeReportController;
+use App\Http\Controllers\Dashboard\ExecutiveReportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -230,6 +241,80 @@ Route::middleware(['permission:roles.menu'])->group(function () {
     Route::get('/role/permission/{id}', [RoleController::class, 'rolePermissionEdit'])->name('rolePermission.edit');
     Route::put('/role/permission/{id}', [RoleController::class, 'rolePermissionUpdate'])->name('rolePermission.update');
     Route::delete('/role/permission/{id}', [RoleController::class, 'rolePermissionDestroy'])->name('rolePermission.destroy');
+});
+
+// ====== REPORTS ======
+Route::middleware(['permission:reports.menu'])->group(function () {
+    Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
+    
+    // Sales Reports
+    Route::middleware(['permission:reports.sales'])->group(function () {
+        Route::get('/reports/sales/summary', [SalesReportController::class, 'summary'])->name('reports.sales.summary');
+        Route::get('/reports/sales/daily', [SalesReportController::class, 'daily'])->name('reports.sales.daily');
+        Route::get('/reports/sales/customer', [SalesReportController::class, 'customer'])->name('reports.sales.customer');
+        Route::get('/reports/sales/product', [SalesReportController::class, 'product'])->name('reports.sales.product');
+        Route::get('/api/reports/customers/search', [SalesReportController::class, 'searchCustomers'])->name('api.reports.customers.search');
+        Route::get('/api/reports/products/search', [SalesReportController::class, 'searchProducts'])->name('api.reports.products.search');
+    });
+    
+    // Purchase Reports
+    Route::middleware(['permission:reports.purchases'])->group(function () {
+        Route::get('/reports/purchases/summary', [PurchaseReportController::class, 'summary'])->name('reports.purchases.summary');
+        Route::get('/reports/purchases/supplier', [PurchaseReportController::class, 'supplier'])->name('reports.purchases.supplier');
+        Route::get('/reports/purchases/product', [PurchaseReportController::class, 'product'])->name('reports.purchases.product');
+    });
+    
+    // Financial Reports
+    Route::middleware(['permission:reports.financial'])->group(function () {
+        Route::get('/reports/financial/profit-loss', [FinancialReportController::class, 'profitLoss'])->name('reports.financial.profit-loss');
+        Route::get('/reports/financial/revenue', [FinancialReportController::class, 'revenue'])->name('reports.financial.revenue');
+        Route::get('/reports/financial/expense', [FinancialReportController::class, 'expense'])->name('reports.financial.expense');
+        Route::get('/reports/financial/cash-flow', [FinancialReportController::class, 'cashFlow'])->name('reports.financial.cash-flow');
+    });
+    
+    // Credit Reports
+    Route::middleware(['permission:reports.credit'])->group(function () {
+        Route::get('/reports/credit/customer', [CreditReportController::class, 'customer'])->name('reports.credit.customer');
+        Route::get('/reports/credit/supplier', [CreditReportController::class, 'supplier'])->name('reports.credit.supplier');
+        Route::get('/reports/credit/summary', [CreditReportController::class, 'summary'])->name('reports.credit.summary');
+    });
+    
+    // Inventory Reports
+    Route::middleware(['permission:reports.inventory'])->group(function () {
+        Route::get('/reports/inventory/stock', [InventoryReportController::class, 'stock'])->name('reports.inventory.stock');
+        Route::get('/reports/inventory/stock-movement', [InventoryReportController::class, 'stockMovement'])->name('reports.inventory.stock-movement');
+        Route::get('/reports/inventory/stock-valuation', [InventoryReportController::class, 'stockValuation'])->name('reports.inventory.stock-valuation');
+        Route::get('/reports/inventory/expired-products', [InventoryReportController::class, 'expiredProducts'])->name('reports.inventory.expired-products');
+    });
+    
+    // Payment Reports
+    Route::middleware(['permission:reports.payment'])->group(function () {
+        Route::get('/reports/payment/collection', [PaymentReportController::class, 'collection'])->name('reports.payment.collection');
+        Route::get('/reports/payment/disbursement', [PaymentReportController::class, 'disbursement'])->name('reports.payment.disbursement');
+        Route::get('/reports/payment/summary', [PaymentReportController::class, 'summary'])->name('reports.payment.summary');
+    });
+    
+    // Return Reports
+    Route::middleware(['permission:reports.returns'])->group(function () {
+        Route::get('/reports/returns/sale-return', [ReturnReportController::class, 'saleReturn'])->name('reports.returns.sale-return');
+    });
+    
+    // Employee Reports
+    Route::middleware(['permission:reports.employee'])->group(function () {
+        Route::get('/reports/employee/salary', [EmployeeReportController::class, 'salary'])->name('reports.employee.salary');
+        Route::get('/reports/employee/attendance', [EmployeeReportController::class, 'attendance'])->name('reports.employee.attendance');
+    });
+    
+    // Comparative Reports
+    Route::middleware(['permission:reports.comparative'])->group(function () {
+        Route::get('/reports/comparative/shop-comparison', [ComparativeReportController::class, 'shopComparison'])->name('reports.comparative.shop-comparison');
+        Route::get('/reports/comparative/period-comparison', [ComparativeReportController::class, 'periodComparison'])->name('reports.comparative.period-comparison');
+    });
+    
+    // Executive Reports
+    Route::middleware(['permission:reports.executive'])->group(function () {
+        Route::get('/reports/executive/summary', [ExecutiveReportController::class, 'summary'])->name('reports.executive.summary');
+    });
 });
 
 require __DIR__.'/auth.php';
