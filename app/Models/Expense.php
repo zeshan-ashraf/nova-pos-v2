@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Activity extends Model
+class Expense extends Model
 {
     use HasFactory;
     // use Sortable;
@@ -36,4 +36,3 @@ class Activity extends Model
         return $this->belongsTo(Shop::class, 'shop_id');
     }
 }
-

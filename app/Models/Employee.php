@@ -21,6 +21,7 @@ class Employee extends Model
         'salary',
         'vacation',
         'city',
+        'shop_id',
     ];
 
     public $sortable = [
@@ -45,5 +46,10 @@ class Employee extends Model
     public function advance_salaries()
     {
         return $this->hasMany(AdvanceSalary::class);
+    }
+
+    public function shop()
+    {
+        return $this->belongsTo(Shop::class, 'shop_id');
     }
 }

@@ -140,9 +140,11 @@
                             </td>
                             <td>
                                 @if ($product->status === 'active')
-                                    <span class="badge rounded-pill bg-success">Valid</span>
+                                    <span class="badge rounded-pill bg-success">Active</span>
+                                @elseif ($product->status === 'ordered')
+                                    <span class="badge rounded-pill bg-warning">Ordered</span>
                                 @else
-                                    <span class="badge rounded-pill bg-danger">Invalid</span>
+                                    <span class="badge rounded-pill bg-secondary">{{ ucfirst($product->status ?? 'N/A') }}</span>
                                 @endif
                             </td>
                             <td>

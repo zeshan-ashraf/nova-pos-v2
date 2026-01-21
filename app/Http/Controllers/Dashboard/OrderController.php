@@ -683,9 +683,10 @@ class OrderController extends Controller
         // For invoice/create page only: show products from user's shop_id only
         $targetShopId = $authUser->shop_id;
         
-        $productsQuery = Product::where(function($query) {
-                $query->where('status', 'active');
-            });
+        // Only show products with status='active' and selling_price IS NOT NULL
+        $productsQuery = Product::where('status', 'active')
+            ->whereNotNull('selling_price')
+            ->where('selling_price', '>', 0);
 
         if ($targetShopId) {
             // Only show products from the user's specific shop_id, not child shops
@@ -775,7 +776,10 @@ class OrderController extends Controller
         $targetShopId = $authUser->shop_id;
 
         // Build base query with status and shop filtering first
-        $productsQuery = Product::where('status', 'active');
+        // Only show products with status='active' and selling_price IS NOT NULL
+        $productsQuery = Product::where('status', 'active')
+            ->whereNotNull('selling_price')
+            ->where('selling_price', '>', 0);
         
         // Apply shop filtering - only user's specific shop_id (exclude child shops)
         if ($targetShopId) {
@@ -1009,6 +1013,13 @@ class OrderController extends Controller
 
                 $productModel = Product::findOrFail($product['product_id']);
                 
+                // Validate product status and selling_price
+                if ($productModel->status !== 'active' || empty($productModel->selling_price) || $productModel->selling_price <= 0) {
+                    Order::where('id', $order_id)->delete();
+                    return back()->withErrors(['products' => "Product {$productModel->product_name} is not available for sale."])
+                        ->withInput();
+                }
+                
                 // Validate stock
                 if ($productModel->product_store < $product['quantity']) {
                     Order::where('id', $order_id)->delete();
@@ -1203,6 +1214,11 @@ class OrderController extends Controller
                         }
 
                         $motherProduct = Product::findOrFail($product['product_id']);
+
+                        // Validate product status and selling_price
+                        if ($motherProduct->status !== 'active' || empty($motherProduct->selling_price) || $motherProduct->selling_price <= 0) {
+                            throw new \Exception("Product {$motherProduct->product_name} is not available for sale.");
+                        }
 
                         // Validate product belongs to mother shop
                         if ($motherProduct->shop_id !== $motherShop->id) {

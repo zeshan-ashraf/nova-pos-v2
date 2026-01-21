@@ -22,18 +22,16 @@
             @endif
             <div class="d-flex flex-wrap align-items-center justify-content-between mb-4">
                 <div>
-                    <h4 class="mb-3">Activity List</h4>
-                    {{--  <p class="mb-0">A product dashboard lets you easily gather and visualize product data from optimizing <br>
-                        the product experience, ensuring product retention. </p>  --}}
+                    <h4 class="mb-3">Expense List</h4>
                 </div>
                 <div>
-                <a href="{{ route('activities.create') }}" class="btn btn-primary add-list">Add Activity</a>
+                <a href="{{ route('expenses.create') }}" class="btn btn-primary add-list">Add Expense</a>
                 </div>
             </div>
         </div>
 
         <div class="col-lg-12">
-            <form action="{{ route('activities.index') }}" method="get">
+            <form action="{{ route('expenses.index') }}" method="get">
                 <div class="d-flex flex-wrap align-items-center justify-content-between">
                     <div class="form-group row">
                         <label for="row" class="col-sm-3 align-self-center">Row:</label>
@@ -50,10 +48,10 @@
                     <div class="form-group row">
                         <label class="control-label col-sm-3 align-self-center" for="search">Search:</label>
                         <div class="input-group col-sm-8">
-                            <input type="text" id="search" class="form-control" name="search" placeholder="Search activity" value="{{ request('search') }}">
+                            <input type="text" id="search" class="form-control" name="search" placeholder="Search expense" value="{{ request('search') }}">
                             <div class="input-group-append">
                                 <button type="button" id="search-btn" class="input-group-text bg-primary"><i class="las la-search"></i></button>
-                                <a href="{{ route('activities.index') }}" class="input-group-text bg-danger"><i class="las la-trash"></i></a>
+                                <a href="{{ route('expenses.index') }}" class="input-group-text bg-danger"><i class="las la-trash"></i></a>
                             </div>
                         </div>
                     </div>
@@ -73,27 +71,27 @@
                             <th>@sortablelink('title', 'Title')</th>
                             <th>@sortablelink('description', 'Description')</th>
                             <th>@sortablelink('date', 'Date')</th>
-                            <th>@sortablelink('activity_cost', 'Activity Cost')</th>
+                            <th>@sortablelink('activity_cost', 'Cost')</th>
                             <th>Action</th>
                         </tr>
                     </thead>
-                    <tbody class="ligth-body" id="activity-table-body">
-                        @forelse ($activities as $activity)
+                    <tbody class="ligth-body" id="expense-table-body">
+                        @forelse ($expenses as $expense)
                             <tr>
-                                <td>{{ (($activities->currentPage() - 1) * $activities->perPage()) + $loop->iteration }}</td> <!-- Correct serial number -->
-                                <td>{{ $activity->title }}</td>
-                                <td>{{ Str::limit($activity->description, 20) }}</td>
-                                <td>{{ $activity->date }}</td>
-                                <td>{{ $activity->activity_cost }}</td>
+                                <td>{{ (($expenses->currentPage() - 1) * $expenses->perPage()) + $loop->iteration }}</td>
+                                <td>{{ $expense->title }}</td>
+                                <td>{{ Str::limit($expense->description, 20) }}</td>
+                                <td>{{ $expense->date }}</td>
+                                <td>{{ $expense->activity_cost }}</td>
                                 <td>
-                                    <form action="{{ route('activities.destroy', $activity->id) }}" method="POST" style="margin-bottom: 5px">
+                                    <form action="{{ route('expenses.destroy', $expense->id) }}" method="POST" style="margin-bottom: 5px">
                                         @method('delete')
                                         @csrf
                                         <div class="d-flex align-items-center list-action">
                                             <a class="btn btn-info mr-2" data-toggle="tooltip" data-placement="top" title="View"
-                                               href="{{ route('activities.show', $activity->id) }}"><i class="ri-eye-line mr-0"></i></a>
+                                               href="{{ route('expenses.show', $expense->id) }}"><i class="ri-eye-line mr-0"></i></a>
                                             <a class="btn btn-success mr-2" data-toggle="tooltip" data-placement="top" title="Edit"
-                                               href="{{ route('activities.edit', $activity->id) }}"><i class="ri-pencil-line mr-0"></i></a>
+                                               href="{{ route('expenses.edit', $expense->id) }}"><i class="ri-pencil-line mr-0"></i></a>
                                             <button type="submit" class="btn btn-warning mr-2 border-none" onclick="return confirm('Are you sure you want to delete this record?')" data-toggle="tooltip" data-placement="top" title="Delete"><i class="ri-delete-bin-line mr-0"></i></button>
                                         </div>
                                     </form>
@@ -101,9 +99,9 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="text-center">
+                                <td colspan="6" class="text-center">
                                     <div class="alert text-white bg-danger" role="alert">
-                                        <div class="iq-alert-text">No Activities Found.</div>
+                                        <div class="iq-alert-text">No Expenses Found.</div>
                                         <button type="button" class="close" data-dismiss="alert" aria-label="Close">
                                             <i class="ri-close-line"></i>
                                         </button>
@@ -117,7 +115,7 @@
 
             <!-- Pagination Links -->
             <div class="pagination" id="pagination">
-                {{ $activities->appends(request()->query())->links() }} <!-- Preserve query parameters when paginating -->
+                {{ $expenses->appends(request()->query())->links() }}
             </div>
         </div>
 
@@ -134,38 +132,29 @@
             var searchQuery = $('#search').val();
 
             $.ajax({
-                url: "{{ route('activities.search') }}",
+                url: "{{ route('expenses.search') }}",
                 method: 'GET',
                 data: { search: searchQuery },
                 success: function(response) {
-                    var activityList = $('#activity-table-body');
-                    activityList.empty();
+                    var expenseList = $('#expense-table-body');
+                    expenseList.empty();
 
-                    if (response.activities.data.length > 0) {
-                        $.each(response.activities.data, function(index, activity) {
-                            // Get the current page and items per page from the API response (assuming it's included in the response)
-                            var currentPage = response.activities.current_page;
-                            var perPage = response.activities.per_page;
-
-                            // Calculate the serial number based on current page and perPage
+                    if (response.expenses.data.length > 0) {
+                        $.each(response.expenses.data, function(index, expense) {
+                            var currentPage = response.expenses.current_page;
+                            var perPage = response.expenses.per_page;
                             var serialNumber = (currentPage - 1) * perPage + index + 1;
-
-                            var truncatedDescription = activity.description.length > 20 ? activity.description.substring(0, 20) + '...' : activity.description;
+                            var truncatedDescription = expense.description.length > 20 ? expense.description.substring(0, 20) + '...' : expense.description;
 
                             var actionButtons = `
                                 <div class="d-flex align-items-center list-action">
-                                    <!-- View Button -->
-                                    <a class="btn btn-info mr-2" data-toggle="tooltip" data-placement="top" title="View" href="/activities/${activity.id}">
+                                    <a class="btn btn-info mr-2" data-toggle="tooltip" data-placement="top" title="View" href="/expenses/${expense.id}">
                                         <i class="ri-eye-line mr-0"></i>
                                     </a>
-
-                                    <!-- Edit Button -->
-                                    <a class="btn btn-success mr-2" data-toggle="tooltip" data-placement="top" title="Edit" href="/activities/${activity.id}/edit">
+                                    <a class="btn btn-success mr-2" data-toggle="tooltip" data-placement="top" title="Edit" href="/expenses/${expense.id}/edit">
                                         <i class="ri-pencil-line mr-0"></i>
                                     </a>
-
-                                    <!-- Delete Button -->
-                                    <button type="button" class="btn btn-warning mr-2" onclick="deleteActivity(${activity.id})" data-toggle="tooltip" data-placement="top" title="Delete">
+                                    <button type="button" class="btn btn-warning mr-2" onclick="deleteExpense(${expense.id})" data-toggle="tooltip" data-placement="top" title="Delete">
                                         <i class="ri-delete-bin-line mr-0"></i>
                                     </button>
                                 </div>
@@ -173,23 +162,23 @@
 
                             var row = `
                                 <tr>
-                                    <td>${serialNumber}</td> <!-- Serial number adjusted for pagination -->
-                                    <td>${activity.title}</td>
-                                    <td>${truncatedDescription}</td> <!-- Truncated description -->
-                                    <td>${activity.date}</td>
-                                    <td>${activity.activity_cost}</td>
+                                    <td>${serialNumber}</td>
+                                    <td>${expense.title}</td>
+                                    <td>${truncatedDescription}</td>
+                                    <td>${expense.date}</td>
+                                    <td>${expense.activity_cost}</td>
                                     <td>
-                                        ${actionButtons} <!-- Insert action buttons -->
+                                        ${actionButtons}
                                     </td>
                                 </tr>
                             `;
-                            $('#activity-table-body').append(row);
+                            $('#expense-table-body').append(row);
                         });
                     } else {
-                        activityList.append('<tr><td colspan="5" class="text-center">No Activities Found.</td></tr>');
+                        expenseList.append('<tr><td colspan="6" class="text-center">No Expenses Found.</td></tr>');
                     }
 
-                    $('#pagination').html(response.activities.links);
+                    $('#pagination').html(response.expenses.links);
                 },
                 error: function() {
                     alert("Error occurred while searching. Please try again.");
@@ -201,11 +190,11 @@
             $('#search-btn').click();
         });
     });
-    function deleteActivity(activityId) {
+    function deleteExpense(expenseId) {
         if (confirm('Are you sure you want to delete this record?')) {
             var form = document.createElement('form');
             form.method = 'POST';
-            form.action = `/activities/${activityId}`;
+            form.action = `/expenses/${expenseId}`;
             var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             var csrfField = document.createElement('input');
             csrfField.type = 'hidden';
@@ -225,5 +214,3 @@
     }
 
 </script>
-
-

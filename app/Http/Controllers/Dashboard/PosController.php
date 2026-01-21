@@ -25,7 +25,10 @@ class PosController extends Controller
         $authUser = auth()->user();
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
 
+        // Only show products with status='active' and selling_price IS NOT NULL
         $productsQuery = Product::where('status', 'active')
+            ->whereNotNull('selling_price')
+            ->where('selling_price', '>', 0)
             ->filter(request(['search']))
             ->sortable();
 
@@ -72,6 +75,18 @@ class PosController extends Controller
         ];
 
         $validatedData = $request->validate($rules);
+
+        // Validate product status and selling_price before adding to cart
+        $product = Product::find($validatedData['id']);
+        
+        if (!$product) {
+            return Redirect::back()->withErrors(['product' => 'Product not found.']);
+        }
+
+        // Ensure product is active and has selling_price
+        if ($product->status !== 'active' || empty($product->selling_price) || $product->selling_price <= 0) {
+            return Redirect::back()->withErrors(['product' => 'This product is not available for sale.']);
+        }
 
         Cart::add([
             'id' => $validatedData['id'],

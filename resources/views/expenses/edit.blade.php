@@ -13,18 +13,20 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between">
                     <div class="header-title">
-                        <h4 class="card-title">Add Activity</h4>
+                        <h4 class="card-title">Edit Expense</h4>
                     </div>
                 </div>
 
                 <div class="card-body">
-                    <form action="{{ route('activities.store') }}" method="POST" enctype="multipart/form-data">
+                    <form action="{{ route('expenses.update', $expense->id) }}" method="POST" enctype="multipart/form-data">
                         @csrf
+                        @method('PUT')
+
                         <!-- begin: Input Title -->
                         <div class="form-group row">
                             <div class="col-md-12">
-                                <label for="title">Activity Title <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control @error('title') is-invalid @enderror" id="title" name="title" value="{{ old('title') }}" required>
+                                <label for="title">Expense Title <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control @error('title') is-invalid @enderror" id="title" name="title" value="{{ old('title', $expense->title) }}" required>
                                 @error('title')
                                 <div class="invalid-feedback">
                                     {{ $message }}
@@ -37,8 +39,8 @@
                         <!-- begin: Input Description -->
                         <div class="form-group row">
                             <div class="col-md-12">
-                                <label for="description">Activity Description <span class="text-danger">*</span></label>
-                                <textarea class="form-control @error('description') is-invalid @enderror" id="description" name="description" rows="4" required>{{ old('description') }}</textarea>
+                                <label for="description">Expense Description <span class="text-danger">*</span></label>
+                                <textarea class="form-control @error('description') is-invalid @enderror" id="description" name="description" rows="4" required>{{ old('description', $expense->description) }}</textarea>
                                 @error('description')
                                 <div class="invalid-feedback">
                                     {{ $message }}
@@ -48,23 +50,65 @@
                         </div>
                         <!-- end: Input Description -->
 
-                        <!-- begin: Input Date and Activity Cost -->
+                        <!-- begin: Input Date -->
                         <div class="form-group row">
-                            <!-- Activity Date -->
                             <div class="col-md-6">
-                                <label for="date">Activity Date <span class="text-danger">*</span></label>
-                                <input type="date" class="form-control @error('date') is-invalid @enderror" id="date" name="date" value="{{ old('date', now()->format('Y-m-d')) }}" required readonly>
+                                <label for="date">Expense Date <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control @error('date') is-invalid @enderror" id="date" name="date" value="{{ old('date', $expense->date) }}" required>
                                 @error('date')
                                 <div class="invalid-feedback">
                                     {{ $message }}
                                 </div>
                                 @enderror
                             </div>
+                        </div>
+                        <!-- end: Input Date -->
 
-                            <!-- Activity Cost -->
+                        <!-- begin: Input Images -->
+                        <div class="form-group row">
                             <div class="col-md-6">
-                                <label for="activity_cost">Activity Cost <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control @error('activity_cost') is-invalid @enderror" id="activity_cost" name="activity_cost" value="{{ old('activity_cost') }}" required>
+                                <label for="image_1">Image 1 <span class="text-danger">*</span></label>
+                                <input type="file" class="custom-file-input @error('image_1') is-invalid @enderror" id="image_1" name="image_1" accept="image" onchange="previewImages();">
+                                <label class="custom-file-label" for="image_1">Choose file</label>
+                                @error('image_1')
+                                <div class="invalid-feedback">
+                                    {{ $message }}
+                                </div>
+                                @enderror
+                              <div id="image-preview-1" class="mt-2">
+                                    <img class="avatar-60 rounded" id="preview-image-1"
+                                        src="{{ is_array($expense->images) && isset($expense->images[0])
+                                                ? asset('storage/' . $expense->images[0])
+                                                : asset('assets/images/product/default.webp') }}"
+                                        alt="preview">
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="image_2">Image 2</label>
+                                <input type="file" class="custom-file-input @error('image_2') is-invalid @enderror" id="image_2" name="image_2" accept="image" onchange="previewImages();">
+                                <label class="custom-file-label" for="image_2">Choose file</label>
+                                @error('image_2')
+                                <div class="invalid-feedback">
+                                    {{ $message }}
+                                </div>
+                                @enderror
+                              <div id="image-preview-2" class="mt-2">
+                                    <img class="avatar-60 rounded" id="preview-image-2"
+                                        src="{{ is_array($expense->images) && isset($expense->images[1])
+                                                ? asset('storage/' . $expense->images[1])
+                                                : asset('assets/images/product/default.webp') }}"
+                                        alt="preview">
+                                </div>
+                            </div>
+                        </div>
+                        <!-- end: Input Images -->
+
+                        <!-- begin: Input Cost -->
+                        <div class="form-group row">
+                            <div class="col-md-6">
+                                <label for="activity_cost">Cost <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control @error('activity_cost') is-invalid @enderror" id="activity_cost" name="activity_cost" value="{{ old('activity_cost', $expense->activity_cost) }}" required>
                                 @error('activity_cost')
                                 <div class="invalid-feedback">
                                     {{ $message }}
@@ -72,55 +116,22 @@
                                 @enderror
                             </div>
                         </div>
-                        <!-- end: Input Date and Activity Cost -->
-
-                        <!-- begin: Input Images -->
-                        <div class="form-group row">
-                            <div class="col-md-6">
-                                <label for="image_1">Image 1 <span class="text-danger">*</span></label>
-                                <input type="file" class="custom-file-input @error('image_1') is-invalid @enderror" id="image_1" name="image_1" accept="image/*" onchange="previewImages();">
-                                <label class="custom-file-label" for="image_1">Choose file</label>
-                                @error('image_1')
-                                <div class="invalid-feedback">
-                                    {{ $message }}
-                                </div>
-                                @enderror
-                                <div id="image-preview-1" class="mt-2">
-                                    <img class="avatar-60 rounded" id="preview-image-1" src="{{ asset('assets/images/product/default.webp') }}" alt="preview">
-                                </div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <label for="image_2">Image 2</label>
-                                <input type="file" class="custom-file-input @error('image_2') is-invalid @enderror" id="image_2" name="image_2" accept="image/*" onchange="previewImages();">
-                                <label class="custom-file-label" for="image_2">Choose file</label>
-                                @error('image_2')
-                                <div class="invalid-feedback">
-                                    {{ $message }}
-                                </div>
-                                @enderror
-                                <div id="image-preview-2" class="mt-2">
-                                    <img class="avatar-60 rounded" id="preview-image-2" src="{{ asset('assets/images/product/default.webp') }}" alt="preview">
-                                </div>
-                            </div>
-                        </div>
-                        <!-- end: Input Images -->
+                        <!-- end: Input Cost -->
 
                         <!-- Submit Button -->
                         <div class="mt-2">
-                            <button type="submit" class="btn btn-primary mr-2">Save</button>
-                            <a class="btn bg-danger" href="{{ route('activities.index') }}">Cancel</a>
+                            <button type="submit" class="btn btn-primary mr-2">Update</button>
+                            <a class="btn bg-danger" href="{{ route('expenses.index') }}">Cancel</a>
                         </div>
                     </form>
                 </div>
             </div>
         </div>
     </div>
-    <!-- Page end  -->
 </div>
 
 <script>
-    // Initialize Datepicker for the activity date field
+    // Initialize Datepicker for the expense date field
     $('#date').datepicker({
         uiLibrary: 'bootstrap4',
         format: 'yyyy-mm-dd'

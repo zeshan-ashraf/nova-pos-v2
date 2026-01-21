@@ -17,7 +17,7 @@ use App\Http\Controllers\Dashboard\OrderController;
 use App\Http\Controllers\Dashboard\PosController;
 use App\Http\Controllers\Dashboard\RoleController;
 use App\Http\Controllers\Dashboard\UserController;
-use App\Http\Controllers\Dashboard\ActivityController;
+use App\Http\Controllers\Dashboard\ExpenseController;
 use App\Http\Controllers\Dashboard\ActiveShopController;
 use App\Http\Controllers\Dashboard\SaleReturnController;
 use App\Http\Controllers\Dashboard\PurchaseController;
@@ -201,12 +201,11 @@ Route::middleware(['permission:purchases.menu'])->group(function () {
     Route::get('/api/purchases/products/search', [PurchaseController::class, 'searchProducts'])->name('api.purchases.products.search');
 });
 
-// ====== ACTIVITY CONTROLLER ======
-// Route::middleware(['permission:activity.menu'])->group(function () {
-    Route::resource('/activities', ActivityController::class);
-    Route::get('/activity-search', [ActivityController::class, 'activitySearch'])->name('activities.search');
-
-// });
+// ====== EXPENSE CONTROLLER ======
+Route::middleware(['permission:expense.menu'])->group(function () {
+    Route::resource('/expenses', ExpenseController::class);
+    Route::get('/expense-search', [ExpenseController::class, 'expenseSearch'])->name('expenses.search');
+});
 
 // ====== DATABASE BACKUP ======
 Route::middleware(['permission:database.menu'])->group(function () {

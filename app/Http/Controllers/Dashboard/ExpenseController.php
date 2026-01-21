@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers\Dashboard;
 
-use App\Models\Activity;
+use App\Models\Expense;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Redirect;
 use App\Support\ActiveShop;
 
-class ActivityController extends Controller
+class ExpenseController extends Controller
 {
     /**
-     * Display a listing of the activities.
+     * Display a listing of the expenses.
      */
     public function index()
     {
@@ -24,33 +24,33 @@ class ActivityController extends Controller
         }
 
         $authUser = auth()->user();
-        $activitiesQuery = Activity::query();
+        $expensesQuery = Expense::query();
 
-        // Apply shop filtering - super admin can see all activities, others only their shop
+        // Apply shop filtering - super admin can see all expenses, others only their shop
         if ($authUser && $authUser->shop_id) {
-            $activitiesQuery->where('shop_id', $authUser->shop_id);
+            $expensesQuery->where('shop_id', $authUser->shop_id);
         }
-        // Super admin (no shop_id) can see all activities, no filtering needed
+        // Super admin (no shop_id) can see all expenses, no filtering needed
 
-        // Paginate activities with the specified number of rows per page
-        $activities = $activitiesQuery->paginate($row);
+        // Paginate expenses with the specified number of rows per page
+        $expenses = $expensesQuery->paginate($row);
 
-        return view('activities.index', [
-            'activities' => $activities,
+        return view('expenses.index', [
+            'expenses' => $expenses,
         ]);
     }
 
 
     /**
-     * Show the form for creating a new activity.
+     * Show the form for creating a new expense.
      */
     public function create()
     {
-        return view('activities.create');
+        return view('expenses.create');
     }
 
     /**
-     * Store a newly created activity in storage.
+     * Store a newly created expense in storage.
      */
     public function store(Request $request)
     {
@@ -76,7 +76,7 @@ class ActivityController extends Controller
         }
 
         $authUser = auth()->user();
-        Activity::create([
+        Expense::create([
             'title' => $request->input('title'),
             'description' => $request->input('description'),
             'date' => $request->input('date'),
@@ -86,33 +86,33 @@ class ActivityController extends Controller
             'images' => json_encode($images), // Storing images as JSON array
         ]);
 
-        return Redirect::route('activities.index')->with('success', 'Activity has been created!');
+        return Redirect::route('expenses.index')->with('success', 'Expense has been created!');
     }
 
     /**
-     * Display the specified activity.
+     * Display the specified expense.
      */
-    public function show(Activity $activity)
+    public function show(Expense $expense)
     {
-        $this->ensureShopAccess($activity);
-        return view('activities.show', compact('activity'));
+        $this->ensureShopAccess($expense);
+        return view('expenses.show', compact('expense'));
     }
 
     /**
-     * Show the form for editing the specified activity.
+     * Show the form for editing the specified expense.
      */
-    public function edit(Activity $activity)
+    public function edit(Expense $expense)
     {
-        $this->ensureShopAccess($activity);
-        return view('activities.edit', compact('activity'));
+        $this->ensureShopAccess($expense);
+        return view('expenses.edit', compact('expense'));
     }
 
     /**
-     * Update the specified activity in storage.
+     * Update the specified expense in storage.
      */
-    public function update(Request $request, Activity $activity)
+    public function update(Request $request, Expense $expense)
     {
-        $this->ensureShopAccess($activity);
+        $this->ensureShopAccess($expense);
         
         $request->validate([
             'title' => 'required|string|max:255',
@@ -123,7 +123,7 @@ class ActivityController extends Controller
             'images.*' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
 
-        $images = is_array($activity->images) ? $activity->images : [];
+        $images = is_array($expense->images) ? $expense->images : [];
 
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $image) {
@@ -131,7 +131,7 @@ class ActivityController extends Controller
             }
         }
 
-        $activity->update([
+        $expense->update([
             'title' => $request->input('title'),
             'description' => $request->input('description'),
             'date' => $request->input('date'),
@@ -140,66 +140,67 @@ class ActivityController extends Controller
             'images' => $images, // Store as an array, not JSON
         ]);
 
-        return Redirect::route('activities.index')->with('success', 'Activity has been updated!');
+        return Redirect::route('expenses.index')->with('success', 'Expense has been updated!');
     }
 
 
     /**
-     * Remove the specified activity from storage.
+     * Remove the specified expense from storage.
      */
-    public function destroy(Activity $activity)
+    public function destroy(Expense $expense)
     {
-        $this->ensureShopAccess($activity);
-        $activity->delete();
-        return Redirect::route('activities.index')->with('success', 'Activity has been deleted!');
+        $this->ensureShopAccess($expense);
+        $expense->delete();
+        return Redirect::route('expenses.index')->with('success', 'Expense has been deleted!');
     }
-    public function activitySearch(Request $request)
+    
+    public function expenseSearch(Request $request)
     {
         $searchTerm = $request->get('search');
         $authUser = auth()->user();
 
-        $activitiesQuery = Activity::where(function ($query) use ($searchTerm) {
+        $expensesQuery = Expense::where(function ($query) use ($searchTerm) {
             $query->where('title', 'like', "%{$searchTerm}%")
                 ->orWhere('description', 'like', "%{$searchTerm}%")
                 ->orWhere('date', 'like', "%{$searchTerm}%")
                 ->orWhere('activity_cost', 'like', "%{$searchTerm}%");
         });
 
-        // Apply shop filtering - super admin can see all activities, others only their shop
+        // Apply shop filtering - super admin can see all expenses, others only their shop
         if ($authUser && $authUser->shop_id) {
-            $activitiesQuery->where('shop_id', $authUser->shop_id);
+            $expensesQuery->where('shop_id', $authUser->shop_id);
         }
-        // Super admin (no shop_id) can see all activities, no filtering needed
+        // Super admin (no shop_id) can see all expenses, no filtering needed
 
-        $activities = $activitiesQuery->paginate(10);
+        $expenses = $expensesQuery->paginate(10);
 
         if ($request->ajax()) {
-            return response()->json(['activities' => $activities]);
+            return response()->json(['expenses' => $expenses]);
         }
 
-        return view('activities.index', compact('activities'));
+        return view('expenses.index', compact('expenses'));
     }
 
     /**
-     * Ensure the current user has access to the activity based on shop.
+     * Ensure the current user has access to the expense based on shop.
      */
-    protected function ensureShopAccess(Activity $activity): void
+    protected function ensureShopAccess(Expense $expense): void
     {
         $authUser = auth()->user();
 
         // If user is not authenticated, deny access
         if (!$authUser) {
-            abort(403, 'You must be authenticated to access this activity.');
+            abort(403, 'You must be authenticated to access this expense.');
         }
 
-        // Super admin can access all activities
+        // Super admin can access all expenses
         if (!$authUser->shop_id) {
             return;
         }
 
-        // Users with shop_id can only access activities from their shop
-        if ($activity->shop_id !== $authUser->shop_id) {
-            abort(403, 'You do not have access to this activity.');
+        // Users with shop_id can only access expenses from their shop
+        if ($expense->shop_id !== $authUser->shop_id) {
+            abort(403, 'You do not have access to this expense.');
         }
     }
 

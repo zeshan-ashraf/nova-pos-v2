@@ -142,8 +142,9 @@
                                 @enderror
                             </div> --}}
                             <div class="form-group col-md-6">
-                                <label for="buying_price">Buying Price <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control @error('buying_price') is-invalid @enderror" id="buying_price" name="buying_price" value="{{ old('buying_price') }}" required>
+                                <label for="buying_price">Buying Price</label>
+                                <input type="text" class="form-control @error('buying_price') is-invalid @enderror" id="buying_price" name="buying_price" value="{{ old('buying_price') }}">
+                                <small class="form-text text-muted">If prices are not provided, the product will be saved as Ordered and won't be available for sale.</small>
                                 @error('buying_price')
                                 <div class="invalid-feedback">
                                     {{ $message }}
@@ -151,8 +152,9 @@
                                 @enderror
                             </div>
                             <div class="form-group col-md-6">
-                                <label for="selling_price">Selling Price <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control @error('selling_price') is-invalid @enderror" id="selling_price" name="selling_price" value="{{ old('selling_price') }}" required>
+                                <label for="selling_price">Selling Price</label>
+                                <input type="text" class="form-control @error('selling_price') is-invalid @enderror" id="selling_price" name="selling_price" value="{{ old('selling_price') }}">
+                                <small class="form-text text-muted">If prices are not provided, the product will be saved as Ordered and won't be available for sale.</small>
                                 @error('selling_price')
                                 <div class="invalid-feedback">
                                     {{ $message }}

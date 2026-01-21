@@ -41,7 +41,7 @@
 
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">Credit Activity</h5>
+            <h5 class="mb-0">Credit Expense</h5>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -95,7 +95,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-4">No credit activity found for this customer.</td>
+                                <td colspan="6" class="text-center text-muted py-4">No credit expense found for this customer.</td>
                             </tr>
                         @endforelse
                     </tbody>

@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Dashboard\Traits\ReportTrait;
 use App\Models\Order;
 use App\Models\Purchase;
-use App\Models\Activity;
+use App\Models\Expense;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -30,8 +30,8 @@ class FinancialReportController extends Controller
         $this->applyShopFilter($cogsQuery, $shopFilter['shop_ids']);
         $cogs = $cogsQuery->sum('total');
 
-        // Expenses (Activities)
-        $expenseQuery = Activity::whereBetween('date', [$dateRange['start_datetime'], $dateRange['end_datetime']]);
+        // Expenses
+        $expenseQuery = Expense::whereBetween('date', [$dateRange['start_datetime'], $dateRange['end_datetime']]);
         $this->applyShopFilter($expenseQuery, $shopFilter['shop_ids']);
         $expenses = $expenseQuery->sum('activity_cost');
 

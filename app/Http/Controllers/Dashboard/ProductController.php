@@ -111,17 +111,31 @@ class ProductController extends Controller
             'category_id' => 'required|integer',
             'supplier_id' => 'nullable|integer',
             'product_garage' => 'string|nullable',
-            'product_store' => 'required|integer|min:0',
+            'product_store' => 'nullable|integer|min:0',
             'low_stock_warning' => 'nullable|integer|min:0',
             'buying_date' => 'date_format:Y-m-d|max:10|nullable',
-            'buying_price' => 'required|integer',
-            'selling_price' => 'required|integer',
+            'buying_price' => 'nullable|numeric|min:0',
+            'selling_price' => 'nullable|numeric|min:0',
         ];
 
         $validatedData = $request->validate($rules);
         
-        // Set status to active by default
-        $validatedData['status'] = 'active';
+        // Set default product_store to 0 if not provided
+        if (!isset($validatedData['product_store']) || $validatedData['product_store'] === null) {
+            $validatedData['product_store'] = 0;
+        }
+        
+        // Determine status based on prices
+        // If both prices are present → status = 'active' (product is sellable)
+        // If either price is missing → status = 'ordered' (product is not sellable)
+        $hasBuyingPrice = !empty($validatedData['buying_price']);
+        $hasSellingPrice = !empty($validatedData['selling_price']);
+        
+        if ($hasBuyingPrice && $hasSellingPrice) {
+            $validatedData['status'] = 'active';
+        } else {
+            $validatedData['status'] = 'ordered';
+        }
         
         // Set default low_stock_warning if not provided
         if (!isset($validatedData['low_stock_warning']) || $validatedData['low_stock_warning'] === null) {
@@ -231,11 +245,11 @@ class ProductController extends Controller
             'category_id' => 'required|integer',
             'supplier_id' => 'nullable|integer',
             'product_garage' => 'string|nullable',
-            'product_store' => 'string|nullable',
+            'product_store' => 'nullable|integer|min:0',
             'low_stock_warning' => 'nullable|integer|min:0',
             'buying_date' => 'date_format:Y-m-d|max:10|nullable',
-            'buying_price' => 'required|integer',
-            'selling_price' => 'required|integer',
+            'buying_price' => 'nullable|numeric|min:0',
+            'selling_price' => 'nullable|numeric|min:0',
         ];
 
         $validatedData = $request->validate($rules);
@@ -257,11 +271,25 @@ class ProductController extends Controller
             $file->storeAs($path, $fileName);
             $validatedData['product_image'] = $fileName;
         }
-            $oldStockQty = $product->product_store;
-            // Ensure status is set to active if not provided
-            if (!isset($validatedData['status'])) {
-                $validatedData['status'] = 'active';
-            }
+        
+        $oldStockQty = $product->product_store;
+        
+        // Set default product_store to current value if not provided, or 0 if null
+        if (!isset($validatedData['product_store']) || $validatedData['product_store'] === null) {
+            $validatedData['product_store'] = $product->product_store ?? 0;
+        }
+        
+        // Determine status based on prices
+        // If both prices are present → status = 'active' (product is sellable)
+        // If either price is missing → status = 'ordered' (product is not sellable)
+        $hasBuyingPrice = !empty($validatedData['buying_price']);
+        $hasSellingPrice = !empty($validatedData['selling_price']);
+        
+        if ($hasBuyingPrice && $hasSellingPrice) {
+            $validatedData['status'] = 'active';
+        } else {
+            $validatedData['status'] = 'ordered';
+        }
             Product::where('id', $product->id)->update($validatedData);
             $newStockQty = $validatedData['product_store'] ?? $product->product_store;
             $stockChange = $newStockQty - $oldStockQty;

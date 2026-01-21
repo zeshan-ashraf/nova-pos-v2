@@ -174,29 +174,29 @@
                 </li>
                 @endif
 
-                {{--  @if (auth()->user()->can('activity.menu'))  --}}
+                @if (auth()->user()->can('expense.menu'))
                 <li>
-                    <a href="#activities" class="collapsed" data-toggle="collapse" aria-expanded="false">
+                    <a href="#expenses" class="collapsed" data-toggle="collapse" aria-expanded="false">
                         <i class="fa-solid fa-boxes-stacked"></i>
-                        <span class="ml-3">Activities</span>
+                        <span class="ml-3">Expenses</span>
                         <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="10 15 15 20 20 15"></polyline><path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
                         </svg>
                     </a>
-                    <ul id="activities" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
-                        <li class="{{ Request::is(['activities']) ? 'active' : '' }}">
-                            <a href="{{ route('activities.index') }}">
-                                <i class="fa-solid fa-arrow-right"></i><span>Activities</span>
+                    <ul id="expenses" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
+                        <li class="{{ Request::is(['expenses']) && !Request::is('expenses/create') ? 'active' : '' }}">
+                            <a href="{{ route('expenses.index') }}">
+                                <i class="fa-solid fa-arrow-right"></i><span>Expenses</span>
                             </a>
                         </li>
-                        <li class="{{ Request::is(['activities/create']) ? 'active' : '' }}">
-                            <a href="{{ route('activities.create') }}">
-                                <i class="fa-solid fa-arrow-right"></i><span>Add Activity</span>
+                        <li class="{{ Request::is(['expenses/create']) ? 'active' : '' }}">
+                            <a href="{{ route('expenses.create') }}">
+                                <i class="fa-solid fa-arrow-right"></i><span>Add Expense</span>
                             </a>
                         </li>
                     </ul>
                 </li>
-                {{--  @endif  --}}
+                @endif
 
                 @if (auth()->user()->can('salary.menu'))
                 <li>
