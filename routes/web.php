@@ -262,6 +262,8 @@ Route::middleware(['permission:reports.menu'])->group(function () {
         Route::get('/reports/purchases/summary', [PurchaseReportController::class, 'summary'])->name('reports.purchases.summary');
         Route::get('/reports/purchases/supplier', [PurchaseReportController::class, 'supplier'])->name('reports.purchases.supplier');
         Route::get('/reports/purchases/product', [PurchaseReportController::class, 'product'])->name('reports.purchases.product');
+        Route::get('/api/reports/suppliers/search', [PurchaseReportController::class, 'searchSuppliers'])->name('api.reports.suppliers.search');
+        Route::get('/api/reports/purchases/products/search', [PurchaseReportController::class, 'searchProducts'])->name('api.reports.purchases.products.search');
     });
     
     // Financial Reports
