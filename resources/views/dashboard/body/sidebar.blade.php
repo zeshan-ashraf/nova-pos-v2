@@ -24,7 +24,7 @@
                 <li class="{{ Request::is('invoice*') ? 'active' : '' }}">
                     <a href="{{ route('invoice.create') }}" class="svg-icon">
                         <i class="fa-solid fa-cart-shopping"></i>
-                        <span class="ml-3">POS</span>
+                        <span class="ml-3">Invoices</span>
                     </a>
                 </li>
                 @endif
