@@ -32,7 +32,7 @@
                             <select class="form-control" name="row" onchange="this.form.submit()">
                                 <option value="10" @if(request('row') == '10')selected="selected"@endif>10</option>
                                 <option value="25" @if(request('row') == '25')selected="selected"@endif>25</option>
-                                <option value="50" @if(request('row') == '50')selected="selected"@endif>50</option>
+                                <option value="50" @if(request('row', '50') == '50')selected="selected"@endif>50</option>
                                 <option value="100" @if(request('row') == '100')selected="selected"@endif>100</option>
                             </select>
                         </div>

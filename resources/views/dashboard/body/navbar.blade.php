@@ -8,12 +8,6 @@
                     <h5 class="logo-title ml-3">Nova POS</h5>
                 </a>
             </div>
-            <div class="iq-search-bar device-search">
-                <form action="#" class="searchbox">
-                    <a class="search-link" href="#"><i class="ri-search-line"></i></a>
-                    <input type="text" class="text search-input" placeholder="Search here...">
-                </form>
-            </div>
             <div class="d-flex align-items-center">
                 <button class="navbar-toggler" type="button" data-toggle="collapse"
                     data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent"
@@ -21,8 +15,41 @@
                     <i class="ri-menu-3-line"></i>
                 </button>
 
-                <div class="collapse navbar-collapse" id="navbarSupportedContent">
-                    <ul class="navbar-nav ml-auto navbar-list align-items-center">
+                <div class="collapse navbar-collapse d-flex justify-content-between" id="navbarSupportedContent">
+                    {{-- Left menu: Quick links (Create Sale Invoice, Create Purchase, Create Sale Return, Create Expense, Reports) --}}
+                    <ul class="navbar-nav navbar-list align-items-center navbar-left-menu">
+                        @auth
+                            @if(auth()->user()->can('advance.pos.menu') || auth()->user()->can('purchases.menu') || auth()->user()->can('sale-returns.menu') || auth()->user()->can('expense.menu') || auth()->user()->can('reports.menu'))
+                                @can('advance.pos.menu')
+                                    <li class="nav-item">
+                                        <a href="{{ route('invoice.create') }}" class="nav-link navbar-quick-link {{ request()->routeIs('invoice.create') ? 'active' : '' }}">Create Sale Invoice</a>
+                                    </li>
+                                @endcan
+                                @can('purchases.menu')
+                                    <li class="nav-item">
+                                        <a href="{{ route('purchases.create') }}" class="nav-link navbar-quick-link {{ request()->routeIs('purchases.create') ? 'active' : '' }}">Create Purchase</a>
+                                    </li>
+                                @endcan
+                                @can('sale-returns.menu')
+                                    <li class="nav-item">
+                                        <a href="{{ route('sale-returns.create') }}" class="nav-link navbar-quick-link {{ request()->routeIs('sale-returns.*') ? 'active' : '' }}">Create Sale Return</a>
+                                    </li>
+                                @endcan
+                                @can('expense.menu')
+                                    <li class="nav-item">
+                                        <a href="{{ route('expenses.create') }}" class="nav-link navbar-quick-link {{ request()->routeIs('expenses.create') ? 'active' : '' }}">Create Expense</a>
+                                    </li>
+                                @endcan
+                                @can('reports.menu')
+                                    <li class="nav-item">
+                                        <a href="{{ route('reports.index') }}" class="nav-link navbar-quick-link {{ request()->routeIs('reports.*') ? 'active' : '' }}">Reports</a>
+                                    </li>
+                                @endcan
+                            @endif
+                        @endauth
+                    </ul>
+                    {{-- Right menu: Active Shop + User (aligned to far right with padding) --}}
+                    <ul class="navbar-nav navbar-list align-items-center navbar-right-menu">
                         @auth
                             @php
                                 $activeShop = \App\Support\ActiveShop::current();
@@ -80,21 +107,6 @@
                                 @endif
                             </li>
                         @endauth
-                        <li class="nav-item nav-icon search-content">
-                            <a href="#" class="search-toggle rounded" id="dropdownSearch" data-toggle="dropdown"
-                                aria-haspopup="true" aria-expanded="false">
-                                <i class="ri-search-line"></i>
-                            </a>
-                            <div class="iq-search-bar iq-sub-dropdown dropdown-menu" aria-labelledby="dropdownSearch">
-                                <form action="#" class="searchbox p-2">
-                                    <div class="form-group mb-0 position-relative">
-                                        <input type="text" class="text search-input font-size-12"
-                                            placeholder="type here to search...">
-                                        <a href="#" class="search-link"><i class="las la-search"></i></a>
-                                    </div>
-                                </form>
-                            </div>
-                        </li>
                         <li class="nav-item nav-icon dropdown caption-content">
                             <a href="#" class="search-toggle dropdown-toggle" id="dropdownMenuButton4"
                                 data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">

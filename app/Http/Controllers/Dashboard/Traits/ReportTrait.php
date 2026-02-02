@@ -136,9 +136,9 @@ trait ReportTrait
      */
     protected function getRowCount(Request $request): int
     {
-        $row = (int) $request->input('row', 25);
+        $row = (int) $request->input('row', 50);
         if ($row < 1 || $row > 100) {
-            return 25;
+            return 50;
         }
         return $row;
     }

@@ -6998,7 +6998,7 @@ a.text-light-gray:hover, a.text-light-gray:focus {
   -ms-border-radius: 10px;
   -o-border-radius: 10px;
   border-radius: 10px;
-  margin-bottom: 30px;
+  margin-bottom: 0px;
   border: 1px solid #DCDFE8;
   box-shadow: none; }
   .card.card-transparent {
@@ -7121,17 +7121,17 @@ a.text-light-gray:hover, a.text-light-gray:focus {
         margin: 0;
         background: transparent !important; }
         .iq-sidebar-menu .iq-menu li li a {
-          font-size: 16px; }
+          font-size: 12px; }
       .iq-sidebar-menu .iq-menu li a {
-        font-size: 16px;
+        font-size: 13px;
         white-space: nowrap;
         display: block;
         color: #676E8A;
         position: relative;
-        padding: 15px 20px 15px 20px;
+        padding: 5px 10px 5px 10px;
         margin-bottom: 5px;
         margin-right: 10px;
-        line-height: 18px;
+        line-height: 15px;
         display: -webkit-box;
         display: -ms-flexbox;
         display: flex;
@@ -7386,10 +7386,10 @@ a.text-light-gray:hover, a.text-light-gray:focus {
   transition: all 0.3s ease-in-out; }
 
 .iq-sidebar-logo {
-  padding: 15px 20px;
+  padding: 5px 10px;
   padding-right: 15px;
   margin-top: 5px;
-  margin-bottom: 15px;
+  margin-bottom: 5px;
   margin-right: 10px;
   width: auto;
   position: relative;
@@ -10605,9 +10605,9 @@ body.tab-horizontal .iq-footer {
   .table .ligth {
     white-space: nowrap; }
     .table .ligth th {
-      padding: 15px 20px !important;
+      padding: 10px 10px !important;
       text-transform: capitalize;
-      font-size: 17px;
+      font-size: 14=px;
       line-height: 22px;
       background: #f4f5fa;
       color: #110A57;
@@ -10626,7 +10626,7 @@ body.tab-horizontal .iq-footer {
   .table .ligth-body .list-action {
     justify-content: center; }
   .table td {
-    padding: 15px 20px !important;
+    padding: 5px 5px !important;
     border: 0px;
     border-bottom: 1px solid #DCDFE8;
     color: #110A57; }
@@ -14595,7 +14595,7 @@ body {
   font-weight: 400;
   font-style: normal;
   font-size: 16px;
-  line-height: 29px;
+  line-height: 12px;
   padding: 0;
   margin: 0;
   color: #676E8A;

@@ -9,6 +9,8 @@ use Spatie\Permission\Models\Role;
 use App\Http\Controllers\Controller;
 use Spatie\QueryBuilder\QueryBuilder;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 use Spatie\Permission\Models\Permission;
 
 class RoleController extends Controller
@@ -184,14 +186,101 @@ class RoleController extends Controller
 
     public function rolePermissionUpdate(Request $request, Int $id)
     {
-        $role = Role::findOrFail($id);
-        $permissions = $request->permission_id;
+        try {
+            $role = Role::findOrFail($id);
+            
+            // Get permissions array, default to empty array if not provided (when no checkboxes are checked)
+            $permissionIds = $request->input('permission_id', []);
+            
+            // Ensure it's an array (in case it's null or single value)
+            if (!is_array($permissionIds)) {
+                $permissionIds = $permissionIds ? [$permissionIds] : [];
+            }
+            
+            // Convert to integers to ensure proper type and filter out empty values
+            $permissionIds = array_map('intval', array_filter($permissionIds));
+            
+            // Log for debugging
+            Log::info('Updating role permissions', [
+                'role_id' => $id,
+                'role_name' => $role->name,
+                'permission_ids' => $permissionIds,
+                'permission_count' => count($permissionIds),
+                'raw_input' => $request->all()
+            ]);
+            
+            // Use DB transaction to ensure data consistency
+            DB::beginTransaction();
+            
+            try {
+                // Always sync permissions, even if empty array (this will remove all permissions if none are selected)
+                // syncPermissions accepts IDs directly
+                $role->syncPermissions($permissionIds);
+                
+                // Refresh the role to get updated permissions
+                $role->refresh();
+                
+                // Clear global permission cache using Spatie's method
+                $permissionRegistrar = app()[\Spatie\Permission\PermissionRegistrar::class];
+                $permissionRegistrar->forgetCachedPermissions();
+                
+                // Clear permission cache for all users with this role
+                $usersWithRole = User::role($role->name)->get();
+                foreach ($usersWithRole as $user) {
+                    // Clear user-specific permission cache
+                    $cacheKey = "spatie.permission.cache.user.{$user->id}";
+                    Cache::forget($cacheKey);
+                    
+                    // Also try alternative cache key formats
+                    Cache::forget("spatie.permission.cache.{$user->id}");
+                    Cache::forget("spatie.permission.cache.user_{$user->id}");
+                    
+                    // Reload user's permissions to refresh cache
+                    $user->load('roles', 'permissions');
+                    // Force refresh by getting permissions
+                    $user->getAllPermissions();
+                }
+                
+                // Clear all cache entries that might contain permission data
+                // This is a more aggressive approach to ensure everything is cleared
+                if (Cache::getStore() instanceof \Illuminate\Cache\TaggedCache) {
+                    try {
+                        Cache::tags(['spatie.permission.cache'])->flush();
+                    } catch (\Exception $e) {
+                        // Tags might not be supported, continue
+                    }
+                }
+                
+                // Clear the main permission cache key
+                $cacheStore = Cache::getStore();
+                $cacheKey = config('permission.cache.key', 'spatie.permission.cache');
+                Cache::forget($cacheKey);
+                
+                DB::commit();
+                
+                // Verify the sync worked
+                $syncedPermissions = $role->permissions->pluck('id')->toArray();
+                Log::info('Role permissions after sync', [
+                    'role_id' => $id,
+                    'synced_permission_ids' => $syncedPermissions,
+                    'synced_count' => count($syncedPermissions)
+                ]);
 
-        if(!empty($permissions)) {
-            $role->syncPermissions($permissions);
+                return Redirect::route('rolePermission.index')
+                    ->with('success', 'Role Permission has been updated! Please refresh your browser (F5 or Ctrl+R) to see the changes in the sidebar.');
+            } catch (\Exception $e) {
+                DB::rollBack();
+                throw $e;
+            }
+        } catch (\Exception $e) {
+            Log::error('Error updating role permissions', [
+                'role_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return Redirect::back()->with('error', 'Failed to update role permissions: ' . $e->getMessage())->withInput();
         }
-
-        return Redirect::route('rolePermission.index')->with('success', 'Role Permission has been updated!');
     }
 
     public function rolePermissionDestroy(Int $id)

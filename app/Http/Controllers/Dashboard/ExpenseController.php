@@ -16,7 +16,7 @@ class ExpenseController extends Controller
     public function index()
     {
         // Get the number of rows per page, default to 10
-        $row = (int) request('row', 10);
+        $row = (int) request('row', 50);
 
         // Validate that the 'row' is between 1 and 100
         if ($row < 1 || $row > 100) {

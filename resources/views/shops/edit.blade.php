@@ -1,5 +1,10 @@
 @extends('dashboard.body.main')
 
+@section('specificpagestyles')
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+@endsection
+
 @section('container')
 <div class="container-fluid">
     <div class="row">
@@ -98,7 +103,7 @@
                                 @enderror
                             </div>
                             <div class="form-group col-md-12">
-                                <label class="mb-3">Banks <small class="text-muted">(optional, click to select multiple)</small></label>
+                                <label for="bank_ids">Banks <small class="text-muted">(optional)</small></label>
                                 @error('bank_ids')
                                 <div class="alert alert-danger">
                                     {{ $message }}
@@ -109,36 +114,20 @@
                                     {{ $message }}
                                 </div>
                                 @enderror
-                                <div class="row" id="bank-selection">
-                                    @php
-                                        $selectedBanks = collect(old('bank_ids', $shop->banks->pluck('id')->all()));
-                                    @endphp
+                                @php
+                                    $selectedBankIds = old('bank_ids', $shop->banks->pluck('id')->toArray());
+                                @endphp
+                                <select name="bank_ids[]" id="bank_ids" class="form-control bank-select @error('bank_ids') is-invalid @enderror" multiple>
                                     @foreach ($banks as $bank)
-                                        <div class="col-md-3 col-sm-4 col-6 mb-3">
-                                            <div class="bank-card card h-100 cursor-pointer @if($selectedBanks->contains($bank->id))border-primary bg-light @endif" 
-                                                 onclick="toggleBank({{ $bank->id }})" 
-                                                 style="transition: all 0.3s ease; cursor: pointer;">
-                                                <div class="card-body text-center p-3">
-                                                    <div class="form-check mb-2">
-                                                        <input class="form-check-input" type="checkbox" 
-                                                               name="bank_ids[]" 
-                                                               value="{{ $bank->id }}" 
-                                                               id="bank_{{ $bank->id }}"
-                                                               @if($selectedBanks->contains($bank->id))checked @endif
-                                                               onchange="updateBankCard({{ $bank->id }})">
-                                                    </div>
-                                                    <div class="bank-icon mb-2" style="font-size: 2rem;">🏦</div>
-                                                    <h6 class="card-title mb-0" style="font-size: 0.85rem; line-height: 1.2;">{{ $bank->name }}</h6>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <option value="{{ $bank->id }}" {{ in_array($bank->id, $selectedBankIds) ? 'selected' : '' }}>{{ $bank->name }}</option>
                                     @endforeach
-                                </div>
+                                </select>
+                                <small class="form-text text-muted">Selected banks appear as badges; click × on a badge to remove. Each bank can be selected only once.</small>
                             </div>
                             <div class="form-group col-md-6">
-                                <label for="is_parent">Is Root Shop? <span class="text-danger">*</span></label>
+                                <label for="is_parent">Is Mother Shop? <span class="text-danger">*</span></label>
                                 <select class="form-control @error('is_parent') is-invalid @enderror" id="is_parent" name="is_parent" required>
-                                    <option value="1" @if(old('is_parent', $shop->is_parent ? '1' : '0') === '1')selected="selected"@endif>Yes - Root Shop</option>
+                                    <option value="1" @if(old('is_parent', $shop->is_parent ? '1' : '0') === '1')selected="selected"@endif>Yes - Mother Shop</option>
                                     <option value="0" @if(old('is_parent', $shop->is_parent ? '1' : '0') === '0')selected="selected"@endif>No - Child Shop</option>
                                 </select>
                                 @error('is_parent')
@@ -176,42 +165,19 @@
 
 @include('components.preview-img-form')
 @include('shops.partials.parent-toggle-script')
+@endsection
 
-<style>
-    .bank-card {
-        border: 2px solid #e0e0e0;
-    }
-    .bank-card:hover {
-        border-color: #007bff;
-        box-shadow: 0 2px 8px rgba(0,123,255,0.2);
-        transform: translateY(-2px);
-    }
-    .bank-card.border-primary {
-        border-color: #007bff !important;
-        background-color: #e7f3ff !important;
-    }
-    .bank-card input[type="checkbox"] {
-        cursor: pointer;
-    }
-</style>
-
+@section('specificpagescripts')
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
-    function toggleBank(bankId) {
-        const checkbox = document.getElementById('bank_' + bankId);
-        checkbox.checked = !checkbox.checked;
-        updateBankCard(bankId);
-    }
-
-    function updateBankCard(bankId) {
-        const checkbox = document.getElementById('bank_' + bankId);
-        const card = checkbox.closest('.bank-card');
-        
-        if (checkbox.checked) {
-            card.classList.add('border-primary', 'bg-light');
-        } else {
-            card.classList.remove('border-primary', 'bg-light');
-        }
-    }
+$(document).ready(function() {
+    $('#bank_ids').select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Select Banks',
+        allowClear: true,
+        width: '100%'
+    });
+});
 </script>
 @endsection
 

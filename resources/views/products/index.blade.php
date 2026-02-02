@@ -43,7 +43,7 @@
                             <select class="form-control" name="row" onchange="this.form.submit()">
                                 <option value="10" @if(request('row') == '10')selected="selected"@endif>10</option>
                                 <option value="25" @if(request('row') == '25')selected="selected"@endif>25</option>
-                                <option value="50" @if(request('row') == '50')selected="selected"@endif>50</option>
+                                <option value="50" @if(request('row', '50') == '50')selected="selected"@endif>50</option>
                                 <option value="100" @if(request('row') == '100')selected="selected"@endif>100</option>
                             </select>
                         </div>
@@ -107,11 +107,6 @@
                             <td>
                                 @if($product->shop)
                                     <span class="badge bg-primary">{{ $product->shop->name }}</span>
-                                    @if($product->shop->is_parent)
-                                        <small class="text-muted d-block">Parent Shop</small>
-                                    @elseif($product->shop->parent)
-                                        <small class="text-muted d-block">Child of {{ $product->shop->parent->name }}</small>
-                                    @endif
                                 @else
                                     <span class="badge bg-secondary">Unassigned</span>
                                 @endif

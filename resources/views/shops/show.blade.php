@@ -42,7 +42,7 @@
                                 </div>
                                 <div class="form-group col-md-6">
                                     <label>Type</label>
-                                    <input type="text" class="form-control bg-white" value="{{ $shop->is_parent ? 'Root Shop' : 'Child Shop' }}" readonly>
+                                    <input type="text" class="form-control bg-white" value="{{ $shop->is_parent ? 'Mother Shop' : 'Child Shop' }}" readonly>
                                 </div>
                                 <div class="form-group col-md-6">
                                     <label>Parent Shop</label>

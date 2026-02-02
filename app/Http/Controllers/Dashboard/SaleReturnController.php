@@ -25,7 +25,7 @@ class SaleReturnController extends Controller
      */
     public function index()
     {
-        $row = (int) request('row', 10);
+        $row = (int) request('row', 50);
 
         if ($row < 1 || $row > 100) {
             abort(400, 'The per-page parameter must be an integer between 1 and 100.');

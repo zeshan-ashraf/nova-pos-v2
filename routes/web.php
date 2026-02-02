@@ -32,6 +32,7 @@ use App\Http\Controllers\Dashboard\ReturnReportController;
 use App\Http\Controllers\Dashboard\EmployeeReportController;
 use App\Http\Controllers\Dashboard\ComparativeReportController;
 use App\Http\Controllers\Dashboard\ExecutiveReportController;
+use App\Http\Controllers\Dashboard\SystemResetController;
 
 /*
 |--------------------------------------------------------------------------
@@ -45,7 +46,7 @@ use App\Http\Controllers\Dashboard\ExecutiveReportController;
 */
 
 Route::get('/', function () {
-    return view('welcome');
+    return redirect()->route('login');
 });
 
 
@@ -316,6 +317,13 @@ Route::middleware(['permission:reports.menu'])->group(function () {
     Route::middleware(['permission:reports.executive'])->group(function () {
         Route::get('/reports/executive/summary', [ExecutiveReportController::class, 'summary'])->name('reports.executive.summary');
     });
+});
+
+// ====== SYSTEM RESET (Super Admin Only) ======
+Route::middleware(['auth', 'role:Super Admin'])->group(function () {
+    Route::get('/system-reset', [SystemResetController::class, 'show'])->name('system-reset.show');
+    Route::post('/system-reset/execute', [SystemResetController::class, 'execute'])->name('system-reset.execute');
+    Route::get('/system-reset/logs', [SystemResetController::class, 'logs'])->name('system-reset.logs');
 });
 
 require __DIR__.'/auth.php';

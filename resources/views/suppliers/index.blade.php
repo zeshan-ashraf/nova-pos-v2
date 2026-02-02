@@ -34,7 +34,7 @@
                             <select class="form-control" name="row" onchange="this.form.submit()">
                                 <option value="10" @if(request('row') == '10')selected="selected"@endif>10</option>
                                 <option value="25" @if(request('row') == '25')selected="selected"@endif>25</option>
-                                <option value="50" @if(request('row') == '50')selected="selected"@endif>50</option>
+                                <option value="50" @if(request('row', '50') == '50')selected="selected"@endif>50</option>
                                 <option value="100" @if(request('row') == '100')selected="selected"@endif>100</option>
                             </select>
                         </div>
@@ -61,7 +61,6 @@
                     <thead class="bg-white text-uppercase">
                         <tr class="ligth ligth-data">
                             <th>No.</th>
-                            <th>Photo</th>
                             {{-- <th>@sortablelink('name')</th> --}} {{-- Name column removed from UI - may be needed in future --}}
                             <th>@sortablelink('shopname', 'Shop Name')</th>
                             <th>@sortablelink('phone')</th>
@@ -75,9 +74,6 @@
                         @foreach ($suppliers as $supplier)
                         <tr>
                             <td>{{ (($suppliers->currentPage() * $suppliers->perPage()) - $suppliers->perPage()) + $loop->iteration  }}</td>
-                            <td>
-                                <img class="avatar-60 rounded" src="{{ $supplier->photo ? asset('storage/suppliers/'.$supplier->photo) : asset('assets/images/user/1.png') }}">
-                            </td>
                             {{-- <td>{{ $supplier->name }}</td> --}} {{-- Name column removed from UI - may be needed in future --}}
                             <td>{{ $supplier->shopname }}</td>
                             <td>{{ $supplier->phone }}</td>

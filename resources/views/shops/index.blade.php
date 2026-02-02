@@ -49,7 +49,7 @@
                             <select class="form-control" name="row" onchange="this.form.submit()">
                                 <option value="10" @if(request('row') == '10')selected="selected"@endif>10</option>
                                 <option value="25" @if(request('row') == '25')selected="selected"@endif>25</option>
-                                <option value="50" @if(request('row') == '50')selected="selected"@endif>50</option>
+                                <option value="50" @if(request('row', '50') == '50')selected="selected"@endif>50</option>
                                 <option value="100" @if(request('row') == '100')selected="selected"@endif>100</option>
                             </select>
                         </div>
@@ -87,7 +87,6 @@
                     <thead class="bg-white text-uppercase">
                         <tr class="ligth ligth-data">
                             <th>No.</th>
-                            <th>Logo</th>
                             <th>@sortablelink('name', 'Shop Name')</th>
                             <th>@sortablelink('owner_name', 'Owner')</th>
                             <th>@sortablelink('phone', 'Phone')</th>
@@ -101,16 +100,13 @@
                         @forelse ($shops as $shop)
                         <tr>
                             <td>{{ (($shops->currentPage() - 1) * $shops->perPage()) + $loop->iteration }}</td>
-                            <td>
-                                <img class="avatar-60 rounded" src="{{ $shop->logo ? asset('storage/shops/'.$shop->logo) : asset('assets/images/user/1.png') }}" alt="{{ $shop->name }}">
-                            </td>
                             <td>{{ $shop->name }}</td>
                             <td>{{ $shop->owner_name }}</td>
                             <td>{{ $shop->phone }}</td>
                             <td>{{ $shop->is_parent ? '—' : ($shop->parent->name ?? '-') }}</td>
                             <td>
                                 @if ($shop->is_parent)
-                                    <span class="badge badge-info">Root</span>
+                                    <span class="badge badge-info">Mother</span>
                                 @else
                                     <span class="badge badge-secondary">Child</span>
                                 @endif
@@ -150,7 +146,7 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="9">
+                            <td colspan="8">
                                 <div class="alert text-white bg-danger mb-0" role="alert">
                                     <div class="iq-alert-text">Data not Found.</div>
                                 </div>

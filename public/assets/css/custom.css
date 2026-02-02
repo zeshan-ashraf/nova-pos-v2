@@ -11,9 +11,37 @@
     padding: 10px !important;
 }
 
+/* Table cell padding */
+.table td {
+    padding: 2px 4px !important;
+}
+
 /* Body Font Size */
 body {
     font-size: 12px !important;
+}
+
+/* Content area: match font sizes across all list/detail pages (e.g. expenses, customers, products) */
+.content-page {
+    font-size: 12px !important;
+}
+.content-page .table th,
+.content-page .table td {
+    font-size: 12px !important;
+}
+.content-page .form-control,
+.content-page select.form-control {
+    font-size: 11px !important;
+}
+.content-page .btn {
+    font-size: 0.7rem !important;
+}
+.content-page label {
+    font-size: 12px !important;
+}
+.content-page h4,
+.content-page .h4 {
+    font-size: 1.1rem !important;
 }
 
 /* Button Add Row Margin */
@@ -36,4 +64,65 @@ body {
 
 .summary-row{
     padding: 0 !important;
+}
+
+/* Navbar quick action links (Create Sale Invoice, Create Purchase, Create Sale Return, etc.) */
+.navbar-quick-link {
+    padding: 0.4rem 0.75rem !important;
+    font-size: 0.85rem !important;
+    white-space: nowrap;
+    border-radius: 0.25rem;
+}
+/* Navbar quick link active state (current page) */
+.navbar-quick-link.active {
+    background-color: var(--iq-primary, #32bdea) !important;
+    color: #fff !important;
+}
+.navbar-quick-link.active:hover {
+    background-color: var(--iq-primary, #32bdea) !important;
+    color: #fff !important;
+    opacity: 0.9;
+}
+
+/* Navbar: wrapper and collapse take remaining width so left/right menus can align */
+.iq-top-navbar .navbar .d-flex.align-items-center {
+    flex: 1 1 auto !important;
+    min-width: 0;
+}
+.iq-top-navbar .navbar-collapse {
+    flex: 1 1 auto !important;
+    min-width: 0;
+    display: flex !important;
+    justify-content: space-between !important;
+}
+
+/* Navbar: left menu (quick links) aligned left */
+.iq-top-navbar .navbar-left-menu {
+    margin-right: auto !important;
+}
+
+/* Navbar: right menu (Active Shop + User) aligned to far right with 10px from edge */
+.iq-top-navbar .navbar-right-menu {
+    margin-left: auto !important;
+    padding-right: 10px !important;
+}
+
+/* Sidebar: reduce top padding */
+.iq-sidebar {
+    padding-top: 6px !important;
+}
+
+/* Shop bank select: small pills for selected banks (Select2 multiselect) */
+.bank-select + .select2-container .select2-selection__choice {
+    padding: 0.3em 0.6em !important;
+    line-height: 1.3 !important;
+    font-size: 10px !important;
+    background-color: var(--iq-danger, #dc3545) !important;
+    border-radius: 50px !important;
+    border: none !important;
+    color: #fff !important;
+}
+.bank-select + .select2-container .select2-selection__choice__remove {
+    color: #fff !important;
+    margin-right: 0.25em;
 }
