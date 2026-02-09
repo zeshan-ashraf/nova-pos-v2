@@ -14,10 +14,15 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 use Haruncpi\LaravelIdGenerator\IdGenerator;
 use App\Support\ActiveShop;
+use App\Services\Stock\StockService;
 use App\Services\SupplierCreditService;
 
 class PurchaseController extends Controller
 {
+    public function __construct(
+        private StockService $stockService
+    ) {}
+
     /**
      * Display a listing of purchases.
      */
@@ -285,9 +290,14 @@ class PurchaseController extends Controller
 
                     PurchaseDetail::insert($purchaseDetailData);
 
-                    // Increase stock
-                    Product::where('id', $product['product_id'])
-                        ->update(['product_store' => DB::raw('product_store + ' . $product['quantity'])]);
+                    // Increase stock via ledger (StockService only; no direct stock math)
+                    $this->stockService->purchaseStock(
+                        $productModel,
+                        (int) $product['quantity'],
+                        (float) ($product['unit_price'] ?? 0),
+                        (int) $supplier->id,
+                        $purchase_id
+                    );
                 }
 
                 // 3. Create payment log if payment was made
@@ -451,18 +461,8 @@ class PurchaseController extends Controller
 
         try {
             DB::transaction(function () use ($purchase, $supplier, $creditService) {
-                // 1. Reverse stock for all purchase details
-                foreach ($purchase->purchaseDetails as $purchaseDetail) {
-                    $product = $purchaseDetail->product;
-                    
-                    if (!$product) {
-                        throw new \Exception("Product with ID {$purchaseDetail->product_id} not found. Cannot reverse stock.");
-                    }
-
-                    // Decrease stock (reverse the increase from purchase)
-                    Product::where('id', $purchaseDetail->product_id)
-                        ->update(['product_store' => DB::raw('product_store - ' . $purchaseDetail->quantity)]);
-                }
+                // 1. Reverse stock via ledger (append reversal logs; do not delete old logs)
+                $this->stockService->reverseStock('purchase', (string) $purchase->id);
 
                 // 2. Reverse supplier credit for pending amount (due)
                 if ($supplier && $purchase->due > 0) {

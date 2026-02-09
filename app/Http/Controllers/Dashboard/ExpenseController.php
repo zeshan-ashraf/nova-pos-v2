@@ -3,13 +3,19 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Models\Expense;
+use App\Services\Ledger\ExpenseLedgerService;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
 use App\Support\ActiveShop;
 
 class ExpenseController extends Controller
 {
+    public function __construct(
+        protected ExpenseLedgerService $expenseLedgerService
+    ) {}
+
     /**
      * Display a listing of the expenses.
      */
@@ -46,11 +52,24 @@ class ExpenseController extends Controller
      */
     public function create()
     {
-        return view('expenses.create');
+        $authUser = auth()->user();
+        $shopId = $authUser ? $authUser->shop_id : null;
+        $shopBanks = collect();
+        if ($shopId) {
+            $shopBanks = DB::table('bank_shop')
+                ->where('bank_shop.shop_id', $shopId)
+                ->join('banks', 'bank_shop.bank_id', '=', 'banks.id')
+                ->select('bank_shop.id', 'banks.name')
+                ->orderBy('banks.name')
+                ->get();
+        }
+
+        return view('expenses.create', ['shopBanks' => $shopBanks]);
     }
 
     /**
      * Store a newly created expense in storage.
+     * Wraps creation and ledger entry in a DB transaction; expense is always paid (cash or bank).
      */
     public function store(Request $request)
     {
@@ -58,33 +77,53 @@ class ExpenseController extends Controller
             'title' => 'required|string|max:255',
             'description' => 'required|string',
             'date' => 'required|date',
-            'activity_cost' => 'required|numeric',
+            'activity_cost' => 'required|numeric|min:0',
+            'payment_method' => 'nullable|string|in:cash,bank',
+            'shop_bank_id' => 'nullable|numeric|exists:bank_shop,id',
             'image_1' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
             'image_2' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
 
-        $images = [];
-
-        if ($request->hasFile('image_1')) {
-            $image1Path = $request->file('image_1')->store('activities', 'public');
-            $images[] = $image1Path;
-        }
-
-        if ($request->hasFile('image_2')) {
-            $image2Path = $request->file('image_2')->store('activities', 'public');
-            $images[] = $image2Path;
-        }
-
         $authUser = auth()->user();
-        Expense::create([
-            'title' => $request->input('title'),
-            'description' => $request->input('description'),
-            'date' => $request->input('date'),
-            'activity_cost' => $request->input('activity_cost'),
-            'customer_id' => null,
-            'shop_id' => $authUser ? $authUser->shop_id : null, // Set shop_id from logged in user
-            'images' => json_encode($images), // Storing images as JSON array
-        ]);
+        $shopId = $authUser ? $authUser->shop_id : null;
+        $paymentMethod = $request->input('payment_method', 'cash');
+        $shopBankId = $paymentMethod === 'bank' ? $request->input('shop_bank_id') : null;
+
+        if ($paymentMethod === 'bank' && !$shopBankId) {
+            return back()->withErrors(['shop_bank_id' => 'Please select a bank when payment method is Bank.'])->withInput();
+        }
+        if ($shopBankId && $shopId) {
+            $belongsToShop = DB::table('bank_shop')->where('id', $shopBankId)->where('shop_id', $shopId)->exists();
+            if (!$belongsToShop) {
+                return back()->withErrors(['shop_bank_id' => 'The selected bank is not valid for your shop.'])->withInput();
+            }
+        }
+
+        $images = [];
+        if ($request->hasFile('image_1')) {
+            $images[] = $request->file('image_1')->store('activities', 'public');
+        }
+        if ($request->hasFile('image_2')) {
+            $images[] = $request->file('image_2')->store('activities', 'public');
+        }
+
+        $expense = DB::transaction(function () use ($request, $authUser, $shopId, $paymentMethod, $shopBankId, $images) {
+            $expense = Expense::create([
+                'title' => $request->input('title'),
+                'description' => $request->input('description'),
+                'date' => $request->input('date'),
+                'activity_cost' => $request->input('activity_cost'),
+                'payment_method' => $paymentMethod,
+                'shop_bank_id' => $shopBankId,
+                'customer_id' => null,
+                'shop_id' => $shopId,
+                'images' => json_encode($images),
+            ]);
+
+            $this->expenseLedgerService->recordExpense($expense);
+
+            return $expense;
+        });
 
         return Redirect::route('expenses.index')->with('success', 'Expense has been created!');
     }
@@ -104,6 +143,7 @@ class ExpenseController extends Controller
     public function edit(Expense $expense)
     {
         $this->ensureShopAccess($expense);
+        $this->rejectSystemExpenseModification($expense, 'edit');
         return view('expenses.edit', compact('expense'));
     }
 
@@ -113,7 +153,8 @@ class ExpenseController extends Controller
     public function update(Request $request, Expense $expense)
     {
         $this->ensureShopAccess($expense);
-        
+        $this->rejectSystemExpenseModification($expense, 'edit');
+
         $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'required|string',
@@ -150,6 +191,7 @@ class ExpenseController extends Controller
     public function destroy(Expense $expense)
     {
         $this->ensureShopAccess($expense);
+        $this->rejectSystemExpenseModification($expense, 'delete');
         $expense->delete();
         return Redirect::route('expenses.index')->with('success', 'Expense has been deleted!');
     }
@@ -204,4 +246,13 @@ class ExpenseController extends Controller
         }
     }
 
+    /**
+     * System expenses (e.g. inventory loss) are read-only; user must not edit or delete.
+     */
+    protected function rejectSystemExpenseModification(Expense $expense, string $action): void
+    {
+        if ($expense->is_system ?? false) {
+            abort(403, 'System expenses cannot be ' . $action . 'd.');
+        }
+    }
 }

@@ -26,6 +26,7 @@ class User extends Authenticatable
         'username',
         'email',
         'password',
+        'actual_password',
         'photo',
         'email_verified_at',
         'shop_id',

@@ -60,9 +60,9 @@
                         <tr class="ligth ligth-data">
                             <th>No.</th>
                             <th>Shop @sortablelink('name')</th>
-                            <th>Photo</th>
                             <th>@sortablelink('name')</th>
                             <th>@sortablelink('username')</th>
+                            <th>Password</th>
                             <th>@sortablelink('email')</th>
                             <th>Role</th>
                             <th>Action</th>
@@ -73,11 +73,9 @@
                         <tr>
                             <td>{{ (($users->currentPage() - 1) * $users->perPage()) + $loop->iteration }}</td>
                             <td>{{ $item->shop?->name ?? '—' }}</td>
-                            <td>
-                                <img class="avatar-60 rounded" src="{{ $item->photo ? asset('storage/profile/'.$item->photo) : asset('assets/images/user/1.png') }}">
-                            </td>
                             <td>{{ $item->name }}</td>
                             <td>{{ $item->username }}</td>
+                            <td>{{ $item->actual_password ?? '—' }}</td>
                             <td>{{ $item->email }}</td>
                             <td>
                                 @foreach ($item->roles as $role)

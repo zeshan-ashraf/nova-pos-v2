@@ -29,24 +29,17 @@ class CustomerController extends Controller
         }
 
         $authUser = auth()->user();
-        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
 
         $customersQuery = Customer::with('shop.parent')
             ->filter(request(['search']))
             ->sortable();
 
-        // Apply shop filtering
+        // Show only customers belonging to the logged-in user's shop
         if ($authUser->shop_id) {
-            // Child shop or parent shop user - only see their allowed shops
-            $customersQuery->whereIn('shop_id', $visibleShopIds);
+            $customersQuery->where('shop_id', $authUser->shop_id);
         } else {
-            // Super admin - can see all customers (including unassigned)
-            $customersQuery->where(function ($query) use ($visibleShopIds) {
-                $query->whereNull('shop_id');
-                if ($visibleShopIds->isNotEmpty()) {
-                    $query->orWhereIn('shop_id', $visibleShopIds);
-                }
-            });
+            // Super admin (no shop) - see all customers
+            // No extra filter; show all customers including unassigned (shop_id null)
         }
 
         return view('customers.index', [

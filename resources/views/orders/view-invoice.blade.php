@@ -289,6 +289,12 @@
                                 <span class="summary-label">Payment Method:</span>
                                 <span class="summary-value text-capitalize">{{ $order->payment_status ?? 'N/A' }}</span>
                             </div>
+                            @if(in_array(strtolower($order->payment_status ?? ''), ['bank', 'cheque']) && !empty($paymentBankName ?? null))
+                            <div class="summary-row">
+                                <span class="summary-label">Bank:</span>
+                                <span class="summary-value">{{ $paymentBankName }}</span>
+                            </div>
+                            @endif
                             <div class="summary-row">
                                 <span class="summary-label">Payment Amount:</span>
                                 <span class="summary-value">{{ number_format($order->pay ?? 0, 2) }}</span>

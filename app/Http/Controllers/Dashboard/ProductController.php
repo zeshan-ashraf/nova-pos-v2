@@ -71,12 +71,17 @@ class ProductController extends Controller
 
     /**
      * Show the form for creating a new resource.
+     * Categories: only those belonging to current user's shop (or active shop for super admin).
      */
     public function create()
     {
+        $shopId = auth()->user()->shop_id ?? (ActiveShop::current()?->id);
+        $categories = $shopId
+            ? Category::where('shop_id', $shopId)->orderBy('name')->get()
+            : Category::whereNull('shop_id')->orderBy('name')->get();
+
         return view('products.create', [
-            'categories' => Category::all(),
-            // 'suppliers' => Supplier::all(), // Supplier field removed from UI
+            'categories' => $categories,
         ]);
     }
 
@@ -215,10 +220,14 @@ class ProductController extends Controller
     {
         $this->ensureShopAccess($product);
 
+        $shopId = auth()->user()->shop_id ?? (ActiveShop::current()?->id);
+        $categories = $shopId
+            ? Category::where('shop_id', $shopId)->orderBy('name')->get()
+            : Category::whereNull('shop_id')->orderBy('name')->get();
+
         return view('products.edit', [
-            'categories' => Category::all(),
-            // 'suppliers' => Supplier::all(), // Supplier field removed from UI
-            'product' => $product
+            'categories' => $categories,
+            'product'   => $product,
         ]);
     }
 

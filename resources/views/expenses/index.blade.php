@@ -72,6 +72,7 @@
                             <th>@sortablelink('description', 'Description')</th>
                             <th>@sortablelink('date', 'Date')</th>
                             <th>@sortablelink('activity_cost', 'Cost')</th>
+                            <th>Type</th>
                             <th>Action</th>
                         </tr>
                     </thead>
@@ -84,22 +85,31 @@
                                 <td>{{ $expense->date }}</td>
                                 <td>{{ $expense->activity_cost }}</td>
                                 <td>
-                                    <form action="{{ route('expenses.destroy', $expense->id) }}" method="POST" style="margin-bottom: 5px">
-                                        @method('delete')
-                                        @csrf
-                                        <div class="d-flex align-items-center list-action">
-                                            <a class="btn btn-info mr-2" data-toggle="tooltip" data-placement="top" title="View"
-                                               href="{{ route('expenses.show', $expense->id) }}"><i class="ri-eye-line mr-0"></i></a>
-                                            <a class="btn btn-success mr-2" data-toggle="tooltip" data-placement="top" title="Edit"
-                                               href="{{ route('expenses.edit', $expense->id) }}"><i class="ri-pencil-line mr-0"></i></a>
+                                    @if($expense->is_system ?? false)
+                                        <span class="badge badge-secondary">System</span>
+                                    @else
+                                        <span class="badge badge-primary">Manual</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center list-action">
+                                        <a class="btn btn-info mr-2" data-toggle="tooltip" data-placement="top" title="View"
+                                           href="{{ route('expenses.show', $expense->id) }}"><i class="ri-eye-line mr-0"></i></a>
+                                        @unless($expense->is_system ?? false)
+                                        <a class="btn btn-success mr-2" data-toggle="tooltip" data-placement="top" title="Edit"
+                                           href="{{ route('expenses.edit', $expense->id) }}"><i class="ri-pencil-line mr-0"></i></a>
+                                        <form action="{{ route('expenses.destroy', $expense->id) }}" method="POST" class="d-inline">
+                                            @method('delete')
+                                            @csrf
                                             <button type="submit" class="btn btn-warning mr-2 border-none" onclick="return confirm('Are you sure you want to delete this record?')" data-toggle="tooltip" data-placement="top" title="Delete"><i class="ri-delete-bin-line mr-0"></i></button>
-                                        </div>
-                                    </form>
+                                        </form>
+                                        @endunless
+                                    </div>
                                 </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="text-center">
+                                <td colspan="7" class="text-center">
                                     <div class="alert text-white bg-danger" role="alert">
                                         <div class="iq-alert-text">No Expenses Found.</div>
                                         <button type="button" class="close" data-dismiss="alert" aria-label="Close">
@@ -146,19 +156,15 @@
                             var serialNumber = (currentPage - 1) * perPage + index + 1;
                             var truncatedDescription = expense.description.length > 20 ? expense.description.substring(0, 20) + '...' : expense.description;
 
-                            var actionButtons = `
-                                <div class="d-flex align-items-center list-action">
-                                    <a class="btn btn-info mr-2" data-toggle="tooltip" data-placement="top" title="View" href="/expenses/${expense.id}">
-                                        <i class="ri-eye-line mr-0"></i>
-                                    </a>
-                                    <a class="btn btn-success mr-2" data-toggle="tooltip" data-placement="top" title="Edit" href="/expenses/${expense.id}/edit">
-                                        <i class="ri-pencil-line mr-0"></i>
-                                    </a>
-                                    <button type="button" class="btn btn-warning mr-2" onclick="deleteExpense(${expense.id})" data-toggle="tooltip" data-placement="top" title="Delete">
-                                        <i class="ri-delete-bin-line mr-0"></i>
-                                    </button>
-                                </div>
-                            `;
+                            var isSystem = expense.is_system === true || expense.is_system === 1;
+                            var typeBadge = isSystem ? '<span class="badge badge-secondary">System</span>' : '<span class="badge badge-primary">Manual</span>';
+                            var actionButtons = '<div class="d-flex align-items-center list-action">' +
+                                '<a class="btn btn-info mr-2" data-toggle="tooltip" data-placement="top" title="View" href="/expenses/' + expense.id + '"><i class="ri-eye-line mr-0"></i></a>';
+                            if (!isSystem) {
+                                actionButtons += '<a class="btn btn-success mr-2" data-toggle="tooltip" data-placement="top" title="Edit" href="/expenses/' + expense.id + '/edit"><i class="ri-pencil-line mr-0"></i></a>' +
+                                    '<button type="button" class="btn btn-warning mr-2" onclick="deleteExpense(' + expense.id + ')" data-toggle="tooltip" data-placement="top" title="Delete"><i class="ri-delete-bin-line mr-0"></i></button>';
+                            }
+                            actionButtons += '</div>';
 
                             var row = `
                                 <tr>
@@ -167,15 +173,14 @@
                                     <td>${truncatedDescription}</td>
                                     <td>${expense.date}</td>
                                     <td>${expense.activity_cost}</td>
-                                    <td>
-                                        ${actionButtons}
-                                    </td>
+                                    <td>${typeBadge}</td>
+                                    <td>${actionButtons}</td>
                                 </tr>
                             `;
                             $('#expense-table-body').append(row);
                         });
                     } else {
-                        expenseList.append('<tr><td colspan="6" class="text-center">No Expenses Found.</td></tr>');
+                        expenseList.append('<tr><td colspan="7" class="text-center">No Expenses Found.</td></tr>');
                     }
 
                     $('#pagination').html(response.expenses.links);

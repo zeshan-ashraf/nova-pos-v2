@@ -114,14 +114,38 @@
 <div class="modal fade bd-example-modal-lg" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <form action="{{ route('order.updateDue') }}" method="post">
+            <form action="{{ route('order.updateDue') }}" method="post" id="payDueForm">
                 @csrf
                 <input type="hidden" name="order_id" id="order_id">
                 <div class="modal-body">
                     <h3 class="modal-title text-center mx-auto">Pay Due</h3>
                     <div class="col-md-12">
                         <div class="form-group">
-                            <label for="due">Pay Now</label>
+                            <label for="due_payment_method">Payment Method <span class="text-danger">*</span></label>
+                            <select class="form-control bg-white @error('payment_method') is-invalid @enderror" id="due_payment_method" name="payment_method" required>
+                                <option value="">Select Method</option>
+                                <option value="cash">Cash</option>
+                                <option value="bank">Bank</option>
+                                <option value="cheque">Cheque</option>
+                            </select>
+                            @error('payment_method')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                        </div>
+                        <div class="form-group due-bank-row" id="due_bank_row" style="display: none;">
+                            <label for="due_shop_bank_id">Select Bank <span class="text-danger">*</span></label>
+                            <select class="form-control bg-white @error('shop_bank_id') is-invalid @enderror" id="due_shop_bank_id" name="shop_bank_id">
+                                <option value="">Select Bank</option>
+                                @foreach($shopBanks ?? [] as $sb)
+                                <option value="{{ $sb->id }}">{{ $sb->name }}</option>
+                                @endforeach
+                            </select>
+                            @error('shop_bank_id')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                        </div>
+                        <div class="form-group">
+                            <label for="due">Pay Now <span class="text-danger">*</span></label>
                             <input type="text" class="form-control bg-white @error('due') is-invalid @enderror" id="due" name="due">
                             @error('due')
                             <div class="invalid-feedback">
@@ -179,15 +203,40 @@
     function payDue(id){
         $.ajax({
             type: 'GET',
-            //url : '/order/due/' + id,
             url: orderDueUrl.replace(':id', id), 
             dataType: 'json',
             success: function(data) {
                 $('#due').val(data.due);
                 $('#order_id').val(data.id);
+                $('#due_payment_method').val('');
+                $('#due_shop_bank_id').val('').prop('required', false);
+                $('#due_bank_row').hide();
             }
         });
     }
+
+    $(document).on('change', '#due_payment_method', function() {
+        var method = $(this).val();
+        if (method === 'bank' || method === 'cheque') {
+            $('#due_bank_row').show();
+            $('#due_shop_bank_id').prop('required', true);
+        } else {
+            $('#due_bank_row').hide();
+            $('#due_shop_bank_id').prop('required', false).val('');
+        }
+    });
+
+    $('#payDueForm').on('submit', function(e) {
+        var method = $('#due_payment_method').val();
+        if (method === 'bank' || method === 'cheque') {
+            if (!$('#due_shop_bank_id').val()) {
+                e.preventDefault();
+                alert('Please select a bank.');
+                $('#due_shop_bank_id').focus();
+                return false;
+            }
+        }
+    });
     
     function showCompleteOrderModal(orderId, invoiceNo) {
         $('#completeOrderId').val(orderId);

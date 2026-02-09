@@ -64,27 +64,13 @@
                                 <div class="col-sm-6 text-end mb-50">
                                     <h4 class="inv-title-1">Details</h4>
                                     <p class="inv-from-1">Payment Status: {{ $order->payment_status }}</p>
+                                    @if(in_array(strtolower($order->payment_status ?? ''), ['bank', 'cheque']) && !empty($paymentBankName ?? null))
+                                    <p class="inv-from-1">Bank: {{ $paymentBankName }}</p>
+                                    @endif
                                     <p class="inv-from-1">Total Pay: {{ $order->pay }}</p>
                                     <p class="inv-from-1">Due: {{ $order->due }}</p>
                                 </div>
                             </div>
-                            @if ($order->payment_status === 'Bank')
-                            <div class="row">
-                                <div class="col-sm-12 mb-30">
-                                    <h4 class="inv-title-1">Bank Information</h4>
-                                    @if($order->shop && $order->shop->banks->isNotEmpty())
-                                        <p class="inv-from-1 mb-1">Shop: {{ $order->shop->name }}</p>
-                                        <ul class="mb-0">
-                                            @foreach($order->shop->banks as $bank)
-                                                <li>{{ $bank->name }}</li>
-                                            @endforeach
-                                        </ul>
-                                    @else
-                                        <p class="inv-from-1 text-muted mb-0">No bank information available for this shop.</p>
-                                    @endif
-                                </div>
-                            </div>
-                            @endif
                             @if($shop && $shop->invoice_policy)
                             <div class="row">
                                 <div class="col-sm-12 mb-30">

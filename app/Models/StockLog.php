@@ -7,7 +7,23 @@ use Illuminate\Database\Eloquent\Model;
 
 class StockLog extends Model
 {
-    protected $fillable = ['product_id', 'supplier_id', 'stock_qty', 'price'];
+    protected $casts = [
+        'adjustment_date' => 'datetime',
+    ];
+
+    protected $fillable = [
+        'shop_id',
+        'product_id',
+        'supplier_id',
+        'qty',            // positive integer only; direction controls in/out
+        'stock_qty',      // legacy signed column (optional)
+        'direction',      // 'in' | 'out'
+        'source_type',    // opening, purchase, sale, purchase_return, sale_return, adjustment, loss
+        'source_id',      // e.g. order_id, purchase_id (nullable for opening/adjustment)
+        'price',
+        'reason',
+        'adjustment_date',
+    ];
 
     public function product()
     {

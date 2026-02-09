@@ -74,6 +74,33 @@
                         </div>
                         <!-- end: Input Date and Cost -->
 
+                        <!-- begin: Payment method and Bank -->
+                        <div class="form-group row">
+                            <div class="col-md-6">
+                                <label for="payment_method">Payment Method <span class="text-danger">*</span></label>
+                                <select class="form-control @error('payment_method') is-invalid @enderror" id="payment_method" name="payment_method">
+                                    <option value="cash" {{ old('payment_method', 'cash') == 'cash' ? 'selected' : '' }}>Cash</option>
+                                    <option value="bank" {{ old('payment_method') == 'bank' ? 'selected' : '' }}>Bank</option>
+                                </select>
+                                @error('payment_method')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                            <div class="col-md-6" id="shop_bank_group" style="display: {{ old('payment_method') == 'bank' ? 'block' : 'none' }};">
+                                <label for="shop_bank_id">Bank Account</label>
+                                <select class="form-control @error('shop_bank_id') is-invalid @enderror" id="shop_bank_id" name="shop_bank_id">
+                                    <option value="">Select bank</option>
+                                    @foreach($shopBanks ?? [] as $bank)
+                                    <option value="{{ $bank->id }}" {{ old('shop_bank_id') == $bank->id ? 'selected' : '' }}>{{ $bank->name }}</option>
+                                    @endforeach
+                                </select>
+                                @error('shop_bank_id')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        </div>
+                        <!-- end: Payment method and Bank -->
+
                         <!-- begin: Input Images -->
                         <div class="form-group row">
                             <div class="col-md-6">
@@ -124,6 +151,13 @@
     $('#date').datepicker({
         uiLibrary: 'bootstrap4',
         format: 'yyyy-mm-dd'
+    });
+
+    // Toggle bank dropdown when payment method changes
+    $('#payment_method').on('change', function() {
+        var isBank = $(this).val() === 'bank';
+        $('#shop_bank_group').toggle(isBank);
+        if (!isBank) $('#shop_bank_id').val('');
     });
 
     // Preview Images Function

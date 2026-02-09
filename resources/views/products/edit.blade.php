@@ -67,9 +67,14 @@
                                 @enderror
                             </div>
                             <div class="form-group col-md-6">
-                                <label for="category_id">Category <span class="text-danger">*</span></label>
-                                <select class="form-control" name="category_id" required>
-                                    <option selected="" disabled>-- Select Category --</option>
+                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <label for="category_id" class="mb-0">Category <span class="text-danger">*</span></label>
+                                    @can('category.menu')
+                                    <button type="button" class="btn btn-sm btn-outline-primary" data-toggle="modal" data-target="#addCategoryModalProduct">Add Category</button>
+                                    @endcan
+                                </div>
+                                <select class="form-control" id="category_id" name="category_id" required>
+                                    <option value="" disabled>-- Select Category --</option>
                                     @foreach ($categories as $category)
                                         <option value="{{ $category->id }}" {{ old('category_id', $product->category_id) == $category->id ? 'selected' : '' }}>{{ $category->name }}</option>
                                     @endforeach
@@ -191,4 +196,111 @@
 </script>
 
 @include('components.preview-img-form')
+
+@can('category.menu')
+{{-- Add Category modal (AJAX) - on success close after 5s and select new category --}}
+<div class="modal fade" id="addCategoryModalProduct" tabindex="-1" role="dialog" aria-labelledby="addCategoryModalProductLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addCategoryModalProductLabel">Add Category</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="add-category-error-product" class="alert alert-danger d-none" role="alert"></div>
+                <div id="add-category-success-product" class="alert alert-success d-none" role="alert"></div>
+                <form id="add-category-form-product">
+                    @csrf
+                    <div class="form-group">
+                        <label for="category_name_product">Category Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="category_name_product" name="name" required placeholder="Enter category name">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="add-category-submit-product">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    var modal = $('#addCategoryModalProduct');
+    var successEl = document.getElementById('add-category-success-product');
+    var errorEl = document.getElementById('add-category-error-product');
+    var selectEl = document.getElementById('category_id');
+
+    function showSuccess(msg) {
+        errorEl.classList.add('d-none');
+        successEl.textContent = msg || '';
+        successEl.classList.toggle('d-none', !msg);
+    }
+    function showError(msg) {
+        successEl.classList.add('d-none');
+        errorEl.textContent = msg || '';
+        errorEl.classList.toggle('d-none', !msg);
+    }
+
+    document.getElementById('add-category-submit-product').addEventListener('click', function() {
+        var name = document.getElementById('category_name_product').value.trim();
+        if (!name) {
+            showError('Category name is required.');
+            return;
+        }
+        showError('');
+        this.disabled = true;
+        var token = document.querySelector('#add-category-form-product input[name="_token"]').value;
+        fetch('{{ route("categories.store") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': token
+            },
+            body: JSON.stringify({ name: name, _token: token })
+        })
+        .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+        .then(function(res) {
+            if (res.ok && res.data.success && res.data.category) {
+                var cat = res.data.category;
+                showSuccess(res.data.message || 'Category has been created!');
+                var opt = document.createElement('option');
+                opt.value = cat.id;
+                opt.textContent = cat.name;
+                opt.selected = true;
+                selectEl.appendChild(opt);
+                selectEl.value = cat.id;
+                var closeTimer = setTimeout(function() {
+                    modal.modal('hide');
+                    showSuccess('');
+                    showError('');
+                    document.getElementById('category_name_product').value = '';
+                }, 5000);
+                modal.one('hidden.bs.modal', function() {
+                    clearTimeout(closeTimer);
+                });
+            } else {
+                showError(res.data.message || (res.data.errors && Object.values(res.data.errors).flat().join(' ')) || 'Request failed.');
+            }
+        })
+        .catch(function() {
+            showError('Network error. Please try again.');
+        })
+        .finally(function() {
+            document.getElementById('add-category-submit-product').disabled = false;
+        });
+    });
+
+    modal.on('hidden.bs.modal', function() {
+        showSuccess('');
+        showError('');
+        document.getElementById('category_name_product').value = '';
+    });
+})();
+</script>
+@endcan
 @endsection

@@ -88,6 +88,18 @@
             padding: 10px 0;
             font-size: 16px;
         }
+        .payment-row-inline {
+            display: flex !important;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px 15px;
+        }
+        .payment-row-inline .summary-label {
+            margin-right: 0;
+        }
+        .bank-inline-wrap {
+            display: inline-block;
+        }
         .summary-row.total {
             font-size: 20px;
             font-weight: bold;
@@ -218,7 +230,7 @@
                                                         data-credit-limit="{{ $customer->credit_limit ?? 0 }}" 
                                                         data-credit-amount="{{ $customer->credit_amount ?? 0 }}"
                                                         data-is-walkin="{{ $customer->is_walkin ?? 0 }}">
-                                                        {{ $customer->shopname ?: $customer->name }}
+                                                        {{ $customer->name ?: $customer->shopname }}
                                                     </option>
                                                 @endforeach
                                             </select>
@@ -259,7 +271,7 @@
                                                         data-credit-limit="{{ $customer->credit_limit ?? 0 }}" 
                                                         data-credit-amount="{{ $customer->credit_amount ?? 0 }}"
                                                         data-is-walkin="{{ $customer->is_walkin ?? 0 }}">
-                                                        {{ $customer->shopname ?: $customer->name }}
+                                                        {{ $customer->name ?: $customer->shopname }}
                                                     </option>
                                                 @endforeach
                                             </select>
@@ -467,24 +479,58 @@
                                     <span class="summary-value" id="invoice_total">0.00</span>
                                     <input type="hidden" name="invoice_total" id="invoice_total_hidden" value="0">
                                 </div>
-                                <div class="summary-row" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #dee2e6;">
-                                    <span class="summary-label">Payment Method <span class="text-danger">*</span>:</span>
-                                    <select class="form-control d-inline-block" id="payment_status" name="payment_status" required style="width: 150px; display: inline-block;">
+                                <div class="summary-row payment-row-inline" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #dee2e6;">
+                                    <span class="summary-label">Payment 1 <span class="text-danger">*</span></span>
+                                    <select class="form-control d-inline-block payment-method-select" id="payment_method_1" name="payment_method_1" required style="width: 130px;">
                                         <option value="">Select Method</option>
                                         <option value="cash">Cash</option>
                                         <option value="bank">Bank</option>
                                         <option value="cheque">Cheque</option>
                                         <option value="credit">Credit</option>
                                     </select>
+                                    <span class="bank-inline-wrap" id="bank_select_row_1" style="display: none;">
+                                        <select class="form-control d-inline-block" id="shop_bank_id_1" name="shop_bank_id_1" style="width: 180px;">
+                                            <option value="">Select Bank</option>
+                                            @foreach($shopBanks ?? [] as $sb)
+                                            <option value="{{ $sb->id }}">{{ $sb->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </span>
+                                    <span class="summary-label ml-2">Amount:</span>
+                                    <input type="number" step="0.01" class="form-control d-inline-block" id="pay_1" name="pay_1" value="0" min="0" style="width: 120px;">
                                 </div>
-                                <div class="summary-row">
-                                    <span class="summary-label">Payment Amount:</span>
-                                    <input type="number" step="0.01" class="form-control d-inline-block" id="pay" name="pay" value="0" min="0" style="width: 150px; display: inline-block;">
+                                <div class="summary-row payment-row-2 payment-row-inline mt-2" id="payment_row_2_block" style="display: none;">
+                                    <span class="summary-label">Payment 2</span>
+                                    <select class="form-control d-inline-block payment-method-select" id="payment_method_2" name="payment_method_2" style="width: 130px;">
+                                        <option value="">Select Method</option>
+                                        <option value="cash">Cash</option>
+                                        <option value="bank">Bank</option>
+                                        <option value="cheque">Cheque</option>
+                                        <option value="credit">Credit</option>
+                                    </select>
+                                    <span class="bank-inline-wrap" id="bank_select_row_2" style="display: none;">
+                                        <select class="form-control d-inline-block" id="shop_bank_id_2" name="shop_bank_id_2" style="width: 180px;">
+                                            <option value="">Select Bank</option>
+                                            @foreach($shopBanks ?? [] as $sb)
+                                            <option value="{{ $sb->id }}">{{ $sb->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </span>
+                                    <span class="summary-label ml-2">Amount:</span>
+                                    <input type="number" step="0.01" class="form-control d-inline-block" id="pay_2" name="pay_2" value="0" min="0" style="width: 120px;">
+                                </div>
+                                <div class="summary-row" style="margin-top: 15px; padding-top: 10px;">
+                                    <span class="summary-label">Payment Total (Pay):</span>
+                                    <span class="summary-value" id="pay_display">0.00</span>
+                                    <input type="hidden" name="pay" id="pay_hidden" value="0">
                                 </div>
                                 <div class="summary-row">
                                     <span class="summary-label">Due Amount:</span>
                                     <span class="summary-value" id="due_display">0.00</span>
                                     <input type="hidden" name="due" id="due_hidden" value="0">
+                                </div>
+                                <div id="payment_validation_error" class="alert alert-danger mt-3 mb-0" role="alert" style="display: none;">
+                                    <i class="ri-error-warning-line mr-2"></i><span id="payment_validation_error_text"></span>
                                 </div>
                             </div>
                         </div>
@@ -678,7 +724,7 @@
             console.log('Checking required fields:');
             console.log('  customer_id:', $('#customer_id').val(), 'Required:', $('#customer_id').prop('required'));
             console.log('  order_date:', $('#order_date').val(), 'Required:', $('#order_date').prop('required'));
-            console.log('  payment_status:', $('#payment_status').val(), 'Required:', $('#payment_status').prop('required'));
+            console.log('  payment_method_1:', $('#payment_method_1').val(), 'Required:', $('#payment_method_1').prop('required'));
             
             // Check products
             let productCount = 0;
@@ -968,11 +1014,15 @@
         calculateInvoiceTotal();
     });
 
-    // Handle payment amount change
-    $(document).on('input', '#pay', function() {
+    // Handle payment amount changes – clear validation error when user edits
+    $(document).on('input', '#pay_1', function() {
+        clearPaymentError();
         calculateDue();
     });
-
+    $(document).on('input', '#pay_2', function() {
+        clearPaymentError();
+        calculateDue();
+    });
     // Calculate invoice total
     function calculateInvoiceTotal() {
         let subtotal = 0;
@@ -989,27 +1039,80 @@
         $('#invoice_total').text(invoiceTotal.toFixed(2));
         $('#invoice_total_hidden').val(invoiceTotal.toFixed(2));
         
-        // If payment method is cash, auto-update payment amount
-        const paymentMethod = $('#payment_status').val();
-        if (paymentMethod === 'cash') {
-            $('#pay').val(invoiceTotal.toFixed(2));
+        // If payment method 1 is cash/bank/cheque, auto-fill first amount with invoice total
+        const method1 = $('#payment_method_1').val();
+        if (method1 === 'cash' || method1 === 'bank' || method1 === 'cheque') {
+            $('#pay_1').val(invoiceTotal.toFixed(2));
         }
-        
+
         calculateDue();
     }
 
-    // Calculate due amount
+    function showPaymentError(msg) {
+        $('#payment_validation_error_text').text(msg);
+        $('#payment_validation_error').show();
+    }
+    function clearPaymentError() {
+        $('#payment_validation_error').hide();
+        $('#payment_validation_error_text').text('');
+    }
+
+    // Calculate due amount (pay = pay_1 + pay_2, due = total - pay)
     function calculateDue() {
         const invoiceTotal = parseFloat($('#invoice_total_hidden').val()) || 0;
-        const pay = parseFloat($('#pay').val()) || 0;
+        const pay1 = parseFloat($('#pay_1').val()) || 0;
+        const pay2 = parseFloat($('#pay_2').val()) || 0;
+        const pay = pay1 + pay2;
         const due = Math.max(0, invoiceTotal - pay);
         
+        $('#pay_display').text(pay.toFixed(2));
+        $('#pay_hidden').val(pay.toFixed(2));
         $('#due_display').text(due.toFixed(2));
         $('#due_hidden').val(due.toFixed(2));
         
-        // Check credit limit
         checkCreditLimit(due);
     }
+
+    // Payment method 1 change: credit hides row 2; cash/bank/cheque show row 2 and bank (if bank/cheque), auto-fill amount
+    $(document).on('change', '#payment_method_1', function() {
+        clearPaymentError();
+        const method = $(this).val();
+        const invoiceTotal = parseFloat($('#invoice_total_hidden').val()) || 0;
+        if (method === 'credit') {
+            $('#payment_row_2_block').hide();
+            $('#pay_2').val('0');
+            $('#payment_method_2').val('');
+            $('#shop_bank_id_2').val('');
+            $('#bank_select_row_2').hide();
+            $('#bank_select_row_1').hide();
+            $('#shop_bank_id_1').val('').prop('required', false);
+        } else if (method === 'bank' || method === 'cheque') {
+            $('#bank_select_row_1').show();
+            $('#shop_bank_id_1').prop('required', true);
+            $('#pay_1').val(invoiceTotal.toFixed(2));
+            $('#payment_row_2_block').show();
+        } else if (method === 'cash') {
+            $('#bank_select_row_1').hide();
+            $('#shop_bank_id_1').val('').prop('required', false);
+            $('#pay_1').val(invoiceTotal.toFixed(2));
+            $('#payment_row_2_block').show();
+        }
+        calculateDue();
+    });
+
+    // Payment method 2 change: show/hide bank dropdown for row 2
+    $(document).on('change', '#payment_method_2', function() {
+        clearPaymentError();
+        const method = $(this).val();
+        if (method === 'bank' || method === 'cheque') {
+            $('#bank_select_row_2').show();
+            $('#shop_bank_id_2').prop('required', true);
+        } else {
+            $('#bank_select_row_2').hide();
+            $('#shop_bank_id_2').val('').prop('required', false);
+        }
+        calculateDue();
+    });
     
     // Check credit limit and show warning
     function checkCreditLimit(dueAmount) {
@@ -1184,18 +1287,6 @@
         calculateDue();
     });
     
-    // Handle payment status change
-    $(document).on('change', '#payment_status', function() {
-        const paymentMethod = $(this).val();
-        
-        // If payment method is cash, auto-populate payment amount with invoice total
-        if (paymentMethod === 'cash') {
-            const invoiceTotal = parseFloat($('#invoice_total_hidden').val()) || 0;
-            $('#pay').val(invoiceTotal.toFixed(2));
-        }
-        
-        calculateDue();
-    });
 
     // Add row function
     function addRow() {
@@ -1342,28 +1433,82 @@
             return false;
         }
 
-        const paymentStatus = $('#payment_status').val();
-        console.log('Payment status:', paymentStatus);
-        if (!paymentStatus) {
+        const paymentMethod1 = $('#payment_method_1').val();
+        if (!paymentMethod1) {
             e.preventDefault();
-            alert('Please select a payment method');
+            showPaymentError('Please select a payment method for Payment 1.');
+            $('#payment_method_1').focus();
             return false;
         }
 
-        // Validate: If payment method is cash, payment amount must equal invoice total
-        if (paymentStatus === 'cash') {
-            const invoiceTotal = parseFloat($('#invoice_total_hidden').val()) || 0;
-            const payAmount = parseFloat($('#pay').val()) || 0;
-            console.log('Invoice total:', invoiceTotal, 'Pay amount:', payAmount);
-            
-            if (Math.abs(payAmount - invoiceTotal) > 0.01) {
+        const invoiceTotal = parseFloat($('#invoice_total_hidden').val()) || 0;
+        const pay1 = parseFloat($('#pay_1').val()) || 0;
+        const pay2 = parseFloat($('#pay_2').val()) || 0;
+        const payTotal = pay1 + pay2;
+        const paymentMethod2 = $('#payment_method_2').val();
+        const method1NonCredit = ['cash','bank','cheque'].indexOf(paymentMethod1) !== -1;
+        const method2NonCredit = paymentMethod2 && ['cash','bank','cheque'].indexOf(paymentMethod2) !== -1;
+        const hasCredit = paymentMethod1 === 'credit' || paymentMethod2 === 'credit';
+
+        // Payment 1: bank/cheque requires bank selected
+        if (paymentMethod1 === 'bank' || paymentMethod1 === 'cheque') {
+            if (!$('#shop_bank_id_1').val()) {
                 e.preventDefault();
-                alert('Payment amount must equal invoice total when payment method is Cash.');
-                $('#pay').focus();
+                showPaymentError('Please select a bank for Payment 1.');
+                $('#shop_bank_id_1').focus();
                 return false;
             }
         }
 
+        // If second payment amount > 0, require method 2 and bank when bank/cheque
+        if (pay2 > 0) {
+            if (!paymentMethod2) {
+                e.preventDefault();
+                showPaymentError('Please select a payment method for Payment 2.');
+                $('#payment_method_2').focus();
+                return false;
+            }
+            if (paymentMethod2 === 'bank' || paymentMethod2 === 'cheque') {
+                if (!$('#shop_bank_id_2').val()) {
+                    e.preventDefault();
+                    showPaymentError('Please select a bank for Payment 2.');
+                    $('#shop_bank_id_2').focus();
+                    return false;
+                }
+            }
+        }
+
+        // Pay total cannot exceed invoice total
+        if (payTotal > invoiceTotal + 0.01) {
+            e.preventDefault();
+            showPaymentError('Pay amount total cannot exceed the invoice total.');
+            $('#pay_1').focus();
+            return false;
+        }
+
+        // When both payment methods are NOT Credit: pay total must equal invoice total
+        if (method1NonCredit && (pay2 <= 0 || method2NonCredit)) {
+            if (Math.abs(payTotal - invoiceTotal) > 0.01) {
+                e.preventDefault();
+                if (payTotal < invoiceTotal) {
+                    showPaymentError('Pay amount total is less than the invoice total. When pay total is less than the invoice total, one payment method must be Credit.');
+                } else {
+                    showPaymentError('Pay amount total must equal the invoice total when both payment methods are Cash, Bank or Cheque.');
+                }
+                $('#pay_1').focus();
+                return false;
+            }
+        }
+
+        // When pay total < invoice total, at least one method must be Credit
+        if (payTotal < invoiceTotal - 0.01 && !hasCredit) {
+            e.preventDefault();
+            showPaymentError('Pay amount total is less than the invoice total. One payment method must be Credit for the remaining due amount.');
+            $('#pay_1').focus();
+            return false;
+        }
+
+        clearPaymentError();
         console.log('Form validation passed, submitting...');
         
         // Log all form data before submission

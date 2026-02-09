@@ -70,7 +70,7 @@ class Shop extends Model
 
     public function banks(): BelongsToMany
     {
-        return $this->belongsToMany(Bank::class)->withTimestamps();
+        return $this->belongsToMany(Bank::class)->withPivot('id')->withTimestamps();
     }
 
     public function suppliers(): HasMany

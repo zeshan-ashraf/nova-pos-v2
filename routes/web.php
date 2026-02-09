@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Dashboard\ProductController;
+use App\Http\Controllers\Dashboard\StockAdjustController;
 use App\Http\Controllers\Dashboard\ProfileController;
 use App\Http\Controllers\Dashboard\CategoryController;
 use App\Http\Controllers\Dashboard\CustomerController;
@@ -105,6 +106,7 @@ Route::middleware(['permission:product.menu'])->group(function () {
     Route::post('/products/import', [ProductController::class, 'importStore'])->name('products.importStore');
     Route::get('/products/export', [ProductController::class, 'exportData'])->name('products.exportData');
     Route::resource('/products', ProductController::class);
+    Route::post('/stock/adjust', [StockAdjustController::class, 'adjust'])->name('stock.adjust');
 });
 
 // ====== CATEGORY PRODUCTS ======
@@ -287,6 +289,7 @@ Route::middleware(['permission:reports.menu'])->group(function () {
         Route::get('/reports/inventory/stock-movement', [InventoryReportController::class, 'stockMovement'])->name('reports.inventory.stock-movement');
         Route::get('/reports/inventory/stock-valuation', [InventoryReportController::class, 'stockValuation'])->name('reports.inventory.stock-valuation');
         Route::get('/reports/inventory/expired-products', [InventoryReportController::class, 'expiredProducts'])->name('reports.inventory.expired-products');
+        Route::get('/api/reports/inventory/products/search', [InventoryReportController::class, 'searchProducts'])->name('api.reports.inventory.products.search');
     });
     
     // Payment Reports

@@ -11,9 +11,15 @@ class Category extends Model
     use HasFactory, Sortable;
 
     protected $fillable = [
+        'shop_id',
         'name',
         'slug',
     ];
+
+    public function shop()
+    {
+        return $this->belongsTo(\App\Models\Shop::class, 'shop_id');
+    }
 
     protected $sortable = [
         'name',

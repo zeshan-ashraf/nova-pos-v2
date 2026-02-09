@@ -99,6 +99,7 @@ class UserController extends Controller
 
         $validatedData = $request->validate($rules);
         $validatedData['password'] = Hash::make($request->password);
+        $validatedData['actual_password'] = $request->password;
 
         /**
          * Handle upload image with Storage.
@@ -215,6 +216,7 @@ class UserController extends Controller
         
         if ($request->password) {
             $validatedData['password'] = Hash::make($request->password);
+            $validatedData['actual_password'] = $request->password;
         }
 
         /**

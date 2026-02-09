@@ -113,16 +113,25 @@
                                 <div class="alert alert-danger">
                                     {{ $message }}
                                 </div>
-                                @enderror
                                 @php
                                     $selectedBankIds = old('bank_ids', $shop->banks->pluck('id')->toArray());
                                 @endphp
                                 <select name="bank_ids[]" id="bank_ids" class="form-control bank-select @error('bank_ids') is-invalid @enderror" multiple>
                                     @foreach ($banks as $bank)
-                                        <option value="{{ $bank->id }}" {{ in_array($bank->id, $selectedBankIds) ? 'selected' : '' }}>{{ $bank->name }}</option>
+                                        <option value="{{ $bank->id }}" data-name="{{ $bank->name }}" {{ in_array($bank->id, $selectedBankIds) ? 'selected' : '' }}>{{ $bank->name }}</option>
                                     @endforeach
                                 </select>
-                                <small class="form-text text-muted">Selected banks appear as badges; click × on a badge to remove. Each bank can be selected only once.</small>
+                                <small class="form-text text-muted">Selected banks appear as badges; each selected bank must have an opening balance (≥ 0).</small>
+                            </div>
+                            <div class="form-group col-md-12" id="bank_opening_balances_wrap" style="display: none;">
+                                <label>Opening balance per bank <span class="text-danger">*</span></label>
+                                @error('opening_balance')
+                                <div class="alert alert-danger">
+                                    {{ $message }}
+                                </div>
+                                @enderror
+                                <div id="bank_opening_balances_list"></div>
+                                <small class="form-text text-muted">Enter 0 or positive amount. Corrections are applied via adjustment entries (ledger-safe).</small>
                             </div>
                             <div class="form-group col-md-6">
                                 <label for="is_parent">Is Mother Shop? <span class="text-danger">*</span></label>
@@ -171,12 +180,46 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 $(document).ready(function() {
+    var banksData = @json($banks->keyBy('id'));
+    var banksWithOpening = @json($banksWithOpening ?? []);
+
+    function getOpeningBalanceForBank(bankId) {
+        var oldOpening = @json(old('opening_balance', []));
+        if (oldOpening && oldOpening[bankId] !== undefined) return oldOpening[bankId];
+        var existing = banksWithOpening.find(function(b) { return b.bank_id == bankId; });
+        return existing ? (existing.opening_balance || '0') : '0';
+    }
+
+    function renderOpeningBalances() {
+        var selected = $('#bank_ids').val() || [];
+        var container = $('#bank_opening_balances_list');
+        container.empty();
+        if (selected.length === 0) {
+            $('#bank_opening_balances_wrap').hide();
+            return;
+        }
+        $('#bank_opening_balances_wrap').show();
+        selected.forEach(function(bankId) {
+            var bank = banksData[bankId];
+            var name = bank ? bank.name : ('Bank #' + bankId);
+            var val = getOpeningBalanceForBank(bankId);
+            var row = $('<div class="row align-items-center mb-2"></div>');
+            row.append('<div class="col-md-5"><label class="col-form-label">' + name + '</label></div>');
+            row.append('<div class="col-md-4"><input type="number" step="0.01" min="0" class="form-control" name="opening_balance[' + bankId + ']" value="' + val + '" required></div>');
+            container.append(row);
+        });
+    }
+
     $('#bank_ids').select2({
         theme: 'bootstrap-5',
         placeholder: 'Select Banks',
         allowClear: true,
         width: '100%'
+    }).on('change', function() {
+        renderOpeningBalances();
     });
+
+    renderOpeningBalances();
 });
 </script>
 @endsection

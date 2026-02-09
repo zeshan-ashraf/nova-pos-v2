@@ -17,8 +17,18 @@ class Expense extends Model
         'date',
         'images',
         'activity_cost',
+        'payment_method',
+        'shop_bank_id',
+        'category',
+        'is_system',
+        'linked_stock_log_id',
+        'reversal_of_expense_id',
         'customer_id',
         'shop_id',
+    ];
+
+    protected $casts = [
+        'is_system' => 'boolean',
     ];
 
     public function getImagesAttribute($value)

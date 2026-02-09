@@ -24,10 +24,17 @@ use Haruncpi\LaravelIdGenerator\IdGenerator;
 use App\Models\PaymentLog;
 use App\Support\ActiveShop;
 use App\Services\CustomerCreditService;
+use App\Services\SalePaymentLedgerService;
+use App\Services\Stock\StockService;
 use App\Services\SupplierCreditService;
+use InvalidArgumentException;
 
 class OrderController extends Controller
 {
+    public function __construct(
+        private StockService $stockService
+    ) {}
+
     /**
      * Display a listing of the resource.
      */
@@ -274,7 +281,9 @@ class OrderController extends Controller
     {
         $order = Order::with(['customer', 'shop.banks'])->findOrFail($order_id);
         $this->ensureShopAccess($order);
-        
+
+        $paymentBankName = $this->getPaymentBankNameForOrder($order);
+
         $orderDetails = OrderDetails::with('product')
                         ->where('order_id', $order_id)
                         ->orderBy('id', 'DESC')
@@ -283,6 +292,7 @@ class OrderController extends Controller
         return view('orders.view-invoice', [
             'order' => $order,
             'orderDetails' => $orderDetails,
+            'paymentBankName' => $paymentBankName,
         ]);
     }
 
@@ -322,7 +332,9 @@ class OrderController extends Controller
     {
         $order = Order::with(['customer', 'shop.banks'])->findOrFail($order_id);
         $this->ensureShopAccess($order);
-        
+
+        $paymentBankName = $this->getPaymentBankNameForOrder($order);
+
         $orderDetails = OrderDetails::with('product')
                         ->where('order_id', $order_id)
                         ->orderBy('id', 'DESC')
@@ -334,12 +346,36 @@ class OrderController extends Controller
             session()->forget(['print_order_id', 'open_print_tab']);
         }
 
-        // show data (only for debugging)
         return view('orders.invoice-order', [
             'order' => $order,
             'orderDetails' => $orderDetails,
             'shouldPrint' => $shouldPrint,
+            'paymentBankName' => $paymentBankName,
         ]);
+    }
+
+    /**
+     * Get the bank name used for this order's payment (from payment_logs.shop_bank_id).
+     * Returns null if payment method is not bank/cheque or no bank was recorded.
+     */
+    private function getPaymentBankNameForOrder(Order $order): ?string
+    {
+        if (!in_array(strtolower($order->payment_status ?? ''), ['bank', 'cheque'])) {
+            return null;
+        }
+
+        $log = PaymentLog::where('order_id', $order->id)
+            ->whereNotNull('shop_bank_id')
+            ->first();
+
+        if (!$log || !$log->shop_bank_id) {
+            return null;
+        }
+
+        return DB::table('bank_shop')
+            ->where('bank_shop.id', $log->shop_bank_id)
+            ->join('banks', 'bank_shop.bank_id', '=', 'banks.id')
+            ->value('banks.name');
     }
 
     public function pendingDue()
@@ -378,8 +414,11 @@ class OrderController extends Controller
             $ordersQuery->orderBy('created_at', 'desc')->orderBy('id', 'desc');
         }
 
+        $shopBanks = $this->getShopBanksByShopId($authUser->shop_id);
+
         return view('orders.pending-due', [
-            'orders' => $ordersQuery->paginate($row)->appends(request()->query())
+            'orders' => $ordersQuery->paginate($row)->appends(request()->query()),
+            'shopBanks' => $shopBanks,
         ]);
     }
 
@@ -395,7 +434,9 @@ class OrderController extends Controller
     {
         $rules = [
             'order_id' => 'required|numeric',
+            'payment_method' => 'required|string|in:cash,bank,cheque',
             'due' => 'required|numeric|min:1',
+            'shop_bank_id' => 'nullable|numeric|exists:bank_shop,id',
         ];
 
         $customMessages = [
@@ -403,6 +444,22 @@ class OrderController extends Controller
         ];
 
         $validatedData = $request->validate($rules, $customMessages);
+
+        $authUser = auth()->user();
+        if (in_array($validatedData['payment_method'], ['bank', 'cheque'])) {
+            if (empty($validatedData['shop_bank_id'])) {
+                return back()->withErrors(['shop_bank_id' => 'Please select a bank for this payment method.'])
+                    ->withInput();
+            }
+            $belongsToShop = DB::table('bank_shop')
+                ->where('id', $validatedData['shop_bank_id'])
+                ->where('shop_id', $authUser->shop_id)
+                ->exists();
+            if (!$belongsToShop) {
+                return back()->withErrors(['shop_bank_id' => 'The selected bank is not valid for your shop.'])
+                    ->withInput();
+            }
+        }
 
         $order = Order::findOrFail($request->order_id);
         $this->ensureShopAccess($order);
@@ -418,17 +475,25 @@ class OrderController extends Controller
 
         $paid_due = $mainDue - $validatedData['due'];
         $paid_pay = $mainPay + $validatedData['due'];
+        $shopBankId = isset($validatedData['shop_bank_id']) && $validatedData['shop_bank_id'] ? $validatedData['shop_bank_id'] : null;
 
-        DB::transaction(function () use ($order, $paid_due, $paid_pay, $validatedData, $creditService, $customer) {
+        DB::transaction(function () use ($order, $paid_due, $paid_pay, $validatedData, $creditService, $customer, $shopBankId) {
             $order->update([
                 'due' => $paid_due,
                 'pay' => $paid_pay,
             ]);
 
-            PaymentLog::create([
+            $paymentLogData = [
                 'order_id' => $order->id,
                 'amount_paid' => $validatedData['due'],
-            ]);
+                'type' => 'payment',
+                'payment_method' => $validatedData['payment_method'],
+            ];
+            if ($shopBankId !== null) {
+                $paymentLogData['shop_bank_id'] = $shopBankId;
+            }
+            $paymentLog = PaymentLog::create($paymentLogData);
+            app(SalePaymentLedgerService::class)->createFromPaymentLog($paymentLog->id);
 
             // Decrease customer credit by the paid amount
             if ($customer) {
@@ -593,18 +658,8 @@ class OrderController extends Controller
 
         try {
             DB::transaction(function () use ($order, $customer, $creditService) {
-                // 1. Reverse stock for all order details
-                foreach ($order->orderDetails as $orderDetail) {
-                    $product = $orderDetail->product;
-                    
-                    if (!$product) {
-                        throw new \Exception("Product with ID {$orderDetail->product_id} not found. Cannot reverse stock.");
-                    }
-
-                    // Add back the stock quantity
-                    Product::where('id', $orderDetail->product_id)
-                        ->update(['product_store' => DB::raw('product_store + ' . $orderDetail->quantity)]);
-                }
+                // 1. Reverse stock via ledger (append reversal logs; do not delete old logs)
+                $this->stockService->reverseStock('sale', (string) $order->id);
 
                 // 2. Reverse customer credit for pending amount (due)
                 if ($customer && $order->due > 0) {
@@ -708,12 +763,35 @@ class OrderController extends Controller
             }
         }
 
+        // Shop banks for payment method bank/cheque (auth user's shop_id only)
+        $shopBanks = $this->getShopBanksByShopId($authUser->shop_id);
+
         return view('orders.create-invoice', [
             'customers' => $customersQuery->orderBy('shopname')->get(),
             'products' => $productsQuery->orderBy('product_name')->get(),
             'childShops' => $childShops,
             'categories' => Category::orderBy('name')->get(),
+            'shopBanks' => $shopBanks,
         ]);
+    }
+
+    /**
+     * Get bank_shop options (id, bank name) for a shop. Uses auth user's shop_id only.
+     *
+     * @param int|null $shopId
+     * @return \Illuminate\Support\Collection
+     */
+    private function getShopBanksByShopId($shopId)
+    {
+        if (!$shopId) {
+            return collect();
+        }
+        return DB::table('bank_shop')
+            ->where('bank_shop.shop_id', $shopId)
+            ->join('banks', 'bank_shop.bank_id', '=', 'banks.id')
+            ->select('bank_shop.id', 'banks.name')
+            ->orderBy('banks.name')
+            ->get();
     }
 
     /**
@@ -846,24 +924,33 @@ class OrderController extends Controller
     }
 
     /**
-     * Create payment log entry (isolated function).
-     * 
+     * Create payment_log row and corresponding ledger entry (one-to-one).
+     * Must be called inside a DB transaction. If ledger creation fails, transaction rolls back.
+     *
      * @param int $orderId
      * @param float $amountPaid
      * @param string $paymentMethod
+     * @param int|null $shopBankId
      * @return void
      */
-    private function createPaymentLog($orderId, $amountPaid, $paymentMethod)
+    private function createPaymentLog($orderId, $amountPaid, $paymentMethod, $shopBankId = null): void
     {
-        // Only create payment log if amount is greater than 0 and not null
-        if ($amountPaid > 0 && $amountPaid !== null) {
-            PaymentLog::create([
-                'order_id' => $orderId,
-                'amount_paid' => $amountPaid,
-                'type' => 'payment',
-                'payment_method' => $paymentMethod,
-            ]);
+        if ($amountPaid <= 0 || $amountPaid === null) {
+            return;
         }
+
+        $data = [
+            'order_id' => $orderId,
+            'amount_paid' => $amountPaid,
+            'type' => 'payment',
+            'payment_method' => $paymentMethod,
+        ];
+        if ($shopBankId !== null) {
+            $data['shop_bank_id'] = $shopBankId;
+        }
+
+        $paymentLog = PaymentLog::create($data);
+        app(SalePaymentLedgerService::class)->createFromPaymentLog($paymentLog->id);
     }
 
     /**
@@ -876,15 +963,23 @@ class OrderController extends Controller
             'customer_id' => $request->input('customer_id'),
             'shop_id' => $request->input('shop_id'),
             'products_count' => count($request->input('products', [])),
-            'payment_status' => $request->input('payment_status'),
+            'payment_method_1' => $request->input('payment_method_1'),
         ]);
-        
+
+        $authUser = auth()->user();
+
         $rules = [
             'customer_id' => 'required_without:shop_id|nullable|numeric',
             'shop_id' => 'required_without:customer_id|nullable|numeric|exists:shops,id',
             'order_date' => 'required|date',
-            'payment_status' => 'required|string|in:cash,bank,cheque,credit',
-            'pay' => 'numeric|nullable|min:0',
+            'payment_method_1' => 'required|string|in:cash,bank,cheque,credit',
+            'pay_1' => 'required|numeric|min:0',
+            'shop_bank_id_1' => 'nullable|numeric|exists:bank_shop,id',
+            'payment_method_2' => 'nullable|string|in:cash,bank,cheque,credit',
+            'pay_2' => 'nullable|numeric|min:0',
+            'shop_bank_id_2' => 'nullable|numeric|exists:bank_shop,id',
+            'pay' => 'nullable|numeric|min:0',
+            'due' => 'nullable|numeric|min:0',
             'vat' => 'numeric|nullable|min:0',
             'invoice_discount' => 'numeric|nullable|min:0',
             'products' => 'required|array|min:1',
@@ -897,27 +992,58 @@ class OrderController extends Controller
 
         try {
             $validatedData = $request->validate($rules);
-            
+
             \Log::info('Invoice validation passed', ['products_count' => count($validatedData['products'])]);
-            
+
             // Filter out empty product entries (where product_id is empty or 0)
-            $validatedData['products'] = array_filter($validatedData['products'], function($product) {
+            $validatedData['products'] = array_filter($validatedData['products'], function ($product) {
                 return !empty($product['product_id']) && $product['product_id'] > 0;
             });
-            
+
             // Re-index array after filtering
             $validatedData['products'] = array_values($validatedData['products']);
-            
+
             // Validate that at least one product remains after filtering
             if (empty($validatedData['products'])) {
                 return back()->withErrors(['products' => 'Please add at least one product to the invoice.'])
                     ->withInput();
             }
+
+            // Payment 1: bank/cheque requires shop_bank_id_1 and must belong to user's shop
+            if (in_array($validatedData['payment_method_1'], ['bank', 'cheque'])) {
+                if (empty($validatedData['shop_bank_id_1'])) {
+                    return back()->withErrors(['shop_bank_id_1' => 'Please select a bank for Payment 1.'])
+                        ->withInput();
+                }
+                if (!DB::table('bank_shop')->where('id', $validatedData['shop_bank_id_1'])->where('shop_id', $authUser->shop_id)->exists()) {
+                    return back()->withErrors(['shop_bank_id_1' => 'The selected bank is not valid for your shop.'])
+                        ->withInput();
+                }
+            }
+
+            // Payment 2: when pay_2 > 0 and method is bank/cheque, require shop_bank_id_2
+            $pay2 = (float) ($validatedData['pay_2'] ?? 0);
+            if ($pay2 > 0 && in_array($validatedData['payment_method_2'] ?? '', ['bank', 'cheque'])) {
+                if (empty($validatedData['shop_bank_id_2'])) {
+                    return back()->withErrors(['shop_bank_id_2' => 'Please select a bank for Payment 2.'])
+                        ->withInput();
+                }
+                if (!DB::table('bank_shop')->where('id', $validatedData['shop_bank_id_2'])->where('shop_id', $authUser->shop_id)->exists()) {
+                    return back()->withErrors(['shop_bank_id_2' => 'The selected bank is not valid for your shop.'])
+                        ->withInput();
+                }
+            }
         } catch (\Illuminate\Validation\ValidationException $e) {
             return back()->withErrors($e->errors())->withInput();
         }
-        $payAmount = $validatedData['pay'] ?? 0;
-        $authUser = auth()->user();
+
+        $pay1 = (float) ($validatedData['pay_1'] ?? 0);
+        $pay2 = (float) ($validatedData['pay_2'] ?? 0);
+        $payAmount = $pay1 + $pay2;
+        $paymentMethod1 = $validatedData['payment_method_1'];
+        $paymentMethod2 = $validatedData['payment_method_2'] ?? null;
+        $shopBankId1 = !empty($validatedData['shop_bank_id_1']) ? (int) $validatedData['shop_bank_id_1'] : null;
+        $shopBankId2 = !empty($validatedData['shop_bank_id_2']) ? (int) $validatedData['shop_bank_id_2'] : null;
 
         // Route logic: Customer flow OR Shop transfer flow
         if (isset($validatedData['customer_id']) && $validatedData['customer_id']) {
@@ -960,16 +1086,21 @@ class OrderController extends Controller
             $pay = $payAmount;
             $due = max(0, $total - $pay);
 
-            // Validate: If payment method is cash, payment amount must equal invoice total
-            if ($validatedData['payment_status'] === 'cash' && abs($pay - $total) > 0.01) {
-                return back()->withErrors(['pay' => 'Payment amount must equal invoice total when payment method is Cash.'])
+            // When both payments are cash/bank/cheque (no credit), sum must equal invoice total
+            $method1NonCredit = in_array($paymentMethod1, ['cash', 'bank', 'cheque']);
+            $method2NonCredit = $paymentMethod2 && in_array($paymentMethod2, ['cash', 'bank', 'cheque']);
+            if ($method1NonCredit && $method2NonCredit && $pay2 > 0 && abs($pay - $total) > 0.01) {
+                return back()->withErrors(['pay_1' => 'When paying by Cash, Bank or Cheque only, the total of both amounts must equal the invoice total.'])
+                    ->withInput();
+            }
+            if ($method1NonCredit && $pay2 <= 0 && abs($pay1 - $total) > 0.01) {
+                return back()->withErrors(['pay_1' => 'Payment amount must equal the invoice total when using Cash, Bank or Cheque only.'])
                     ->withInput();
             }
 
-            // Determine order status: if due == 0, mark as complete, otherwise pending
+            // Determine order status: if due == 0, mark complete, otherwise pending
             $orderStatus = ($due == 0) ? 'complete' : 'pending';
 
-            // Prepare order data
             $orderData = [
                 'customer_id' => $validatedData['customer_id'],
                 'shop_id' => $authUser->shop_id,
@@ -981,76 +1112,69 @@ class OrderController extends Controller
                 'vat' => $vat,
                 'invoice_no' => $invoice_no,
                 'total' => $total,
-                'payment_status' => $validatedData['payment_status'],
+                'payment_status' => $paymentMethod1,
                 'pay' => $pay,
                 'due' => $due,
                 'comment' => $request->input('comment'),
             ];
 
             $order_id = null;
-            $paymentMethod = $validatedData['payment_status'];
-            // Create order, adjust credit, and create payment log in one transaction
-            DB::transaction(function () use (&$order_id, $orderData, $creditService, $customer, $due, $pay, $paymentMethod) {
-                $order = Order::create($orderData);
-                $order_id = $order->id;
-                
-                // Only add pending credit if due > 0
-                if ($due > 0) {
-                    $creditService->addPending($customer, $due);
-                }
-                
-                // Create payment log if payment amount > 0 (isolated function)
-                if ($pay > 0) {
-                    $this->createPaymentLog($order_id, $pay, $paymentMethod);
-                }
-            });
+            try {
+                DB::transaction(function () use (&$order_id, $orderData, $validatedData, $creditService, $customer, $due, $pay1, $pay2, $paymentMethod1, $paymentMethod2, $shopBankId1, $shopBankId2, $authUser) {
+                    $order = Order::create($orderData);
+                    $order_id = $order->id;
 
-            // Create order details and reduce stock
-            foreach ($validatedData['products'] as $product) {
-                if (empty($product['product_id'])) {
-                    continue;
-                }
+                    if ($due > 0) {
+                        $creditService->addPending($customer, $due);
+                    }
 
-                $productModel = Product::findOrFail($product['product_id']);
-                
-                // Validate product status and selling_price
-                if ($productModel->status !== 'active' || empty($productModel->selling_price) || $productModel->selling_price <= 0) {
-                    Order::where('id', $order_id)->delete();
-                    return back()->withErrors(['products' => "Product {$productModel->product_name} is not available for sale."])
-                        ->withInput();
-                }
-                
-                // Validate stock
-                if ($productModel->product_store < $product['quantity']) {
-                    Order::where('id', $order_id)->delete();
-                    return back()->withErrors(['products' => "Insufficient stock for product: {$productModel->product_name}. Available: {$productModel->product_store}"])
-                        ->withInput();
-                }
+                    if ($pay1 > 0) {
+                        $this->createPaymentLog($order_id, $pay1, $paymentMethod1, $shopBankId1);
+                    }
+                    if ($pay2 > 0 && $paymentMethod2) {
+                        $this->createPaymentLog($order_id, $pay2, $paymentMethod2, $shopBankId2);
+                    }
 
-                // Validate shop access for product
-                if ($authUser->shop_id && $productModel->shop_id !== $authUser->shop_id) {
-                    Order::where('id', $order_id)->delete();
-                    return back()->withErrors(['products' => "Product {$productModel->product_name} does not belong to your shop."])
-                        ->withInput();
-                }
+                    // Order details and stock (ledger-safe: StockService only)
+                    foreach ($validatedData['products'] as $product) {
+                        if (empty($product['product_id'])) {
+                            continue;
+                        }
 
-                // Create order detail
-                $orderDetailData = [
-                    'order_id' => $order_id,
-                    'product_id' => $product['product_id'],
-                    'quantity' => $product['quantity'],
-                    'unitcost' => $product['unit_price'],
-                    'item_discount' => $product['item_discount'] ?? 0,
-                    'total' => $product['total'],
-                    'created_at' => Carbon::now(),
-                    'updated_at' => Carbon::now(),
-                ];
+                        $productModel = Product::findOrFail($product['product_id']);
 
-                OrderDetails::insert($orderDetailData);
+                        if ($productModel->status !== 'active' || empty($productModel->selling_price) || $productModel->selling_price <= 0) {
+                            throw new \Exception("Product {$productModel->product_name} is not available for sale.");
+                        }
 
-                // Reduce stock
-                Product::where('id', $product['product_id'])
-                    ->update(['product_store' => DB::raw('product_store - ' . $product['quantity'])]);
+                        if ($authUser->shop_id && $productModel->shop_id !== $authUser->shop_id) {
+                            throw new \Exception("Product {$productModel->product_name} does not belong to your shop.");
+                        }
+
+                        $orderDetailData = [
+                            'order_id' => $order_id,
+                            'product_id' => $product['product_id'],
+                            'quantity' => $product['quantity'],
+                            'unitcost' => $product['unit_price'],
+                            'item_discount' => $product['item_discount'] ?? 0,
+                            'total' => $product['total'],
+                            'created_at' => Carbon::now(),
+                            'updated_at' => Carbon::now(),
+                        ];
+                        OrderDetails::insert($orderDetailData);
+
+                        $this->stockService->sellStock(
+                            $productModel,
+                            (int) $product['quantity'],
+                            (float) ($product['unit_price'] ?? $productModel->selling_price ?? 0),
+                            $order_id
+                        );
+                    }
+                });
+            } catch (InvalidArgumentException $e) {
+                return back()->withErrors(['products' => $e->getMessage()])->withInput();
+            } catch (\Exception $e) {
+                return back()->withErrors(['products' => $e->getMessage()])->withInput();
             }
 
             $warning = null;
@@ -1161,27 +1285,29 @@ class OrderController extends Controller
             $pay = $payAmount;
             $due = max(0, $total - $pay);
 
-            // Validate: If payment method is cash, payment amount must equal invoice total
-            if ($validatedData['payment_status'] === 'cash' && abs($pay - $total) > 0.01) {
-                return back()->withErrors(['pay' => 'Payment amount must equal invoice total when payment method is Cash.'])
+            $method1NonCredit = in_array($paymentMethod1, ['cash', 'bank', 'cheque']);
+            $method2NonCredit = $paymentMethod2 && in_array($paymentMethod2, ['cash', 'bank', 'cheque']);
+            if ($method1NonCredit && $method2NonCredit && $pay2 > 0 && abs($pay - $total) > 0.01) {
+                return back()->withErrors(['pay_1' => 'When paying by Cash, Bank or Cheque only, the total of both amounts must equal the invoice total.'])
+                    ->withInput();
+            }
+            if ($method1NonCredit && $pay2 <= 0 && abs($pay1 - $total) > 0.01) {
+                return back()->withErrors(['pay_1' => 'Payment amount must equal the invoice total when using Cash, Bank or Cheque only.'])
                     ->withInput();
             }
 
-            // Determine order status: if due == 0, mark as complete, otherwise pending
             $orderStatus = ($due == 0) ? 'complete' : 'pending';
 
             $order_id = null;
             $purchase_id = null;
-            $paymentMethod = $validatedData['payment_status'];
 
-            // All operations in transaction
             try {
                 DB::transaction(function () use (
-                    &$order_id, &$purchase_id, $validatedData, $motherShop, $childShop, $supplier, 
-                    $systemCustomer, $invoice_no, $subtotal, $totalProducts, $vat, $invoiceDiscount, 
-                    $total, $pay, $due, $authUser, $request, $creditService, $supplierCreditService, $paymentMethod, $orderStatus
+                    &$order_id, &$purchase_id, $validatedData, $motherShop, $childShop, $supplier,
+                    $systemCustomer, $invoice_no, $subtotal, $totalProducts, $vat, $invoiceDiscount,
+                    $total, $pay, $due, $authUser, $request, $creditService, $supplierCreditService, $orderStatus,
+                    $paymentMethod1, $paymentMethod2, $pay1, $pay2, $shopBankId1, $shopBankId2
                 ) {
-                    // 1. Create Order (Invoice)
                     $orderData = [
                         'customer_id' => $systemCustomer->id,
                         'shop_id' => $motherShop->id,
@@ -1193,7 +1319,7 @@ class OrderController extends Controller
                         'vat' => $vat,
                         'invoice_no' => $invoice_no,
                         'total' => $total,
-                        'payment_status' => $validatedData['payment_status'],
+                        'payment_status' => $paymentMethod1,
                         'pay' => $pay,
                         'due' => $due,
                         'comment' => $request->input('comment'),
@@ -1202,9 +1328,11 @@ class OrderController extends Controller
                     $order = Order::create($orderData);
                     $order_id = $order->id;
 
-                    // Create payment log if payment amount > 0 (isolated function)
-                    if ($pay > 0) {
-                        $this->createPaymentLog($order_id, $pay, $paymentMethod);
+                    if ($pay1 > 0) {
+                        $this->createPaymentLog($order_id, $pay1, $paymentMethod1, $shopBankId1);
+                    }
+                    if ($pay2 > 0 && $paymentMethod2) {
+                        $this->createPaymentLog($order_id, $pay2, $paymentMethod2, $shopBankId2);
                     }
 
                     // 2. Process products: Reduce mother shop stock, add/update child shop products
