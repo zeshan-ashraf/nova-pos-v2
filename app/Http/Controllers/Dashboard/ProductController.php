@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Illuminate\Support\Facades\Redirect;
 use App\Support\ActiveShop;
+use App\Services\ProductCodeService;
 
 use PhpOffice\PhpSpreadsheet\Writer\Xls;
 use Picqer\Barcode\BarcodeGeneratorHTML;
@@ -70,6 +71,15 @@ class ProductController extends Controller
     }
 
     /**
+     * Return a unique 4-char product code (1 capital + 3 alphanumeric). For "Generate Code" on create form.
+     */
+    public function generateCode()
+    {
+        $code = app(ProductCodeService::class)->generateUniqueCode();
+        return response()->json(['code' => $code]);
+    }
+
+    /**
      * Show the form for creating a new resource.
      * Categories: only those belonging to current user's shop (or active shop for super admin).
      */
@@ -107,8 +117,9 @@ class ProductController extends Controller
             'product_image' => 'image|file|max:1024',
             'product_name' => 'required|string',
             'product_code' => [
-                'required',
+                'nullable',
                 'string',
+                'max:255',
                 $shopId ? Rule::unique('products', 'product_code')->where(function ($query) use ($shopId) {
                     return $query->where('shop_id', $shopId);
                 }) : 'unique:products,product_code',
@@ -124,6 +135,11 @@ class ProductController extends Controller
         ];
 
         $validatedData = $request->validate($rules);
+
+        // Auto-generate product code if empty (Option A)
+        if (empty(trim((string) ($validatedData['product_code'] ?? '')))) {
+            $validatedData['product_code'] = app(ProductCodeService::class)->generateUniqueCode();
+        }
         
         // Set default product_store to 0 if not provided
         if (!isset($validatedData['product_store']) || $validatedData['product_store'] === null) {
@@ -381,19 +397,31 @@ class ProductController extends Controller
             }
             
             $now = now();
+            $codeService = app(ProductCodeService::class);
+            $usedInBatch = [];
+
             foreach ( $row_range as $row ) {
                 $productName = $sheet->getCell( 'A' . $row )->getValue();
                 $categoryId = $sheet->getCell( 'B' . $row )->getValue();
-                
+
                 // Skip empty rows
                 if (empty($productName) || empty($categoryId)) {
                     continue;
                 }
-                
+
+                $rawCode = $sheet->getCell( 'D' . $row )->getValue();
+                $code = is_scalar($rawCode) ? trim((string) $rawCode) : '';
+
+                // Auto-generate product code if empty or duplicate (Option B: duplicate → auto-generate)
+                if ($code === '' || Product::where('product_code', $code)->exists() || in_array($code, $usedInBatch, true)) {
+                    $code = $codeService->generateUniqueCode($usedInBatch);
+                }
+                $usedInBatch[] = $code;
+
                 $rowData = [
                     'product_name' => $productName,
                     'category_id' => $categoryId,
-                    'product_code' => $sheet->getCell( 'D' . $row )->getValue(),
+                    'product_code' => $code,
                     'product_garage' => $sheet->getCell( 'E' . $row )->getValue(),
                     'product_image' => $sheet->getCell( 'F' . $row )->getValue(),
                     'product_store' => $sheet->getCell( 'G' . $row )->getValue(),
@@ -404,23 +432,23 @@ class ProductController extends Controller
                     'created_at' => $now,
                     'updated_at' => $now,
                 ];
-                
+
                 // Assign shop_id if available
                 if ($shopId) {
                     $rowData['shop_id'] = $shopId;
                 }
-                
+
                 // Optional fields - only add if they have values
                 $supplierId = $sheet->getCell( 'C' . $row )->getValue();
                 if ($supplierId) {
                     $rowData['supplier_id'] = $supplierId;
                 }
-                
+
                 $expireDate = $sheet->getCell( 'I' . $row )->getValue();
                 if ($expireDate) {
                     $rowData['expire_date'] = $expireDate;
                 }
-                
+
                 $data[] = $rowData;
             }
             

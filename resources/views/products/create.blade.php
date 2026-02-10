@@ -57,8 +57,11 @@
                                 @enderror
                             </div>
                             <div class="form-group col-md-6">
-                                <label for="product_code">Product Code <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control @error('product_code') is-invalid @enderror" id="product_code" name="product_code" value="{{ old('product_code') }}" required>
+                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <label for="product_code" class="mb-0">Product Code</label>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" id="generate-product-code">Generate Code</button>
+                                </div>
+                                <input type="text" class="form-control @error('product_code') is-invalid @enderror" id="product_code" name="product_code" value="{{ old('product_code') }}" placeholder="Optional – leave empty to auto-generate">
                                 @error('product_code')
                                 <div class="invalid-feedback">
                                     {{ $message }}
@@ -192,6 +195,22 @@
         format: 'yyyy-mm-dd'
         // https://gijgo.com/datetimepicker/configuration/format
     }); --}}
+
+    document.getElementById('generate-product-code').addEventListener('click', function() {
+        var btn = this;
+        btn.disabled = true;
+        fetch('{{ route("products.generateCode") }}', {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data && data.code) {
+                document.getElementById('product_code').value = data.code;
+            }
+        })
+        .catch(function() {})
+        .finally(function() { btn.disabled = false; });
+    });
 </script>
 
 @include('components.preview-img-form')

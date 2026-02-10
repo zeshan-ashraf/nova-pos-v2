@@ -105,6 +105,7 @@ Route::middleware(['permission:product.menu'])->group(function () {
     Route::get('/products/import', [ProductController::class, 'importView'])->name('products.importView');
     Route::post('/products/import', [ProductController::class, 'importStore'])->name('products.importStore');
     Route::get('/products/export', [ProductController::class, 'exportData'])->name('products.exportData');
+    Route::get('/products/generate-code', [ProductController::class, 'generateCode'])->name('products.generateCode');
     Route::resource('/products', ProductController::class);
     Route::post('/stock/adjust', [StockAdjustController::class, 'adjust'])->name('stock.adjust');
 });

@@ -22,8 +22,11 @@
                     </div>
                     
                     <div class="form-group">
-                        <label for="modal_product_code">Product Code <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="modal_product_code" name="product_code" required>
+                        <div class="d-flex align-items-center justify-content-between mb-1">
+                            <label for="modal_product_code" class="mb-0">Product Code</label>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="modalGenerateProductCode">Generate Code</button>
+                        </div>
+                        <input type="text" class="form-control" id="modal_product_code" name="product_code" placeholder="Optional – leave empty to auto-generate on save">
                         <div class="invalid-feedback" id="error_product_code"></div>
                     </div>
                     
@@ -138,6 +141,24 @@
             }
         });
     }
+
+    // Generate Code button - fetch unique code and put in Product Code field
+    $(document).on('click', '#modalGenerateProductCode', function() {
+        var btn = $(this);
+        btn.prop('disabled', true);
+        $.ajax({
+            url: '{{ route("products.generateCode") }}',
+            method: 'GET',
+            dataType: 'json',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        }).done(function(data) {
+            if (data && data.code) {
+                $('#modal_product_code').val(data.code);
+            }
+        }).always(function() {
+            btn.prop('disabled', false);
+        });
+    });
 
     // Wait for document ready
     $(document).ready(function() {
