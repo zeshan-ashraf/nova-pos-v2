@@ -15,6 +15,7 @@ use Intervention\Image\Facades\Image;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Str;
 use App\Support\ActiveShop;
 use App\Services\ProductCodeService;
 
@@ -402,11 +403,36 @@ class ProductController extends Controller
 
             foreach ( $row_range as $row ) {
                 $productName = $sheet->getCell( 'A' . $row )->getValue();
-                $categoryId = $sheet->getCell( 'B' . $row )->getValue();
+                $categoryValue = $sheet->getCell( 'B' . $row )->getValue();
+                $categoryValue = trim((string) $categoryValue);
 
                 // Skip empty rows
-                if (empty($productName) || empty($categoryId)) {
+                if (empty($productName) || $categoryValue === '') {
                     continue;
+                }
+
+                // Resolve category_id: if numeric use as id; else lookup by name (case-insensitive) or create
+                if (filter_var($categoryValue, FILTER_VALIDATE_INT) !== false) {
+                    $categoryId = (int) $categoryValue;
+                } else {
+                    $name = $categoryValue;
+                    $query = Category::query();
+                    if ($shopId !== null) {
+                        $query->where('shop_id', $shopId);
+                    } else {
+                        $query->whereNull('shop_id');
+                    }
+                    $category = $query->whereRaw('LOWER(TRIM(name)) = ?', [strtolower($name)])->first();
+                    if ($category) {
+                        $categoryId = $category->id;
+                    } else {
+                        $category = Category::create([
+                            'name'   => $name,
+                            'shop_id' => $shopId,
+                            'slug'   => Str::slug($name),
+                        ]);
+                        $categoryId = $category->id;
+                    }
                 }
 
                 $rawCode = $sheet->getCell( 'D' . $row )->getValue();
