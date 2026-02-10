@@ -2,7 +2,7 @@
 
 namespace App\Services\Stock;
 
-use App\Models\Expense;
+use App\Models\Activity;
 use App\Models\Product;
 use App\Models\StockLog;
 
@@ -24,9 +24,9 @@ class StockLossExpenseService
      * NON-CASH: do NOT create account_transactions.
      *
      * @param StockLog $stockLog Must have direction='out', source_type in (loss, expired, theft), shop_id, product_id, qty
-     * @return Expense The created or existing system expense
+     * @return Activity The created or existing system expense
      */
-    public function recordExpenseFromStockLog(StockLog $stockLog): Expense
+    public function recordExpenseFromStockLog(StockLog $stockLog): Activity
     {
         if ($stockLog->direction !== 'out' || !in_array($stockLog->source_type, self::LOSS_SOURCE_TYPES, true)) {
             throw new \InvalidArgumentException(
@@ -35,7 +35,7 @@ class StockLossExpenseService
         }
 
         // Duplicate protection: do not create a second expense for the same stock_log
-        $existing = Expense::query()
+        $existing = Activity::query()
             ->where('linked_stock_log_id', $stockLog->id)
             ->first();
 
@@ -62,7 +62,7 @@ class StockLossExpenseService
             ? $logCreatedAt->format('Y-m-d')
             : \Carbon\Carbon::parse($logCreatedAt)->format('Y-m-d');
 
-        return Expense::create([
+        return Activity::create([
             'shop_id' => $shopId,
             'title' => self::CATEGORY_INVENTORY_LOSS,
             'description' => $notes,
@@ -84,10 +84,10 @@ class StockLossExpenseService
      * Amount = negative original amount; DO NOT delete the original expense.
      * NON-CASH: do NOT create account_transactions.
      *
-     * @param Expense $originalExpense System expense linked to the stock loss being reversed
-     * @return Expense The reversal expense row
+     * @param Activity $originalExpense System expense linked to the stock loss being reversed
+     * @return Activity The reversal expense row
      */
-    public function recordReversal(Expense $originalExpense): Expense
+    public function recordReversal(Activity $originalExpense): Activity
     {
         if (!($originalExpense->is_system ?? false)) {
             throw new \InvalidArgumentException('Reversal only allowed for system expenses.');
@@ -95,7 +95,7 @@ class StockLossExpenseService
 
         $reversalAmount = - (float) $originalExpense->activity_cost;
 
-        return Expense::create([
+        return Activity::create([
             'shop_id' => $originalExpense->shop_id,
             'title' => self::CATEGORY_INVENTORY_LOSS,
             'description' => 'Reversal of stock loss',

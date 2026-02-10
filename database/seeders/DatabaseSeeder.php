@@ -79,5 +79,6 @@ class DatabaseSeeder extends Seeder
         $user->assignRole('Account');
 
         $this->call(BankSeeder::class);
+        $this->call(ExpenseSeeder::class);
     }
 }

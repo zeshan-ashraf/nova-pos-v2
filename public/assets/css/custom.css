@@ -89,22 +89,76 @@ body {
     flex: 1 1 auto !important;
     min-width: 0;
 }
-.iq-top-navbar .navbar-collapse {
-    flex: 1 1 auto !important;
-    min-width: 0;
-    display: flex !important;
-    justify-content: space-between !important;
+
+/* Desktop (lg and up): keep horizontal layout - do NOT apply display:flex on mobile so Bootstrap collapse can toggle */
+@media (min-width: 992px) {
+    .iq-top-navbar .navbar-collapse {
+        flex: 1 1 auto !important;
+        min-width: 0;
+        display: flex !important;
+        justify-content: space-between !important;
+    }
+    .iq-top-navbar .navbar-left-menu {
+        margin-right: auto !important;
+    }
+    .iq-top-navbar .navbar-right-menu {
+        margin-left: auto !important;
+        padding-right: 10px !important;
+    }
 }
 
-/* Navbar: left menu (quick links) aligned left */
-.iq-top-navbar .navbar-left-menu {
-    margin-right: auto !important;
-}
-
-/* Navbar: right menu (Active Shop + User) aligned to far right with 10px from edge */
-.iq-top-navbar .navbar-right-menu {
-    margin-left: auto !important;
-    padding-right: 10px !important;
+/* Mobile (below lg): navbar toggler shows/hides menu; menu is vertical and scrollable */
+@media (max-width: 991px) {
+    .iq-top-navbar .navbar .d-flex.align-items-center {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+    .iq-top-navbar .navbar-toggler {
+        order: 1;
+        margin-left: auto;
+    }
+    .iq-top-navbar .navbar-collapse {
+        order: 2;
+        flex-basis: 100%;
+        width: 100%;
+        max-height: calc(100vh - 80px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 0.5rem 0;
+        margin-top: 0.5rem;
+        border-top: 1px solid rgba(0,0,0,0.08);
+    }
+    .iq-top-navbar .navbar-collapse:not(.show) {
+        display: none !important;
+    }
+    .iq-top-navbar .navbar-collapse.show {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        justify-content: flex-start !important;
+    }
+    .iq-top-navbar .navbar-left-menu,
+    .iq-top-navbar .navbar-right-menu {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding: 0 !important;
+    }
+    .iq-top-navbar .navbar-left-menu {
+        border-bottom: 1px solid rgba(0,0,0,0.06);
+        padding-bottom: 0.5rem !important;
+    }
+    .iq-top-navbar .navbar-right-menu {
+        padding-top: 0.5rem !important;
+    }
+    .iq-top-navbar .navbar-list .nav-item .nav-link {
+        padding: 0.5rem 1rem !important;
+        display: block;
+    }
+    .iq-top-navbar .navbar-quick-link {
+        white-space: normal;
+    }
 }
 
 /* Sidebar: reduce top padding */

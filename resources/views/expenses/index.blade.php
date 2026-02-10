@@ -68,7 +68,7 @@
                     <thead class="bg-white text-uppercase">
                         <tr class="ligth ligth-data">
                             <th>No.</th>
-                            <th>@sortablelink('title', 'Title')</th>
+                            <th>Category</th>
                             <th>@sortablelink('description', 'Description')</th>
                             <th>@sortablelink('date', 'Date')</th>
                             <th>@sortablelink('activity_cost', 'Cost')</th>
@@ -80,7 +80,7 @@
                         @forelse ($expenses as $expense)
                             <tr>
                                 <td>{{ (($expenses->currentPage() - 1) * $expenses->perPage()) + $loop->iteration }}</td>
-                                <td>{{ $expense->title }}</td>
+                                <td>{{ $expense->expense?->expense_title ?? '—' }}</td>
                                 <td>{{ Str::limit($expense->description, 20) }}</td>
                                 <td>{{ $expense->date }}</td>
                                 <td>{{ $expense->activity_cost }}</td>
@@ -154,7 +154,8 @@
                             var currentPage = response.expenses.current_page;
                             var perPage = response.expenses.per_page;
                             var serialNumber = (currentPage - 1) * perPage + index + 1;
-                            var truncatedDescription = expense.description.length > 20 ? expense.description.substring(0, 20) + '...' : expense.description;
+                            var truncatedDescription = (expense.description || '').length > 20 ? (expense.description || '').substring(0, 20) + '...' : (expense.description || '');
+                            var categoryName = (expense.expense && expense.expense.expense_title) ? expense.expense.expense_title : '—';
 
                             var isSystem = expense.is_system === true || expense.is_system === 1;
                             var typeBadge = isSystem ? '<span class="badge badge-secondary">System</span>' : '<span class="badge badge-primary">Manual</span>';
@@ -169,7 +170,7 @@
                             var row = `
                                 <tr>
                                     <td>${serialNumber}</td>
-                                    <td>${expense.title}</td>
+                                    <td>${categoryName}</td>
                                     <td>${truncatedDescription}</td>
                                     <td>${expense.date}</td>
                                     <td>${expense.activity_cost}</td>

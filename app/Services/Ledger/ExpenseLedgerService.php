@@ -3,7 +3,7 @@
 namespace App\Services\Ledger;
 
 use App\Models\AccountTransaction;
-use App\Models\Expense;
+use App\Models\Activity;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -18,10 +18,10 @@ class ExpenseLedgerService
      * Record an expense in the ledger (money spent = debit).
      * Skips ledger for system expenses (non-cash); duplicate protection otherwise.
      *
-     * @param Expense $expense Must have id, shop_id, activity_cost (amount), payment_method, shop_bank_id (if bank)
+     * @param Activity $expense Must have id, shop_id, activity_cost (amount), payment_method, shop_bank_id (if bank)
      * @return AccountTransaction|null The created or existing ledger entry, or null for system expenses
      */
-    public function recordExpense(Expense $expense): ?AccountTransaction
+    public function recordExpense(Activity $expense): ?AccountTransaction
     {
         // System expenses (inventory loss etc.) are non-cash; do NOT create account_transactions
         if (($expense->is_system ?? false) || ($expense->payment_method ?? '') === 'system') {

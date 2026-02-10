@@ -4,6 +4,8 @@
     <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
     <script src="https://unpkg.com/gijgo@1.9.14/js/gijgo.min.js" type="text/javascript"></script>
     <link href="https://unpkg.com/gijgo@1.9.14/css/gijgo.min.css" rel="stylesheet" type="text/css" />
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 @endsection
 
 @section('container')
@@ -20,25 +22,30 @@
                 <div class="card-body">
                     <form action="{{ route('expenses.store') }}" method="POST" enctype="multipart/form-data">
                         @csrf
-                        <!-- begin: Input Title -->
+                        <!-- begin: Expense Category -->
                         <div class="form-group row">
                             <div class="col-md-12">
-                                <label for="title">Expense Title <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control @error('title') is-invalid @enderror" id="title" name="title" value="{{ old('title') }}" required>
-                                @error('title')
+                                <label for="expense_id">Expense Category <span class="text-danger">*</span></label>
+                                <select class="form-control expense-category-select @error('expense_id') is-invalid @enderror" id="expense_id" name="expense_id" required>
+                                    <option value="">Select category</option>
+                                    @foreach($expenseCategories ?? [] as $cat)
+                                    <option value="{{ $cat->id }}" {{ old('expense_id') == $cat->id ? 'selected' : '' }}>{{ $cat->expense_title }}</option>
+                                    @endforeach
+                                </select>
+                                @error('expense_id')
                                 <div class="invalid-feedback">
                                     {{ $message }}
                                 </div>
                                 @enderror
                             </div>
                         </div>
-                        <!-- end: Input Title -->
+                        <!-- end: Expense Category -->
 
                         <!-- begin: Input Description -->
                         <div class="form-group row">
                             <div class="col-md-12">
-                                <label for="description">Expense Description <span class="text-danger">*</span></label>
-                                <textarea class="form-control @error('description') is-invalid @enderror" id="description" name="description" rows="4" required>{{ old('description') }}</textarea>
+                                <label for="description">Expense Description</label>
+                                <textarea class="form-control @error('description') is-invalid @enderror" id="description" name="description" rows="4">{{ old('description') }}</textarea>
                                 @error('description')
                                 <div class="invalid-feedback">
                                     {{ $message }}
@@ -185,5 +192,15 @@
     }
 </script>
 
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+$(document).ready(function() {
+    $('.expense-category-select').select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Select expense category',
+        allowClear: false
+    });
+});
+</script>
 @include('components.preview-img-form')
 @endsection

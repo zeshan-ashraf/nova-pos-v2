@@ -40,6 +40,60 @@
                 .content-page {
                     padding-top: 40px;
                 }
+                /* Prevent horizontal overflow on mobile */
+                body, .wrapper {
+                    overflow-x: hidden;
+                    max-width: 100vw;
+                }
+                /* Top navbar: hide menu by default; show only when .show is toggled (overrides .d-flex) */
+                .iq-top-navbar .navbar .d-flex.align-items-center {
+                    flex-wrap: wrap;
+                    width: 100%;
+                }
+                .iq-top-navbar .navbar-toggler {
+                    order: 1;
+                    margin-left: auto;
+                }
+                .iq-top-navbar .navbar-collapse {
+                    order: 2;
+                    flex-basis: 100%;
+                    width: 100%;
+                    max-height: calc(100vh - 80px);
+                    overflow-y: auto;
+                    -webkit-overflow-scrolling: touch;
+                    padding: 0.5rem 0;
+                    margin-top: 0.5rem;
+                    border-top: 1px solid rgba(0,0,0,0.08);
+                }
+                .iq-top-navbar .navbar-collapse:not(.show) {
+                    display: none !important;
+                }
+                .iq-top-navbar .navbar-collapse.show {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    align-items: stretch !important;
+                    justify-content: flex-start !important;
+                }
+                .iq-top-navbar .navbar-left-menu,
+                .iq-top-navbar .navbar-right-menu {
+                    flex-direction: column !important;
+                    align-items: stretch !important;
+                    padding: 0 !important;
+                }
+                .iq-top-navbar .navbar-left-menu {
+                    border-bottom: 1px solid rgba(0,0,0,0.06);
+                    padding-bottom: 0.5rem !important;
+                }
+                .iq-top-navbar .navbar-right-menu {
+                    padding-top: 0.5rem !important;
+                }
+                .iq-top-navbar .navbar-list .nav-item .nav-link {
+                    padding: 0.5rem 1rem !important;
+                    display: block;
+                }
+                .iq-top-navbar .navbar-quick-link {
+                    white-space: normal;
+                }
             }
         </style>
 
@@ -75,6 +129,28 @@
     <!-- App JavaScript -->
     <script src="{{ asset('assets/js/app.js') }}"></script>
     
+    <!-- Navbar toggler: single handler so menu stays open/closed (no double-toggle with Bootstrap) -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var toggler = document.querySelector('.iq-top-navbar .navbar-toggler');
+            var collapseEl = document.getElementById('navbarSupportedContent');
+            if (toggler && collapseEl) {
+                toggler.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    var isShown = collapseEl.classList.contains('show');
+                    if (isShown) {
+                        collapseEl.classList.remove('show');
+                        toggler.setAttribute('aria-expanded', 'false');
+                    } else {
+                        collapseEl.classList.add('show');
+                        toggler.setAttribute('aria-expanded', 'true');
+                    }
+                }, true);
+            }
+        });
+    </script>
     <!-- Fix for stuck modal backdrops -->
     <script>
         // Remove any stuck modal backdrops on page load

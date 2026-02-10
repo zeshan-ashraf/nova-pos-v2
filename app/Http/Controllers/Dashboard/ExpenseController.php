@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Models\Activity;
 use App\Models\Expense;
 use App\Services\Ledger\ExpenseLedgerService;
 use Illuminate\Http\Request;
@@ -30,13 +31,16 @@ class ExpenseController extends Controller
         }
 
         $authUser = auth()->user();
-        $expensesQuery = Expense::query();
+        $expensesQuery = Activity::query();
 
         // Apply shop filtering - super admin can see all expenses, others only their shop
         if ($authUser && $authUser->shop_id) {
             $expensesQuery->where('shop_id', $authUser->shop_id);
         }
         // Super admin (no shop_id) can see all expenses, no filtering needed
+
+        // Eager load expense category to avoid N+1
+        $expensesQuery->with('expense');
 
         // Paginate expenses with the specified number of rows per page
         $expenses = $expensesQuery->paginate($row);
@@ -64,7 +68,16 @@ class ExpenseController extends Controller
                 ->get();
         }
 
-        return view('expenses.create', ['shopBanks' => $shopBanks]);
+        // Expense categories for dropdown (shop-scoped when user has shop)
+        $expenseCategories = Expense::query()
+            ->when($shopId, fn ($q) => $q->where('shop_id', $shopId))
+            ->orderBy('expense_title')
+            ->get(['id', 'expense_title']);
+
+        return view('expenses.create', [
+            'shopBanks' => $shopBanks,
+            'expenseCategories' => $expenseCategories,
+        ]);
     }
 
     /**
@@ -74,8 +87,8 @@ class ExpenseController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'required|string',
+            'expense_id' => 'required|exists:expenses,id',
+            'description' => 'nullable|string',
             'date' => 'required|date',
             'activity_cost' => 'required|numeric|min:0',
             'payment_method' => 'nullable|string|in:cash,bank',
@@ -88,6 +101,14 @@ class ExpenseController extends Controller
         $shopId = $authUser ? $authUser->shop_id : null;
         $paymentMethod = $request->input('payment_method', 'cash');
         $shopBankId = $paymentMethod === 'bank' ? $request->input('shop_bank_id') : null;
+
+        // Ensure selected expense category belongs to user's shop (when user has shop)
+        if ($shopId) {
+            $validCategory = Expense::where('id', $request->input('expense_id'))->where('shop_id', $shopId)->exists();
+            if (!$validCategory) {
+                return back()->withErrors(['expense_id' => 'The selected expense category is not valid for your shop.'])->withInput();
+            }
+        }
 
         if ($paymentMethod === 'bank' && !$shopBankId) {
             return back()->withErrors(['shop_bank_id' => 'Please select a bank when payment method is Bank.'])->withInput();
@@ -108,9 +129,9 @@ class ExpenseController extends Controller
         }
 
         $expense = DB::transaction(function () use ($request, $authUser, $shopId, $paymentMethod, $shopBankId, $images) {
-            $expense = Expense::create([
-                'title' => $request->input('title'),
-                'description' => $request->input('description'),
+            $expense = Activity::create([
+                'expense_id' => $request->input('expense_id'),
+                'description' => $request->filled('description') ? $request->input('description') : null,
                 'date' => $request->input('date'),
                 'activity_cost' => $request->input('activity_cost'),
                 'payment_method' => $paymentMethod,
@@ -131,38 +152,57 @@ class ExpenseController extends Controller
     /**
      * Display the specified expense.
      */
-    public function show(Expense $expense)
+    public function show(Activity $expense)
     {
         $this->ensureShopAccess($expense);
+        $expense->load('expense');
         return view('expenses.show', compact('expense'));
     }
 
     /**
      * Show the form for editing the specified expense.
      */
-    public function edit(Expense $expense)
+    public function edit(Activity $expense)
     {
         $this->ensureShopAccess($expense);
         $this->rejectSystemExpenseModification($expense, 'edit');
-        return view('expenses.edit', compact('expense'));
+
+        $shopId = auth()->user()?->shop_id;
+        $expenseCategories = Expense::query()
+            ->when($shopId, fn ($q) => $q->where('shop_id', $shopId))
+            ->orderBy('expense_title')
+            ->get(['id', 'expense_title']);
+
+        return view('expenses.edit', [
+            'expense' => $expense,
+            'expenseCategories' => $expenseCategories,
+        ]);
     }
 
     /**
      * Update the specified expense in storage.
      */
-    public function update(Request $request, Expense $expense)
+    public function update(Request $request, Activity $expense)
     {
         $this->ensureShopAccess($expense);
         $this->rejectSystemExpenseModification($expense, 'edit');
 
         $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'required|string',
+            'expense_id' => 'required|exists:expenses,id',
+            'description' => 'nullable|string',
             'date' => 'required|date',
             'activity_cost' => 'required|numeric',
             'images' => 'nullable|array',
             'images.*' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
+
+        $shopId = auth()->user()?->shop_id;
+        if ($shopId) {
+            $validCategory = Expense::where('id', $request->input('expense_id'))->where('shop_id', $shopId)->exists();
+            if (!$validCategory) {
+                return back()->withErrors(['expense_id' => 'The selected expense category is not valid for your shop.'])->withInput();
+            }
+        }
 
         $images = is_array($expense->images) ? $expense->images : [];
 
@@ -173,8 +213,8 @@ class ExpenseController extends Controller
         }
 
         $expense->update([
-            'title' => $request->input('title'),
-            'description' => $request->input('description'),
+            'expense_id' => $request->input('expense_id'),
+            'description' => $request->filled('description') ? $request->input('description') : null,
             'date' => $request->input('date'),
             'activity_cost' => $request->input('activity_cost'),
             'customer_id' => null,
@@ -188,7 +228,7 @@ class ExpenseController extends Controller
     /**
      * Remove the specified expense from storage.
      */
-    public function destroy(Expense $expense)
+    public function destroy(Activity $expense)
     {
         $this->ensureShopAccess($expense);
         $this->rejectSystemExpenseModification($expense, 'delete');
@@ -201,12 +241,14 @@ class ExpenseController extends Controller
         $searchTerm = $request->get('search');
         $authUser = auth()->user();
 
-        $expensesQuery = Expense::where(function ($query) use ($searchTerm) {
-            $query->where('title', 'like', "%{$searchTerm}%")
-                ->orWhere('description', 'like', "%{$searchTerm}%")
-                ->orWhere('date', 'like', "%{$searchTerm}%")
-                ->orWhere('activity_cost', 'like', "%{$searchTerm}%");
-        });
+        $expensesQuery = Activity::query()
+            ->with('expense')
+            ->where(function ($query) use ($searchTerm) {
+                $query->where('description', 'like', "%{$searchTerm}%")
+                    ->orWhere('date', 'like', "%{$searchTerm}%")
+                    ->orWhere('activity_cost', 'like', "%{$searchTerm}%")
+                    ->orWhereHas('expense', fn ($q) => $q->where('expense_title', 'like', "%{$searchTerm}%"));
+            });
 
         // Apply shop filtering - super admin can see all expenses, others only their shop
         if ($authUser && $authUser->shop_id) {
@@ -226,7 +268,7 @@ class ExpenseController extends Controller
     /**
      * Ensure the current user has access to the expense based on shop.
      */
-    protected function ensureShopAccess(Expense $expense): void
+    protected function ensureShopAccess(Activity $expense): void
     {
         $authUser = auth()->user();
 
@@ -249,7 +291,7 @@ class ExpenseController extends Controller
     /**
      * System expenses (e.g. inventory loss) are read-only; user must not edit or delete.
      */
-    protected function rejectSystemExpenseModification(Expense $expense, string $action): void
+    protected function rejectSystemExpenseModification(Activity $expense, string $action): void
     {
         if ($expense->is_system ?? false) {
             abort(403, 'System expenses cannot be ' . $action . 'd.');

@@ -20,11 +20,11 @@
 
                 <div class="card-body">
                     <!-- View Expense Form (Read-Only) -->
-                    <!-- Expense Title -->
+                    <!-- Expense Category -->
                     <div class="form-group row">
                         <div class="col-md-12">
-                            <label for="title">Expense Title</label>
-                            <input type="text" class="form-control" id="title" value="{{ $expense->title }}" readonly>
+                            <label for="expense_category">Expense Category</label>
+                            <input type="text" class="form-control" id="expense_category" value="{{ $expense->expense?->expense_title ?? '—' }}" readonly>
                         </div>
                     </div>
 

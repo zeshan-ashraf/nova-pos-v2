@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Dashboard;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Dashboard\Traits\ReportTrait;
 use App\Models\AccountTransaction;
-use App\Models\Expense;
+use App\Models\Activity;
 use App\Models\Order;
 use App\Models\StockLog;
 use Illuminate\Http\Request;
@@ -65,7 +65,7 @@ class FinancialReportController extends Controller
         $dateRange = $this->getDateRange($request);
         $shopFilter = $this->getShopFilter($request, $authUser);
 
-        $expenseQuery = Expense::query()
+        $expenseQuery = Activity::query()
             ->whereBetween('date', [$dateRange['start_datetime'], $dateRange['end_datetime']]);
         $this->applyShopFilter($expenseQuery, $shopFilter['shop_ids']);
         $totalExpenses = (float) (clone $expenseQuery)->sum('activity_cost');
@@ -77,10 +77,11 @@ class FinancialReportController extends Controller
             ->orderBy('date')
             ->get();
 
-        // Group by expense category (activities has no category column; use title as grouping)
+        // Group by expense category (expenses.expense_title via expense_id)
         $byCategory = (clone $expenseQuery)
-            ->select('title', DB::raw('SUM(activity_cost) as total'))
-            ->groupBy('title')
+            ->leftJoin('expenses', 'activities.expense_id', '=', 'expenses.id')
+            ->select(DB::raw("COALESCE(expenses.expense_title, 'Uncategorized') as title"), DB::raw('SUM(activities.activity_cost) as total'))
+            ->groupBy(DB::raw("COALESCE(expenses.expense_title, 'Uncategorized')"))
             ->orderByDesc('total')
             ->get();
 
@@ -190,8 +191,8 @@ class FinancialReportController extends Controller
             $cogs = (float) ((clone $cogsQuery)->selectRaw('SUM(stock_logs.qty * COALESCE(products.buying_price, 0)) as cogs')->value('cogs') ?? 0);
         }
 
-        // Expenses: sum from expenses (activities table), same logic as Expense Report
-        $expenseQuery = Expense::query()
+        // Expenses: sum from activities table, same logic as Expense Report
+        $expenseQuery = Activity::query()
             ->whereBetween('date', [$dateRange['start_datetime'], $dateRange['end_datetime']]);
         $this->applyShopFilter($expenseQuery, $shopFilter['shop_ids']);
         $expenses = (float) (clone $expenseQuery)->sum('activity_cost');

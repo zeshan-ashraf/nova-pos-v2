@@ -9,8 +9,10 @@
                 </a>
             </div>
             <div class="d-flex align-items-center">
-                <button class="navbar-toggler" type="button" data-toggle="collapse"
-                    data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent"
+                <button class="navbar-toggler" type="button"
+                    data-toggle="collapse" data-target="#navbarSupportedContent"
+                    data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent"
+                    aria-controls="navbarSupportedContent" aria-expanded="false"
                     aria-label="Toggle navigation">
                     <i class="ri-menu-3-line"></i>
                 </button>

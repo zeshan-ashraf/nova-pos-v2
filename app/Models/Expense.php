@@ -4,45 +4,24 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Expense extends Model
 {
-    use HasFactory;
-    // use Sortable;
-    protected $table = 'activities';
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'title',
-        'description',
-        'date',
-        'images',
-        'activity_cost',
-        'payment_method',
-        'shop_bank_id',
-        'category',
-        'is_system',
-        'linked_stock_log_id',
-        'reversal_of_expense_id',
-        'customer_id',
+        'expense_title',
         'shop_id',
     ];
-
-    protected $casts = [
-        'is_system' => 'boolean',
-    ];
-
-    public function getImagesAttribute($value)
-    {
-        return json_decode($value, true);
-    }
-
-    public function customer()
-    {
-        return $this->belongsTo(Customer::class);
-    }
 
     public function shop()
     {
         return $this->belongsTo(Shop::class, 'shop_id');
+    }
+
+    public function activities()
+    {
+        return $this->hasMany(Activity::class, 'expense_id');
     }
 }
