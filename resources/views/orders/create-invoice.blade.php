@@ -646,24 +646,33 @@
         let rowCount = 0;
 
         // Old input (flashed by Laravel when redirecting back with errors) - for repopulating form
-        var invoiceOldInput = @json([
-            'customer_id' => old('customer_id'),
-            'shop_id' => old('shop_id'),
-            'order_date' => old('order_date'),
-            'select_type' => old('select_type', 'customer'),
-            'products' => old('products', []),
-            'payment_method_1' => old('payment_method_1'),
-            'pay_1' => old('pay_1'),
-            'shop_bank_id_1' => old('shop_bank_id_1'),
-            'payment_method_2' => old('payment_method_2'),
-            'pay_2' => old('pay_2'),
-            'shop_bank_id_2' => old('shop_bank_id_2'),
-            'vat' => old('vat', 0),
-            'invoice_discount' => old('invoice_discount', 0),
-            'comment' => old('comment'),
-        ]);
-        var productIdToText = @json(collect($products ?? [])->keyBy('id')->map(function($p) { return (isset($p->product_code) && $p->product_code) ? $p->product_code . ' - ' . $p->product_name : $p->product_name; })->toArray());
-        var productIdToCode = @json(collect($products ?? [])->keyBy('id')->map(function($p) { return $p->product_code ?? ''; })->toArray());
+        @php
+            $invoiceOldInput = [
+                'customer_id' => old('customer_id'),
+                'shop_id' => old('shop_id'),
+                'order_date' => old('order_date'),
+                'select_type' => old('select_type', 'customer'),
+                'products' => old('products', []),
+                'payment_method_1' => old('payment_method_1'),
+                'pay_1' => old('pay_1'),
+                'shop_bank_id_1' => old('shop_bank_id_1'),
+                'payment_method_2' => old('payment_method_2'),
+                'pay_2' => old('pay_2'),
+                'shop_bank_id_2' => old('shop_bank_id_2'),
+                'vat' => old('vat', 0),
+                'invoice_discount' => old('invoice_discount', 0),
+                'comment' => old('comment'),
+            ];
+            $productIdToText = collect($products ?? [])->keyBy('id')->map(function ($p) {
+                return (isset($p->product_code) && $p->product_code) ? $p->product_code . ' - ' . $p->product_name : $p->product_name;
+            })->toArray();
+            $productIdToCode = collect($products ?? [])->keyBy('id')->map(function ($p) {
+                return $p->product_code ?? '';
+            })->toArray();
+        @endphp
+        var invoiceOldInput = @json($invoiceOldInput);
+        var productIdToText = @json($productIdToText);
+        var productIdToCode = @json($productIdToCode);
         
         // Re-enable buttons if there are errors on the page
         // This handles the case when form submission fails and page reloads with errors
