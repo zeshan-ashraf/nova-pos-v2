@@ -25,10 +25,12 @@
                         <!-- begin: Expense Category -->
                         <div class="form-group row">
                             <div class="col-md-12">
-                                <label for="expense_id">Expense Category <span class="text-danger">*</span></label>
-                                @if (auth()->user()->can('expense-categories.menu'))
-                                <a href="#" class="small d-block mb-1" data-toggle="modal" data-target="#expenseCategoryModal">Add category</a>
-                                @endif
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label for="expense_id" class="mb-0">Expense Category <span class="text-danger">*</span></label>
+                                    @if (auth()->user()->can('expense-categories.menu'))
+                                    <button type="button" class="btn btn-sm btn-outline-primary" data-toggle="modal" data-target="#expenseCategoryModal">Add category</button>
+                                    @endif
+                                </div>
                                 <select class="form-control expense-category-select @error('expense_id') is-invalid @enderror" id="expense_id" name="expense_id" required>
                                     <option value="">Select category</option>
                                     @foreach($expenseCategories ?? [] as $cat)
@@ -245,22 +247,60 @@ $(document).ready(function() {
             },
             body: JSON.stringify({ expense_title: title, _token: form.querySelector('input[name="_token"]').value })
         })
-        .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+        .then(function(r) {
+            return r.text().then(function(text) {
+                var data = null;
+                try { data = text ? JSON.parse(text) : null; } catch (e) {}
+                return { ok: r.ok, status: r.status, data: data || {} };
+            }).catch(function() {
+                return { ok: r.ok, status: r.status, data: {} };
+            });
+        })
         .then(function(res) {
-            if (res.ok && res.data.success && res.data.category) {
-                var opt = document.createElement('option');
-                opt.value = res.data.category.id;
-                opt.textContent = res.data.category.expense_title;
-                document.getElementById('expense_id').appendChild(opt);
-                $('#expense_id').val(res.data.category.id).trigger('change');
-                modal.modal('hide');
-            } else {
-                errorEl.textContent = res.data.message || 'Request failed.';
+            try {
+                var data = res.data || {};
+                var success = data.success === true;
+                var category = data.category || (data.id && data.expense_title ? { id: data.id, expense_title: data.expense_title } : null);
+                if (res.ok && success && category) {
+                    var sel = document.getElementById('expense_id');
+                    if (sel) {
+                        var opt = document.createElement('option');
+                        opt.value = category.id;
+                        opt.textContent = category.expense_title;
+                        sel.appendChild(opt);
+                        try {
+                            if (typeof $ !== 'undefined') {
+                                $('#expense_id').val(category.id).trigger('change');
+                            } else {
+                                sel.value = category.id;
+                            }
+                        } catch (e) {}
+                    }
+                    try {
+                        if (typeof modal !== 'undefined' && modal.modal) {
+                            modal.modal('hide');
+                        } else {
+                            var m = document.getElementById('expenseCategoryModal');
+                            if (m) { m.classList.remove('show'); m.style.display = 'none'; document.body.classList.remove('modal-open'); }
+                        }
+                    } catch (e) {}
+                    titleInput.value = '';
+                    errorEl.classList.add('d-none');
+                } else {
+                    errorEl.textContent = data.message || 'Request failed.';
+                    errorEl.classList.remove('d-none');
+                }
+            } catch (e) {
+                errorEl.textContent = (res.data && res.data.message) || 'Something went wrong. Please select the category from the list.';
                 errorEl.classList.remove('d-none');
+                try {
+                    if (typeof modal !== 'undefined' && modal.modal) { modal.modal('hide'); } else { var m = document.getElementById('expenseCategoryModal'); if (m) { m.classList.remove('show'); m.style.display = 'none'; } }
+                    titleInput.value = '';
+                } catch (e2) {}
             }
         })
         .catch(function() {
-            errorEl.textContent = 'Network error. Please try again.';
+            errorEl.textContent = 'Network error. Please check your connection and try again.';
             errorEl.classList.remove('d-none');
         })
         .finally(function() { submitBtn.disabled = false; });
