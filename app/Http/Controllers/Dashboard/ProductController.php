@@ -542,13 +542,14 @@ class ProductController extends Controller
                 ->with('error', 'Please select a shop to export products.');
         }
 
-        $products = Product::where('shop_id', $shopId)
+        $products = Product::with(['category'])
+            ->where('shop_id', $shopId)
             ->orderByDesc('id')
             ->get();
 
         $product_array [] = array(
             'Product Name',
-            'Category Id',
+            'Category Name',
             'Supplier Id',
             'Product Code',
             'Product Garage',
@@ -564,7 +565,7 @@ class ProductController extends Controller
         {
             $product_array[] = array(
                 'Product Name' => $product->product_name,
-                'Category Id' => $product->category_id,
+                'Category Name' => $product->category?->name ?? '',
                 'Supplier Id' => $product->supplier_id,
                 'Product Code' => $product->product_code,
                 'Product Garage' => $product->product_garage,
