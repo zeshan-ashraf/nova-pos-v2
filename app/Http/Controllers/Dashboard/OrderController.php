@@ -27,6 +27,7 @@ use App\Services\CustomerCreditService;
 use App\Services\SalePaymentLedgerService;
 use App\Services\Stock\StockService;
 use App\Services\SupplierCreditService;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 class OrderController extends Controller
@@ -1383,10 +1384,25 @@ class OrderController extends Controller
                             Product::where('id', $childProduct->id)
                                 ->update(['product_store' => DB::raw('product_store + ' . $product['quantity'])]);
                         } else {
+                            // Resolve category for child shop: find by name or create
+                            $motherCategory = Category::find($motherProduct->category_id);
+                            $categoryName = $motherCategory ? trim($motherCategory->name) : 'Uncategorized';
+                            $childCategory = Category::where('shop_id', $childShop->id)
+                                ->whereRaw('LOWER(TRIM(name)) = ?', [strtolower($categoryName)])
+                                ->first();
+                            if (!$childCategory) {
+                                $childCategory = Category::create([
+                                    'name'   => $categoryName,
+                                    'shop_id' => $childShop->id,
+                                    'slug'   => Str::slug($categoryName),
+                                ]);
+                            }
+                            $childCategoryId = $childCategory->id;
+
                             // Create new product for child shop (same product code as mother shop; unique per shop)
                             Product::create([
                                 'product_name' => $motherProduct->product_name,
-                                'category_id' => $motherProduct->category_id,
+                                'category_id' => $childCategoryId,
                                 'supplier_id' => $supplier->id,
                                 'shop_id' => $childShop->id,
                                 'product_code' => $motherProduct->product_code,
