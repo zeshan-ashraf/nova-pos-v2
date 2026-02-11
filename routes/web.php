@@ -19,6 +19,7 @@ use App\Http\Controllers\Dashboard\PosController;
 use App\Http\Controllers\Dashboard\RoleController;
 use App\Http\Controllers\Dashboard\UserController;
 use App\Http\Controllers\Dashboard\ExpenseController;
+use App\Http\Controllers\Dashboard\ExpenseCategoryController;
 use App\Http\Controllers\Dashboard\ActiveShopController;
 use App\Http\Controllers\Dashboard\SaleReturnController;
 use App\Http\Controllers\Dashboard\PurchaseController;
@@ -209,6 +210,15 @@ Route::middleware(['permission:purchases.menu'])->group(function () {
 Route::middleware(['permission:expense.menu'])->group(function () {
     Route::resource('/expenses', ExpenseController::class);
     Route::get('/expense-search', [ExpenseController::class, 'expenseSearch'])->name('expenses.search');
+});
+
+// ====== EXPENSE CATEGORIES (expenses table CRUD) ======
+Route::middleware(['permission:expense-categories.menu'])->group(function () {
+    Route::get('/expense-categories', [ExpenseCategoryController::class, 'index'])->name('expense-categories.index');
+    Route::post('/expense-categories', [ExpenseCategoryController::class, 'store'])->name('expense-categories.store');
+    Route::put('/expense-categories/{expense_category}', [ExpenseCategoryController::class, 'update'])->name('expense-categories.update');
+    Route::delete('/expense-categories/{expense_category}', [ExpenseCategoryController::class, 'destroy'])->name('expense-categories.destroy');
+    Route::get('/expense-categories/{expense_category}/entries', [ExpenseCategoryController::class, 'entries'])->name('expense-categories.entries');
 });
 
 // ====== DATABASE BACKUP ======

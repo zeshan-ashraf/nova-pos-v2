@@ -194,6 +194,13 @@
                                 <i class="fa-solid fa-arrow-right"></i><span>Add Expense</span>
                             </a>
                         </li>
+                        @if (auth()->user()->can('expense-categories.menu'))
+                        <li class="{{ Request::is('expense-categories*') ? 'active' : '' }}">
+                            <a href="{{ route('expense-categories.index') }}">
+                                <i class="fa-solid fa-arrow-right"></i><span>Expense Categories</span>
+                            </a>
+                        </li>
+                        @endif
                     </ul>
                 </li>
                 @endif

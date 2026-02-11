@@ -26,6 +26,9 @@
                         <div class="form-group row">
                             <div class="col-md-12">
                                 <label for="expense_id">Expense Category <span class="text-danger">*</span></label>
+                                @if (auth()->user()->can('expense-categories.menu'))
+                                <a href="#" class="small d-block mb-1" data-toggle="modal" data-target="#expenseCategoryModal">Add category</a>
+                                @endif
                                 <select class="form-control expense-category-select @error('expense_id') is-invalid @enderror" id="expense_id" name="expense_id" required>
                                     <option value="">Select category</option>
                                     @foreach($expenseCategories ?? [] as $cat)
@@ -202,5 +205,68 @@ $(document).ready(function() {
     });
 });
 </script>
+@if (auth()->user()->can('expense-categories.menu'))
+@include('partials.expense-category-modal')
+<script>
+(function() {
+    var modal = $('#expenseCategoryModal');
+    var form = document.getElementById('expense-category-form');
+    var titleInput = document.getElementById('expense_category_title');
+    var idInput = document.getElementById('expense_category_id');
+    var submitBtn = document.getElementById('expense-category-modal-submit');
+    var modalTitle = document.getElementById('expenseCategoryModalLabel');
+    var errorEl = document.getElementById('expense-category-modal-error');
+    var successEl = errorEl.nextElementSibling;
+
+    modal.on('show.bs.modal', function() {
+        idInput.value = '';
+        titleInput.value = '';
+        modalTitle.textContent = 'Add Expense Category';
+    });
+
+    submitBtn.addEventListener('click', function() {
+        var title = titleInput.value.trim();
+        if (!title) {
+            errorEl.textContent = 'Category title is required.';
+            errorEl.classList.remove('d-none');
+            return;
+        }
+        errorEl.classList.add('d-none');
+        successEl.classList.add('d-none');
+        submitBtn.disabled = true;
+
+        fetch('{{ route("expense-categories.store") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': form.querySelector('input[name="_token"]').value
+            },
+            body: JSON.stringify({ expense_title: title, _token: form.querySelector('input[name="_token"]').value })
+        })
+        .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+        .then(function(res) {
+            if (res.ok && res.data.success && res.data.category) {
+                var opt = document.createElement('option');
+                opt.value = res.data.category.id;
+                opt.textContent = res.data.category.expense_title;
+                document.getElementById('expense_id').appendChild(opt);
+                $('#expense_id').val(res.data.category.id).trigger('change');
+                modal.modal('hide');
+            } else {
+                errorEl.textContent = res.data.message || 'Request failed.';
+                errorEl.classList.remove('d-none');
+            }
+        })
+        .catch(function() {
+            errorEl.textContent = 'Network error. Please try again.';
+            errorEl.classList.remove('d-none');
+        })
+        .finally(function() { submitBtn.disabled = false; });
+    });
+})();
+</script>
+@endif
 @include('components.preview-img-form')
 @endsection
