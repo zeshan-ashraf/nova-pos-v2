@@ -72,11 +72,12 @@ class ProductController extends Controller
     }
 
     /**
-     * Return a unique 4-char product code (1 capital + 3 alphanumeric). For "Generate Code" on create form.
+     * Return the next available MHB-XXXX code (preview only; does not consume).
+     * Same code is shown until a product is saved with it.
      */
     public function generateCode()
     {
-        $code = app(ProductCodeService::class)->generateUniqueCode();
+        $code = app(ProductCodeService::class)->getNextAvailableCode();
         return response()->json(['code' => $code]);
     }
 
@@ -121,9 +122,7 @@ class ProductController extends Controller
                 'nullable',
                 'string',
                 'max:255',
-                $shopId ? Rule::unique('products', 'product_code')->where(function ($query) use ($shopId) {
-                    return $query->where('shop_id', $shopId);
-                }) : 'unique:products,product_code',
+                Rule::when($request->filled('product_code'), ['regex:/^MHB-\d+$/', 'unique:products,product_code']),
             ],
             'category_id' => 'required|integer',
             'supplier_id' => 'nullable|integer',
@@ -134,13 +133,12 @@ class ProductController extends Controller
             'buying_price' => 'nullable|numeric|min:0',
             'selling_price' => 'nullable|numeric|min:0',
         ];
+        $messages = ['product_code.regex' => 'Product code must start with MHB- followed by digits (e.g. MHB-1001).'];
+        $validatedData = $request->validate($rules, $messages);
 
-        $validatedData = $request->validate($rules);
-
-        // Auto-generate product code if empty (Option A)
-        if (empty(trim((string) ($validatedData['product_code'] ?? '')))) {
-            $validatedData['product_code'] = app(ProductCodeService::class)->generateUniqueCode();
-        }
+        // Auto-generate product code if empty (with lock so no conflict with import/other users)
+        $codeService = app(ProductCodeService::class);
+        $validatedData['product_code'] = $codeService->ensureCode($validatedData['product_code'] ?? null, null);
         
         // Set default product_store to 0 if not provided
         if (!isset($validatedData['product_store']) || $validatedData['product_store'] === null) {
@@ -194,6 +192,9 @@ class ProductController extends Controller
         }
 
         $product = Product::create($validatedData);
+
+        // Sync sequence so this code is not shown as "next available" again
+        $codeService->syncSequenceAfterAssign($codeService->parseNumericPart($product->product_code) ?? 0);
 
         // If AJAX request, return JSON response
         if ($request->ajax()) {
@@ -264,9 +265,9 @@ class ProductController extends Controller
             'product_code' => [
                 'required',
                 'string',
-                $shopId ? Rule::unique('products', 'product_code')->where(function ($query) use ($shopId) {
-                    return $query->where('shop_id', $shopId);
-                })->ignore($product->id) : Rule::unique('products', 'product_code')->ignore($product->id),
+                'max:255',
+                'regex:/^MHB-\d+$/',
+                Rule::unique('products', 'product_code')->ignore($product->id),
             ],
             'category_id' => 'required|integer',
             'supplier_id' => 'nullable|integer',
@@ -277,8 +278,8 @@ class ProductController extends Controller
             'buying_price' => 'nullable|numeric|min:0',
             'selling_price' => 'nullable|numeric|min:0',
         ];
-
-        $validatedData = $request->validate($rules);
+        $messages = ['product_code.regex' => 'Product code must start with MHB- followed by digits (e.g. MHB-1001).'];
+        $validatedData = $request->validate($rules, $messages);
 
         /**
          * Handle upload image with Storage.
@@ -399,7 +400,6 @@ class ProductController extends Controller
             
             $now = now();
             $codeService = app(ProductCodeService::class);
-            $usedInBatch = [];
 
             foreach ( $row_range as $row ) {
                 $productName = $sheet->getCell( 'A' . $row )->getValue();
@@ -438,11 +438,8 @@ class ProductController extends Controller
                 $rawCode = $sheet->getCell( 'D' . $row )->getValue();
                 $code = is_scalar($rawCode) ? trim((string) $rawCode) : '';
 
-                // Auto-generate product code if empty or duplicate (Option B: duplicate → auto-generate)
-                if ($code === '' || Product::where('product_code', $code)->exists() || in_array($code, $usedInBatch, true)) {
-                    $code = $codeService->generateUniqueCode($usedInBatch);
-                }
-                $usedInBatch[] = $code;
+                // Generate code when missing or invalid/duplicate (same MHB-1001 rule; lock so no conflict with manual add)
+                $code = $codeService->ensureCode($code === '' ? null : $code, null);
 
                 $rowData = [
                     'product_name' => $productName,
@@ -480,6 +477,18 @@ class ProductController extends Controller
             
             if (empty($data)) {
                 return Redirect::route('products.importView')->with('error', 'No valid data found in the Excel file. Please check that product name and category are provided.');
+            }
+
+            // Sync sequence so assigned codes are not shown as "next available" again
+            $maxNum = 0;
+            foreach ($data as $row) {
+                $n = $codeService->parseNumericPart($row['product_code'] ?? null);
+                if ($n !== null && $n > $maxNum) {
+                    $maxNum = $n;
+                }
+            }
+            if ($maxNum > 0) {
+                $codeService->syncSequenceAfterAssign($maxNum);
             }
 
             Product::insert($data);

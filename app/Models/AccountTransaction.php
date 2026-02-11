@@ -19,6 +19,7 @@ class AccountTransaction extends Model
     public const SOURCE_OPENING = 'opening';
     public const SOURCE_SALE = 'sale';
     public const SOURCE_PURCHASE = 'purchase';
+    public const SOURCE_PURCHASE_PAYMENT = 'purchase_payment';
     public const SOURCE_EXPENSE = 'expense';
     public const SOURCE_TRANSFER = 'transfer';
     public const SOURCE_ADJUSTMENT = 'adjustment';

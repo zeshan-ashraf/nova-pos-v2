@@ -14,6 +14,7 @@ class PurchasePaymentLog extends Model
         'purchase_id',
         'amount_paid',
         'type',
+        'shop_bank_id',
     ];
 
     protected $guarded = [

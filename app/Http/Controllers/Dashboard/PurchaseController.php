@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 use Haruncpi\LaravelIdGenerator\IdGenerator;
 use App\Support\ActiveShop;
+use App\Services\Ledger\PurchaseLedgerService;
 use App\Services\Stock\StockService;
 use App\Services\SupplierCreditService;
 
@@ -104,9 +105,20 @@ class PurchaseController extends Controller
             $productsQuery->whereRaw('1 = 0'); // Always false condition
         }
 
+        $shopBanks = [];
+        if ($targetShopId) {
+            $shopBanks = DB::table('bank_shop')
+                ->where('bank_shop.shop_id', $targetShopId)
+                ->join('banks', 'bank_shop.bank_id', '=', 'banks.id')
+                ->select('bank_shop.id', 'banks.name')
+                ->orderBy('banks.name')
+                ->get();
+        }
+
         return view('purchases.create', [
             'suppliers' => $suppliersQuery->orderBy('shopname')->get(),
             'products' => $productsQuery->orderBy('product_name')->get(),
+            'shopBanks' => $shopBanks,
         ]);
     }
 
@@ -182,13 +194,14 @@ class PurchaseController extends Controller
     /**
      * Store a newly created purchase.
      */
-    public function store(Request $request, SupplierCreditService $creditService)
+    public function store(Request $request, SupplierCreditService $creditService, PurchaseLedgerService $purchaseLedgerService)
     {
         $rules = [
             'supplier_id' => 'required|numeric',
             'purchase_date' => 'required|date',
             'payment_status' => 'required|string|in:cash,bank,cheque,credit',
             'pay' => 'numeric|nullable|min:0',
+            'shop_bank_id' => 'nullable|numeric|exists:bank_shop,id',
             'vat' => 'numeric|nullable|min:0',
             'invoice_discount' => 'numeric|nullable|min:0',
             'products' => 'required|array|min:1',
@@ -200,16 +213,28 @@ class PurchaseController extends Controller
         ];
 
         $validatedData = $request->validate($rules);
-        $payAmount = $validatedData['pay'] ?? 0;
+        $payAmount = (float) ($validatedData['pay'] ?? 0);
+        $paymentStatus = $validatedData['payment_status'] ?? '';
 
         // Validate that supplier belongs to the same shop as logged-in user
         $authUser = auth()->user();
         $supplier = Supplier::findOrFail($validatedData['supplier_id']);
-        
-        // Supplier must belong to the same shop as the logged-in user
+
         if ($supplier->shop_id !== $authUser->shop_id) {
             return back()->withErrors(['supplier_id' => 'The selected supplier does not belong to your shop.'])
                 ->withInput();
+        }
+
+        if ($payAmount > 0 && in_array(strtolower($paymentStatus), ['bank', 'cheque'], true)) {
+            $shopBankId = $validatedData['shop_bank_id'] ?? null;
+            if (empty($shopBankId)) {
+                return back()->withErrors(['shop_bank_id' => 'Please select a bank when payment method is Bank or Cheque.'])
+                    ->withInput();
+            }
+            if ($authUser->shop_id && !DB::table('bank_shop')->where('id', $shopBankId)->where('shop_id', $authUser->shop_id)->exists()) {
+                return back()->withErrors(['shop_bank_id' => 'The selected bank is not valid for your shop.'])
+                    ->withInput();
+            }
         }
 
         // Generate purchase number
@@ -257,13 +282,16 @@ class PurchaseController extends Controller
 
         $purchase_id = null;
 
+        $purchaseDate = Carbon::parse($validatedData['purchase_date'])->format('Y-m-d');
+        $shopBankId = ($validatedData['shop_bank_id'] ?? null) ? (string) $validatedData['shop_bank_id'] : null;
+
         try {
-            DB::transaction(function () use (&$purchase_id, $purchaseData, $validatedData, $supplier, $creditService, $authUser, $due, $payAmount) {
+            DB::transaction(function () use (&$purchase_id, $purchaseData, $validatedData, $supplier, $creditService, $purchaseLedgerService, $authUser, $due, $payAmount, $purchaseDate, $shopBankId) {
                 // 1. Create purchase
                 $purchase = Purchase::create($purchaseData);
                 $purchase_id = $purchase->id;
 
-                // 2. Create purchase details and increase stock
+                // 2. Create purchase details and increase stock (stock_logs with purchase_date for COGS)
                 foreach ($validatedData['products'] as $product) {
                     if (empty($product['product_id'])) {
                         continue;
@@ -290,28 +318,31 @@ class PurchaseController extends Controller
 
                     PurchaseDetail::insert($purchaseDetailData);
 
-                    // Increase stock via ledger (StockService only; no direct stock math)
+                    // Increase stock via ledger (StockService; price = purchase_unit_cost for COGS)
                     $this->stockService->purchaseStock(
                         $productModel,
                         (int) $product['quantity'],
                         (float) ($product['unit_price'] ?? 0),
                         (int) $supplier->id,
-                        $purchase_id
+                        $purchase_id,
+                        $purchaseDate
                     );
                 }
 
-                // 3. Create payment log if payment was made
+                // 3. Create payment log if payment was made (shop_bank_id for bank/cheque)
                 if ($payAmount > 0) {
                     PurchasePaymentLog::create([
                         'purchase_id' => $purchase_id,
                         'amount_paid' => $payAmount,
                         'type' => 'payment',
+                        'shop_bank_id' => in_array(strtolower($validatedData['payment_status'] ?? ''), ['bank', 'cheque'], true) ? $shopBankId : null,
                     ]);
+                    // Ledger: cash outflow (debit) for paid amount; credit-only has no ledger entry until payment later
+                    $purchaseLedgerService->recordPurchasePayment($purchase, $payAmount, $shopBankId);
                 }
 
                 // 4. Adjust supplier credit
                 if ($due > 0) {
-                    // Increase supplier credit by pending amount
                     $creditService->addPending($supplier, $due);
                 }
             });
@@ -459,17 +490,21 @@ class PurchaseController extends Controller
         $creditService = new SupplierCreditService();
         $supplier = $purchase->supplier;
 
+        $purchaseLedgerService = app(PurchaseLedgerService::class);
         try {
-            DB::transaction(function () use ($purchase, $supplier, $creditService) {
+            DB::transaction(function () use ($purchase, $supplier, $creditService, $purchaseLedgerService) {
                 // 1. Reverse stock via ledger (append reversal logs; do not delete old logs)
                 $this->stockService->reverseStock('purchase', (string) $purchase->id);
 
-                // 2. Reverse supplier credit for pending amount (due)
+                // 2. Remove purchase ledger entries (account_transactions: purchase + purchase_payment)
+                $purchaseLedgerService->reverseForPurchase($purchase);
+
+                // 3. Reverse supplier credit for pending amount (due)
                 if ($supplier && $purchase->due > 0) {
                     $creditService->removePending($supplier, $purchase->due);
                 }
 
-                // 3. Reverse supplier credit for all payments made
+                // 4. Reverse supplier credit for all payments made
                 if ($supplier) {
                     foreach ($purchase->paymentLogs as $paymentLog) {
                         if ($paymentLog->type === 'payment' && $paymentLog->amount_paid > 0) {
@@ -478,17 +513,17 @@ class PurchaseController extends Controller
                     }
                 }
 
-                // 4. Soft delete payment logs
+                // 5. Soft delete payment logs
                 foreach ($purchase->paymentLogs as $paymentLog) {
                     $paymentLog->delete();
                 }
 
-                // 5. Soft delete purchase details
+                // 6. Soft delete purchase details
                 foreach ($purchase->purchaseDetails as $purchaseDetail) {
                     $purchaseDetail->delete();
                 }
 
-                // 6. Soft delete purchase
+                // 7. Soft delete purchase
                 $purchase->delete();
             });
 

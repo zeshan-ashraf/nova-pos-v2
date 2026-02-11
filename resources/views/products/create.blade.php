@@ -61,7 +61,7 @@
                                     <label for="product_code" class="mb-0">Product Code</label>
                                     <button type="button" class="btn btn-sm btn-outline-primary" id="generate-product-code">Generate Code</button>
                                 </div>
-                                <input type="text" class="form-control @error('product_code') is-invalid @enderror" id="product_code" name="product_code" value="{{ old('product_code') }}" placeholder="Optional – leave empty to auto-generate">
+                                <input type="text" class="form-control @error('product_code') is-invalid @enderror" id="product_code" name="product_code" value="{{ old('product_code') }}" placeholder="Optional – leave empty for MHB-1001 style auto-generate">
                                 @error('product_code')
                                 <div class="invalid-feedback">
                                     {{ $message }}

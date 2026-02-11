@@ -40,12 +40,23 @@ class StockService
     /**
      * Record purchase stock (incoming from supplier).
      * supplier_id and purchase_id (source_id) required.
+     * Optional $purchaseDate sets stock_logs.adjustment_date for COGS/valuation (Y-m-d or Carbon).
      */
-    public function purchaseStock(Product $product, int $qty, float $price, int $supplierId, int $purchaseId): StockLog
-    {
+    public function purchaseStock(
+        Product $product,
+        int $qty,
+        float $price,
+        int $supplierId,
+        int $purchaseId,
+        $purchaseDate = null
+    ): StockLog {
         $this->validator->validateInOperation($qty, 'purchase', (string) $purchaseId, $supplierId);
 
-        return $this->insertAndUpdate($product, $qty, 'in', 'purchase', (string) $purchaseId, $price, $supplierId);
+        $adjustmentDate = $purchaseDate
+            ? (\is_string($purchaseDate) ? $purchaseDate : \Illuminate\Support\Carbon::parse($purchaseDate)->toDateString())
+            : null;
+
+        return $this->insertAndUpdate($product, $qty, 'in', 'purchase', (string) $purchaseId, $price, $supplierId, null, $adjustmentDate);
     }
 
     /**

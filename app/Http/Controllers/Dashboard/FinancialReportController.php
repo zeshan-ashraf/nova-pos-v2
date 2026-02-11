@@ -174,7 +174,7 @@ class FinancialReportController extends Controller
         $this->applyShopFilter($revenueQuery, $shopFilter['shop_ids']);
         $revenue = (float) (clone $revenueQuery)->sum('total');
 
-        // COGS: stock_logs where source_type=sale, direction=out; cost = qty × products.buying_price only.
+        // COGS: stock_logs where source_type=sale, direction=out; cost = qty × stock_logs.price (cost at time of sale).
         $orderIdsInRange = Order::query()
             ->whereBetween('order_date', [$dateRange['start_datetime'], $dateRange['end_datetime']]);
         $this->applyShopFilter($orderIdsInRange, $shopFilter['shop_ids']);
@@ -183,12 +183,11 @@ class FinancialReportController extends Controller
         $cogs = 0.0;
         if ($orderIdsInRange->isNotEmpty()) {
             $cogsQuery = StockLog::query()
-                ->join('products', 'stock_logs.product_id', '=', 'products.id')
                 ->where('stock_logs.source_type', 'sale')
                 ->where('stock_logs.direction', 'out')
                 ->whereIn('stock_logs.source_id', $orderIdsInRange);
             $this->applyShopFilter($cogsQuery, $shopFilter['shop_ids'], 'stock_logs.shop_id');
-            $cogs = (float) ((clone $cogsQuery)->selectRaw('SUM(stock_logs.qty * COALESCE(products.buying_price, 0)) as cogs')->value('cogs') ?? 0);
+            $cogs = (float) ((clone $cogsQuery)->selectRaw('SUM(stock_logs.qty * COALESCE(stock_logs.price, 0)) as cogs')->value('cogs') ?? 0);
         }
 
         // Expenses: sum from activities table, same logic as Expense Report

@@ -303,11 +303,23 @@
                                     <span class="summary-label">Payment Method <span class="text-danger">*</span>:</span>
                                     <select class="form-control d-inline-block" id="payment_status" name="payment_status" required style="width: 150px; display: inline-block;">
                                         <option value="">Select Method</option>
-                                        <option value="cash">Cash</option>
-                                        <option value="bank">Bank</option>
-                                        <option value="cheque">Cheque</option>
-                                        <option value="credit">Credit</option>
+                                        <option value="cash" {{ old('payment_status') == 'cash' ? 'selected' : '' }}>Cash</option>
+                                        <option value="bank" {{ old('payment_status') == 'bank' ? 'selected' : '' }}>Bank</option>
+                                        <option value="cheque" {{ old('payment_status') == 'cheque' ? 'selected' : '' }}>Cheque</option>
+                                        <option value="credit" {{ old('payment_status') == 'credit' ? 'selected' : '' }}>Credit</option>
                                     </select>
+                                </div>
+                                <div class="summary-row" id="shop_bank_group" style="display: none;">
+                                    <span class="summary-label">Bank Account <span class="text-danger">*</span>:</span>
+                                    <select class="form-control d-inline-block" id="shop_bank_id" name="shop_bank_id" style="width: 200px; display: inline-block;">
+                                        <option value="">Select Bank</option>
+                                        @foreach($shopBanks ?? [] as $bank)
+                                        <option value="{{ $bank->id }}" {{ old('shop_bank_id') == $bank->id ? 'selected' : '' }}>{{ $bank->name }}</option>
+                                        @endforeach
+                                    </select>
+                                    @error('shop_bank_id')
+                                    <div class="text-danger">{{ $message }}</div>
+                                    @enderror
                                 </div>
                                 <div class="summary-row">
                                     <span class="summary-label">Payment Amount:</span>
@@ -690,10 +702,18 @@
         calculateDue();
     });
     
-    // Handle payment status change
+    // Handle payment status change (show bank dropdown for bank/cheque)
+    function toggleBankGroup() {
+        const status = ($('#payment_status').val() || '').toLowerCase();
+        const isBankOrCheque = (status === 'bank' || status === 'cheque');
+        $('#shop_bank_group').toggle(isBankOrCheque);
+        if (!isBankOrCheque) $('#shop_bank_id').val('');
+    }
     $(document).on('change', '#payment_status', function() {
+        toggleBankGroup();
         calculateDue();
     });
+    toggleBankGroup(); // initial state (e.g. after validation error with bank/cheque selected)
 
     // Add row function
     function addRow() {

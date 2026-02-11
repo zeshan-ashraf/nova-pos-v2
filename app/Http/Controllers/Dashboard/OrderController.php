@@ -24,6 +24,7 @@ use Haruncpi\LaravelIdGenerator\IdGenerator;
 use App\Models\PaymentLog;
 use App\Support\ActiveShop;
 use App\Services\CustomerCreditService;
+use App\Services\ProductCodeService;
 use App\Services\SalePaymentLedgerService;
 use App\Services\Stock\StockService;
 use App\Services\SupplierCreditService;
@@ -853,11 +854,8 @@ class OrderController extends Controller
         // For invoice/create page only: show products from user's shop_id only (exclude child shops)
         $targetShopId = $authUser->shop_id;
 
-        // Build base query with status and shop filtering first
-        // Only show products with status='active' and selling_price IS NOT NULL
-        $productsQuery = Product::where('status', 'active')
-            ->whereNotNull('selling_price')
-            ->where('selling_price', '>', 0);
+        // Build base query with status and shop filtering (no selling_price restriction; null → 0 as unit price)
+        $productsQuery = Product::where('status', 'active');
         
         // Apply shop filtering - only user's specific shop_id (exclude child shops)
         if ($targetShopId) {
@@ -891,12 +889,13 @@ class OrderController extends Controller
             ->map(function ($product) {
                 $productCode = $product->product_code ?? '';
                 $displayText = $productCode ? $productCode . ' - ' . $product->product_name : $product->product_name;
-                
+                // When selling_price is null, populate 0 as unit price for selection
+                $unitPrice = $product->selling_price !== null && $product->selling_price !== '' ? (float) $product->selling_price : 0;
                 return [
                     'id' => $product->id,
                     'text' => $displayText,
                     'name' => $product->product_name,
-                    'price' => $product->selling_price ?? 0,
+                    'price' => $unitPrice,
                     'stock' => $product->product_store ?? 0,
                     'code' => $productCode,
                 ];
@@ -1384,13 +1383,14 @@ class OrderController extends Controller
                             Product::where('id', $childProduct->id)
                                 ->update(['product_store' => DB::raw('product_store + ' . $product['quantity'])]);
                         } else {
-                            // Create new product for child shop
+                            // Create new product for child shop (unique product code system-wide)
+                            $productCode = app(ProductCodeService::class)->generateNextCode();
                             Product::create([
                                 'product_name' => $motherProduct->product_name,
                                 'category_id' => $motherProduct->category_id,
                                 'supplier_id' => $supplier->id,
                                 'shop_id' => $childShop->id,
-                                'product_code' => $motherProduct->product_code,
+                                'product_code' => $productCode,
                                 'product_garage' => $motherProduct->product_garage,
                                 'product_image' => $motherProduct->product_image,
                                 'product_store' => $product['quantity'],

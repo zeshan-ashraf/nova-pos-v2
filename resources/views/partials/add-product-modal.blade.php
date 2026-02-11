@@ -26,7 +26,7 @@
                             <label for="modal_product_code" class="mb-0">Product Code</label>
                             <button type="button" class="btn btn-sm btn-outline-primary" id="modalGenerateProductCode">Generate Code</button>
                         </div>
-                        <input type="text" class="form-control" id="modal_product_code" name="product_code" placeholder="Optional – leave empty to auto-generate on save">
+                        <input type="text" class="form-control" id="modal_product_code" name="product_code" placeholder="Optional – leave empty for MHB-1001 style auto-generate">
                         <div class="invalid-feedback" id="error_product_code"></div>
                     </div>
                     
