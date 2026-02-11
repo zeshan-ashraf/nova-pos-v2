@@ -23,7 +23,7 @@ class InventoryReportController extends Controller
         $shopFilter = $this->getShopFilter($request, $authUser);
         $row = $this->getRowCount($request);
 
-        $productsQuery = Product::with(['category', 'shop.parent']);
+        $productsQuery = Product::with(['shop.parent']);
 
         $this->applyShopFilter($productsQuery, $shopFilter['shop_ids']);
 
@@ -38,6 +38,7 @@ class InventoryReportController extends Controller
         }
 
         $products = $productsQuery->orderBy('product_store')->paginate($row)->appends($request->query());
+        Product::eagerLoadSameShopCategory($products->getCollection());
 
         // Summary
         $totalProducts = (clone $productsQuery)->count();
@@ -199,13 +200,14 @@ class InventoryReportController extends Controller
         $shopFilter = $this->getShopFilter($request, $authUser);
         $row = $this->getRowCount($request);
 
-        $query = Product::with(['category', 'shop.parent'])
+        $query = Product::with(['shop.parent'])
             ->whereNotNull('expire_date')
             ->where('expire_date', '<=', Carbon::today()->format('Y-m-d'));
 
         $this->applyShopFilter($query, $shopFilter['shop_ids']);
 
         $products = $query->orderBy('expire_date')->paginate($row)->appends($request->query());
+        Product::eagerLoadSameShopCategory($products->getCollection());
         $totalCount = (clone $query)->count();
 
         return view('reports.inventory.expired-products', compact(

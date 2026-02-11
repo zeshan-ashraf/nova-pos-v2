@@ -146,7 +146,7 @@
                                     <td>{{ ($products->currentPage() - 1) * $products->perPage() + $loop->iteration }}</td>
                                     <td>{{ $product->product_name }}</td>
                                     <td>{{ $product->product_code ?? '–' }}</td>
-                                    <td>{{ $product->category->name ?? '–' }}</td>
+                                    <td>{{ $product->same_shop_category?->name ?? '–' }}</td>
                                     <td>{{ $shopName }}</td>
                                     <td class="text-right">{{ number_format($qty, 0) }}</td>
                                     <td class="text-right">{{ number_format($threshold, 0) }}</td>

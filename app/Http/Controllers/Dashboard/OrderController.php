@@ -169,12 +169,15 @@ class OrderController extends Controller
             abort(400, 'The per-page parameter must be an integer between 1 and 100.');
         }
 
-        return view('stock.index', [
-            'products' => Product::with(['category', 'supplier'])
+        $products = Product::with(['supplier'])
                 ->filter(request(['search']))
                 ->sortable()
                 ->paginate($row)
-                ->appends(request()->query()),
+                ->appends(request()->query());
+        Product::eagerLoadSameShopCategory($products->getCollection());
+
+        return view('stock.index', [
+            'products' => $products,
         ]);
     }
 

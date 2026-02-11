@@ -60,10 +60,10 @@ class StockValuationReportService
 
         $this->applyFilters($query, $filters);
 
-        $query->with(['category:id,name']);
         $query->orderBy('products.product_name');
 
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+        Product::eagerLoadSameShopCategory(collect($paginator->items()));
 
         $data = $this->formatRows($paginator->items());
 
@@ -131,10 +131,7 @@ class StockValuationReportService
             $stockSale = (float) ($row->stock_sale_value ?? 0);
             $profitPotential = (float) ($row->profit_potential ?? 0);
 
-            $categoryName = null;
-            if ($row->relationLoaded('category') && $row->category) {
-                $categoryName = $row->category->name;
-            }
+            $categoryName = $row->same_shop_category?->name ?? null;
 
             $rows[] = [
                 'product_id'        => (int) $row->id,

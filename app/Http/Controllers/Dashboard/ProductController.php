@@ -41,7 +41,7 @@ class ProductController extends Controller
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
         $isSuperAdmin = !$authUser->shop_id;
 
-        $productsQuery = Product::with(['category', 'supplier', 'shop.parent'])
+        $productsQuery = Product::with(['supplier', 'shop.parent'])
             ->filter(request(['search']))
             ->sortable();
 
@@ -64,8 +64,11 @@ class ProductController extends Controller
             }
         }
 
+        $products = $productsQuery->paginate($row)->appends(request()->query());
+        Product::eagerLoadSameShopCategory($products->getCollection());
+
         return view('products.index', [
-            'products' => $productsQuery->paginate($row)->appends(request()->query()),
+            'products' => $products,
             'isSuperAdmin' => $isSuperAdmin,
             'shops' => $isSuperAdmin ? Shop::orderBy('name')->get() : collect(),
         ]);
@@ -527,11 +530,21 @@ class ProductController extends Controller
     }
 
     /**
-     *This function loads the customer data from the database then converts it
-     * into an Array that will be exported to Excel
+     * Export products to Excel. Scoped by shop: user's shop or (super admin) active shop.
+     * Only exports products that have a shop_id.
      */
     function exportData(){
-        $products = Product::all()->sortByDesc('product_id');
+        $authUser = auth()->user();
+        $shopId = $authUser->shop_id ?? ActiveShop::current()?->id;
+
+        if (!$shopId) {
+            return Redirect::route('products.index')
+                ->with('error', 'Please select a shop to export products.');
+        }
+
+        $products = Product::where('shop_id', $shopId)
+            ->orderByDesc('id')
+            ->get();
 
         $product_array [] = array(
             'Product Name',

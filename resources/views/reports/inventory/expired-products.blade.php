@@ -81,7 +81,7 @@
                                     <td>{{ ($products->currentPage() - 1) * $products->perPage() + $loop->iteration }}</td>
                                     <td>{{ $product->product_name }}</td>
                                     <td>{{ $product->product_code ?? '–' }}</td>
-                                    <td>{{ $product->category->name ?? '–' }}</td>
+                                    <td>{{ $product->same_shop_category?->name ?? '–' }}</td>
                                     <td class="text-right">{{ number_format((int) ($product->product_store ?? 0), 0) }}</td>
                                     <td>{{ $product->expire_date ? \Carbon\Carbon::parse($product->expire_date)->format('d M Y') : '–' }}</td>
                                 </tr>

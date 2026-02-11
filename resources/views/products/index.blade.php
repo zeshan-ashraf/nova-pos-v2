@@ -112,7 +112,7 @@
                             <td>{{ (($products->currentPage() * $products->perPage()) - $products->perPage()) + $loop->iteration  }}</td>
                             <td>{{ $product->product_name }}</td>
                             <td>{{ $product->product_code ?? '—' }}</td>
-                            <td>{{ $product->category->name }}</td>
+                            <td>{{ $product->same_shop_category?->name ?? '–' }}</td>
                             <td>{{ $product->supplier ? $product->supplier->name : 'N/A' }}</td>
                             <td>
                                 @if($product->shop)

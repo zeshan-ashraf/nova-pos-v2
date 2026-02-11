@@ -60,7 +60,7 @@
                         </div>
                         <div class="form-group col-md-6">
                             <label>Category</label>
-                            <input type="text" class="form-control bg-white" value="{{  $product->category->name }}" readonly>
+                            <input type="text" class="form-control bg-white" value="{{ $product->same_shop_category?->name ?? '–' }}" readonly>
                         </div>
                         {{-- Supplier field removed --}}
                         {{-- <div class="form-group col-md-6">
