@@ -96,6 +96,7 @@
                         <tr class="ligth ligth-data">
                             <th>No.</th>
                             <th>@sortablelink('product_name', 'name')</th>
+                            <th>@sortablelink('product_code', 'Code')</th>
                             <th>@sortablelink('category.name', 'category')</th>
                             <th>@sortablelink('supplier.name', 'supplier')</th>
                             <th>Shop</th>
@@ -110,6 +111,7 @@
                         <tr>
                             <td>{{ (($products->currentPage() * $products->perPage()) - $products->perPage()) + $loop->iteration  }}</td>
                             <td>{{ $product->product_name }}</td>
+                            <td>{{ $product->product_code ?? '—' }}</td>
                             <td>{{ $product->category->name }}</td>
                             <td>{{ $product->supplier ? $product->supplier->name : 'N/A' }}</td>
                             <td>

@@ -29,6 +29,7 @@ class Product extends Model
 
     public $sortable = [
         'product_name',
+        'product_code',
         'selling_price',
     ];
 
