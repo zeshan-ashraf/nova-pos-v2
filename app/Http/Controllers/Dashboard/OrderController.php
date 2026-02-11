@@ -1425,7 +1425,7 @@ class OrderController extends Controller
                         'vat' => $vat,
                         'purchase_no' => $purchase_no,
                         'total' => $total,
-                        'payment_status' => $validatedData['payment_status'],
+                        'payment_status' => $paymentMethod1,
                         'pay' => $pay,
                         'due' => $due,
                         'comment' => $request->input('comment'),

@@ -644,6 +644,26 @@
     $(document).ready(function() {
         console.log('Invoice form page loaded');
         let rowCount = 0;
+
+        // Old input (flashed by Laravel when redirecting back with errors) - for repopulating form
+        var invoiceOldInput = @json([
+            'customer_id' => old('customer_id'),
+            'shop_id' => old('shop_id'),
+            'order_date' => old('order_date'),
+            'select_type' => old('select_type', 'customer'),
+            'products' => old('products', []),
+            'payment_method_1' => old('payment_method_1'),
+            'pay_1' => old('pay_1'),
+            'shop_bank_id_1' => old('shop_bank_id_1'),
+            'payment_method_2' => old('payment_method_2'),
+            'pay_2' => old('pay_2'),
+            'shop_bank_id_2' => old('shop_bank_id_2'),
+            'vat' => old('vat', 0),
+            'invoice_discount' => old('invoice_discount', 0),
+            'comment' => old('comment'),
+        ]);
+        var productIdToText = @json(collect($products ?? [])->keyBy('id')->map(function($p) { return (isset($p->product_code) && $p->product_code) ? $p->product_code . ' - ' . $p->product_name : $p->product_name; })->toArray());
+        var productIdToCode = @json(collect($products ?? [])->keyBy('id')->map(function($p) { return $p->product_code ?? ''; })->toArray());
         
         // Re-enable buttons if there are errors on the page
         // This handles the case when form submission fails and page reloads with errors
@@ -892,15 +912,101 @@
         });
     });
 
-    // Initialize date/time with current date/time
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const formattedDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
-    $('#order_date').val(formattedDateTime);
+    // Initialize date/time with current date/time (or from old() when repopulating after error)
+    var orderDateVal = invoiceOldInput && invoiceOldInput.order_date ? invoiceOldInput.order_date : null;
+    if (!orderDateVal) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        orderDateVal = `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+    $('#order_date').val(orderDateVal);
+
+    // Repopulate form from old() when returning with validation/exception errors
+    var hasOldInput = invoiceOldInput && (
+        (invoiceOldInput.products && invoiceOldInput.products.length > 0) ||
+        invoiceOldInput.customer_id || invoiceOldInput.shop_id
+    );
+    if (hasOldInput) {
+        var o = invoiceOldInput;
+        @if($childShops->isNotEmpty())
+        var selectType = o.select_type || 'customer';
+        $('input[name="select_type"][value="' + selectType + '"]').prop('checked', true).parent().addClass('active');
+        if (selectType === 'shop') {
+            $('#customer-group').hide();
+            $('#shop-group').show();
+            $('#shop_id').val(o.shop_id || '').prop('required', true);
+            $('#customer_id').prop('required', false).val('');
+            $('#btn-shop-type').addClass('active');
+            $('#btn-customer-type').removeClass('active');
+        } else {
+            $('#customer-group').show();
+            $('#shop-group').hide();
+            $('#customer_id').val(o.customer_id || '').prop('required', true);
+            $('#shop_id').prop('required', false).val('');
+            $('#btn-customer-type').addClass('active');
+            $('#btn-shop-type').removeClass('active');
+        }
+        @else
+        $('#customer_id').val(o.customer_id || '');
+        @endif
+        if (o.vat != null && o.vat !== '') $('#vat').val(o.vat);
+        if (o.invoice_discount != null && o.invoice_discount !== '') $('#invoice_discount').val(o.invoice_discount);
+        if (o.comment != null && o.comment !== '') $('#comment').val(o.comment);
+        if (o.payment_method_1) {
+            $('#payment_method_1').val(o.payment_method_1);
+            $('#payment_method_1').trigger('change');
+            if (o.pay_1 != null && o.pay_1 !== '') $('#pay_1').val(o.pay_1);
+            if (o.shop_bank_id_1) $('#shop_bank_id_1').val(o.shop_bank_id_1);
+        }
+        if (o.payment_method_2) {
+            $('#payment_method_2').val(o.payment_method_2);
+            $('#payment_method_2').trigger('change');
+            if (o.pay_2 != null && o.pay_2 !== '') $('#pay_2').val(o.pay_2);
+            if (o.shop_bank_id_2) $('#shop_bank_id_2').val(o.shop_bank_id_2);
+        }
+        var products = o.products || [];
+        if (products.length > 0) {
+            var $tbody = $('#productTableBody');
+            var $firstRow = $tbody.find('tr[data-row-index="0"]');
+            $tbody.find('tr[data-row-index]').not($firstRow).each(function() {
+                var $row = $(this);
+                var $sel = $row.find('.product-select');
+                if ($sel.data('select2')) $sel.select2('destroy');
+                $row.remove();
+            });
+            rowCount = 0;
+            for (var i = 0; i < products.length; i++) {
+                var p = products[i];
+                var pid = String(p.product_id || '');
+                if (!pid) continue;
+                if (i > 0) addRow();
+                var $row = $tbody.find('tr[data-row-index="' + i + '"]');
+                var $select = $row.find('.product-select');
+                if ($select.data('select2')) $select.select2('destroy');
+                var text = productIdToText && productIdToText[pid] ? productIdToText[pid] : 'Product #' + pid;
+                var code = productIdToCode && productIdToCode[pid] ? productIdToCode[pid] : '-';
+                $select.append(new Option(text, pid, true, true));
+                initializeSelect2($select);
+                $select.val(pid).trigger('change');
+                $row.find('.original-price').val(p.original_price || p.unit_price || 0);
+                $row.find('.unit-price').val(p.unit_price || 0);
+                $row.find('.quantity').val(p.quantity || 1);
+                $row.find('.item-discount-value').val(p.item_discount || 0);
+                $row.find('.total-value').val(p.total || 0);
+                $row.find('.product-code-display').text(code);
+                $row.find('.discount-display').text(parseFloat(p.item_discount || 0).toFixed(2));
+                $row.find('.total-display').text(parseFloat(p.total || 0).toFixed(2));
+                var stock = p.stock != null ? p.stock : 0;
+                $row.find('.stock-display').text(stock);
+            }
+            calculateInvoiceTotal();
+            calculateDue();
+        }
+    }
 
     // Focus on customer dropdown on page load
     $('#customer_id').focus();
