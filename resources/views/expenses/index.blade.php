@@ -25,6 +25,7 @@
                     <h4 class="mb-3">Expense List</h4>
                 </div>
                 <div>
+                <a href="{{ route('expenses.bulk-create') }}" class="btn btn-outline-primary add-list mr-2">Bulk Expense</a>
                 <a href="{{ route('expenses.create') }}" class="btn btn-primary add-list">Add Expense</a>
                 </div>
             </div>
@@ -68,7 +69,7 @@
                     <thead class="bg-white text-uppercase">
                         <tr class="ligth ligth-data">
                             <th>No.</th>
-                            <th>Category</th>
+                            <th>@sortablelink('expense.expense_title', 'Category')</th>
                             <th>@sortablelink('description', 'Description')</th>
                             <th>@sortablelink('date', 'Date')</th>
                             <th>@sortablelink('activity_cost', 'Cost')</th>

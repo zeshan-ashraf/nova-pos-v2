@@ -208,6 +208,8 @@ Route::middleware(['permission:purchases.menu'])->group(function () {
 
 // ====== EXPENSE CONTROLLER ======
 Route::middleware(['permission:expense.menu'])->group(function () {
+    Route::get('/expenses/bulk-create', [ExpenseController::class, 'bulkCreate'])->name('expenses.bulk-create');
+    Route::post('/expenses/bulk-create', [ExpenseController::class, 'storeBulk'])->name('expenses.bulk-store');
     Route::resource('/expenses', ExpenseController::class);
     Route::get('/expense-search', [ExpenseController::class, 'expenseSearch'])->name('expenses.search');
 });

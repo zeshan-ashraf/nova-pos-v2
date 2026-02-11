@@ -4,12 +4,21 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Kyslik\ColumnSortable\Sortable;
 
 class Activity extends Model
 {
-    use HasFactory;
+    use HasFactory, Sortable;
 
     protected $table = 'activities';
+
+    public $sortable = [
+        'id',
+        'description',
+        'date',
+        'activity_cost',
+        'expense.expense_title',
+    ];
 
     protected $fillable = [
         'title',

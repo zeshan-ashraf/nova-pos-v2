@@ -35,12 +35,18 @@ class ExpenseController extends Controller
 
         // Apply shop filtering - super admin can see all expenses, others only their shop
         if ($authUser && $authUser->shop_id) {
-            $expensesQuery->where('shop_id', $authUser->shop_id);
+            $expensesQuery->where('activities.shop_id', $authUser->shop_id);
         }
         // Super admin (no shop_id) can see all expenses, no filtering needed
 
         // Eager load expense category to avoid N+1
         $expensesQuery->with('expense');
+
+        // Default: newest first (reverse order by id). Sortable overrides when user clicks a column.
+        if (!request()->has('sort')) {
+            $expensesQuery->orderBy('id', 'desc');
+        }
+        $expensesQuery->sortable();
 
         // Paginate expenses with the specified number of rows per page
         $expenses = $expensesQuery->paginate($row);
@@ -78,6 +84,145 @@ class ExpenseController extends Controller
             'shopBanks' => $shopBanks,
             'expenseCategories' => $expenseCategories,
         ]);
+    }
+
+    /**
+     * Show the bulk expense form (view only – no submit logic).
+     * Same shop rule as normal expense: user's shop or active shop for categories/banks.
+     */
+    public function bulkCreate()
+    {
+        $authUser = auth()->user();
+        $shopId = $authUser ? $authUser->shop_id : null;
+        if (!$shopId) {
+            $shopId = ActiveShop::current()?->id;
+        }
+
+        $shopBanks = collect();
+        if ($shopId) {
+            $shopBanks = DB::table('bank_shop')
+                ->where('bank_shop.shop_id', $shopId)
+                ->join('banks', 'bank_shop.bank_id', '=', 'banks.id')
+                ->select('bank_shop.id', 'banks.name')
+                ->orderBy('banks.name')
+                ->get();
+        }
+
+        $expenseCategories = Expense::query()
+            ->when($shopId, fn ($q) => $q->where('shop_id', $shopId))
+            ->orderBy('expense_title')
+            ->get(['id', 'expense_title']);
+
+        return view('expenses.bulk-create', [
+            'shopBanks' => $shopBanks,
+            'expenseCategories' => $expenseCategories,
+        ]);
+    }
+
+    /**
+     * Store bulk expenses. One date for all; each filled row creates one Activity and one account_transaction.
+     * Same shop rule as single expense; all-or-nothing in one DB transaction.
+     */
+    public function storeBulk(Request $request)
+    {
+        $request->validate([
+            'bulk_expense_date' => 'required|date',
+            'expenses' => 'nullable|array',
+            'expenses.*.expense_id' => 'nullable|exists:expenses,id',
+            'expenses.*.activity_cost' => 'nullable|numeric|min:0',
+            'expenses.*.description' => 'nullable|string',
+            'expenses.*.payment_method' => 'nullable|string|in:cash,bank',
+            'expenses.*.shop_bank_id' => 'nullable|numeric|exists:bank_shop,id',
+        ]);
+
+        $authUser = auth()->user();
+        $shopId = $authUser ? $authUser->shop_id : null;
+        if (!$shopId) {
+            $shopId = ActiveShop::current()?->id;
+        }
+        if (!$shopId) {
+            return Redirect::back()
+                ->withErrors(['bulk_expense_date' => 'Please select a shop to add expenses.'])
+                ->withInput();
+        }
+
+        $expensesInput = $request->input('expenses', []);
+        $rows = [];
+        foreach ($expensesInput as $row) {
+            $expenseId = isset($row['expense_id']) ? (trim((string) $row['expense_id']) !== '' ? (int) $row['expense_id'] : null) : null;
+            $cost = isset($row['activity_cost']) && $row['activity_cost'] !== '' && $row['activity_cost'] !== null
+                ? (float) $row['activity_cost']
+                : null;
+            if ($expenseId === null || $cost === null || $cost < 0) {
+                continue;
+            }
+            $rows[] = [
+                'expense_id' => $expenseId,
+                'activity_cost' => $cost,
+                'description' => isset($row['description']) ? trim((string) $row['description']) : null,
+                'payment_method' => isset($row['payment_method']) && in_array($row['payment_method'], ['cash', 'bank'], true)
+                    ? $row['payment_method']
+                    : 'cash',
+                'shop_bank_id' => isset($row['shop_bank_id']) && trim((string) $row['shop_bank_id']) !== ''
+                    ? (int) $row['shop_bank_id']
+                    : null,
+            ];
+        }
+
+        if (empty($rows)) {
+            return Redirect::back()
+                ->withErrors(['expenses' => 'Add at least one expense (category and amount required).'])
+                ->withInput();
+        }
+
+        foreach ($rows as $i => $row) {
+            if ($shopId) {
+                $validCategory = Expense::where('id', $row['expense_id'])->where('shop_id', $shopId)->exists();
+                if (!$validCategory) {
+                    return Redirect::back()
+                        ->withErrors(['expenses' => "Row " . ($i + 1) . ": The selected expense category is not valid for your shop."])
+                        ->withInput();
+                }
+            }
+            if (($row['payment_method'] ?? 'cash') === 'bank') {
+                if (empty($row['shop_bank_id'])) {
+                    return Redirect::back()
+                        ->withErrors(['expenses' => "Row " . ($i + 1) . ": Please select a bank when payment method is Bank."])
+                        ->withInput();
+                }
+                $belongsToShop = DB::table('bank_shop')->where('id', $row['shop_bank_id'])->where('shop_id', $shopId)->exists();
+                if (!$belongsToShop) {
+                    return Redirect::back()
+                        ->withErrors(['expenses' => "Row " . ($i + 1) . ": The selected bank is not valid for your shop."])
+                        ->withInput();
+                }
+            }
+        }
+
+        $date = $request->input('bulk_expense_date');
+
+        $count = DB::transaction(function () use ($rows, $date, $shopId) {
+            $count = 0;
+            foreach ($rows as $row) {
+                $activity = Activity::create([
+                    'expense_id' => $row['expense_id'],
+                    'description' => $row['description'],
+                    'date' => $date,
+                    'activity_cost' => $row['activity_cost'],
+                    'payment_method' => $row['payment_method'],
+                    'shop_bank_id' => $row['payment_method'] === 'bank' ? $row['shop_bank_id'] : null,
+                    'customer_id' => null,
+                    'shop_id' => $shopId,
+                    'images' => json_encode([]),
+                ]);
+                $this->expenseLedgerService->recordExpense($activity);
+                $count++;
+            }
+            return $count;
+        });
+
+        return Redirect::route('expenses.index')
+            ->with('success', $count . ' expenses have been created!');
     }
 
     /**

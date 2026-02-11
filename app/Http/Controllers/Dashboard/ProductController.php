@@ -153,17 +153,10 @@ class ProductController extends Controller
             $validatedData['product_store'] = 0;
         }
         
-        // Determine status based on prices
-        // If both prices are present → status = 'active' (product is sellable)
-        // If either price is missing → status = 'ordered' (product is not sellable)
+        // Determine status based on buying price only
+        // If buying price is present → status = 'active'; if missing → status = 'ordered'
         $hasBuyingPrice = !empty($validatedData['buying_price']);
-        $hasSellingPrice = !empty($validatedData['selling_price']);
-        
-        if ($hasBuyingPrice && $hasSellingPrice) {
-            $validatedData['status'] = 'active';
-        } else {
-            $validatedData['status'] = 'ordered';
-        }
+        $validatedData['status'] = $hasBuyingPrice ? 'active' : 'ordered';
         
         // Set default low_stock_warning if not provided
         if (!isset($validatedData['low_stock_warning']) || $validatedData['low_stock_warning'] === null) {
@@ -316,17 +309,10 @@ class ProductController extends Controller
             $validatedData['product_store'] = $product->product_store ?? 0;
         }
         
-        // Determine status based on prices
-        // If both prices are present → status = 'active' (product is sellable)
-        // If either price is missing → status = 'ordered' (product is not sellable)
+        // Determine status based on buying price only
+        // If buying price is present → status = 'active'; if missing → status = 'ordered'
         $hasBuyingPrice = !empty($validatedData['buying_price']);
-        $hasSellingPrice = !empty($validatedData['selling_price']);
-        
-        if ($hasBuyingPrice && $hasSellingPrice) {
-            $validatedData['status'] = 'active';
-        } else {
-            $validatedData['status'] = 'ordered';
-        }
+        $validatedData['status'] = $hasBuyingPrice ? 'active' : 'ordered';
             Product::where('id', $product->id)->update($validatedData);
             $newStockQty = $validatedData['product_store'] ?? $product->product_store;
             $stockChange = $newStockQty - $oldStockQty;
