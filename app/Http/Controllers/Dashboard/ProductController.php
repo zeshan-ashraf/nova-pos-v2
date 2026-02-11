@@ -41,7 +41,7 @@ class ProductController extends Controller
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
         $isSuperAdmin = !$authUser->shop_id;
 
-        $productsQuery = Product::with(['supplier', 'shop.parent'])
+        $productsQuery = Product::with(['category', 'supplier', 'shop.parent'])
             ->filter(request(['search']))
             ->sortable();
 
