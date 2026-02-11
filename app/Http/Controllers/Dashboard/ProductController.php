@@ -122,7 +122,12 @@ class ProductController extends Controller
                 'nullable',
                 'string',
                 'max:255',
-                Rule::when($request->filled('product_code'), ['regex:/^MHB-\d+$/', 'unique:products,product_code']),
+                Rule::when($request->filled('product_code'), [
+                    'regex:/^MHB-\d+$/',
+                    $shopId
+                        ? Rule::unique('products', 'product_code')->where('shop_id', $shopId)
+                        : Rule::unique('products', 'product_code')->whereNull('shop_id'),
+                ]),
             ],
             'category_id' => 'required|integer',
             'supplier_id' => 'nullable|integer',
@@ -138,7 +143,7 @@ class ProductController extends Controller
 
         // Auto-generate product code if empty (with lock so no conflict with import/other users)
         $codeService = app(ProductCodeService::class);
-        $validatedData['product_code'] = $codeService->ensureCode($validatedData['product_code'] ?? null, null);
+        $validatedData['product_code'] = $codeService->ensureCode($validatedData['product_code'] ?? null, null, $shopId);
         
         // Set default product_store to 0 if not provided
         if (!isset($validatedData['product_store']) || $validatedData['product_store'] === null) {
@@ -267,7 +272,9 @@ class ProductController extends Controller
                 'string',
                 'max:255',
                 'regex:/^MHB-\d+$/',
-                Rule::unique('products', 'product_code')->ignore($product->id),
+                $shopId !== null
+                ? Rule::unique('products', 'product_code')->ignore($product->id)->where('shop_id', $shopId)
+                : Rule::unique('products', 'product_code')->ignore($product->id)->whereNull('shop_id'),
             ],
             'category_id' => 'required|integer',
             'supplier_id' => 'nullable|integer',
@@ -439,7 +446,7 @@ class ProductController extends Controller
                 $code = is_scalar($rawCode) ? trim((string) $rawCode) : '';
 
                 // Generate code when missing or invalid/duplicate (same MHB-1001 rule; lock so no conflict with manual add)
-                $code = $codeService->ensureCode($code === '' ? null : $code, null);
+                $code = $codeService->ensureCode($code === '' ? null : $code, null, $shopId);
 
                 $rowData = [
                     'product_name' => $productName,

@@ -6,7 +6,7 @@ use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 
 /**
- * MHB-XXXX product codes: global sequence, unique system-wide.
+ * MHB-XXXX product codes: unique per shop (same code can exist in different shops).
  * Format: MHB-1001, MHB-1002, ... (length not restricted to 4).
  * "Generate code" button shows next available WITHOUT consuming; code is consumed only on save (lock at insert).
  */
@@ -93,9 +93,9 @@ class ProductCodeService
     }
 
     /**
-     * Validate code: format MHB- + digits and unique in system (excluding product id when editing).
+     * Validate code: format MHB- + digits and unique per shop (excluding product id when editing).
      */
-    public function validateCode(?string $code, ?int $excludeProductId = null): void
+    public function validateCode(?string $code, ?int $excludeProductId = null, ?int $shopId = null): void
     {
         if ($code === null || trim((string) $code) === '') {
             return;
@@ -105,22 +105,32 @@ class ProductCodeService
             throw new \InvalidArgumentException('Product code must start with ' . self::PREFIX . ' followed by digits (e.g. ' . self::PREFIX . '1001).');
         }
         $query = Product::query()->where('product_code', $code);
+        if ($shopId !== null) {
+            $query->where('shop_id', $shopId);
+        } else {
+            $query->whereNull('shop_id');
+        }
         if ($excludeProductId !== null) {
             $query->where('id', '!=', $excludeProductId);
         }
         if ($query->exists()) {
-            throw new \InvalidArgumentException('Product code is already in use.');
+            throw new \InvalidArgumentException('Product code is already in use in this shop.');
         }
     }
 
     /**
-     * Ensure product has a code: use existing if valid and unique, otherwise generate next (with lock).
+     * Ensure product has a code: use existing if valid and unique in the shop, otherwise generate next (with lock).
      */
-    public function ensureCode(?string $code, ?int $excludeProductId = null): string
+    public function ensureCode(?string $code, ?int $excludeProductId = null, ?int $shopId = null): string
     {
         $code = $code === null ? '' : trim($code);
         if ($code !== '' && $this->isValidFormat($code)) {
             $query = Product::query()->where('product_code', $code);
+            if ($shopId !== null) {
+                $query->where('shop_id', $shopId);
+            } else {
+                $query->whereNull('shop_id');
+            }
             if ($excludeProductId !== null) {
                 $query->where('id', '!=', $excludeProductId);
             }

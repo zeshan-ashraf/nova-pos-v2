@@ -24,7 +24,6 @@ use Haruncpi\LaravelIdGenerator\IdGenerator;
 use App\Models\PaymentLog;
 use App\Support\ActiveShop;
 use App\Services\CustomerCreditService;
-use App\Services\ProductCodeService;
 use App\Services\SalePaymentLedgerService;
 use App\Services\Stock\StockService;
 use App\Services\SupplierCreditService;
@@ -1384,14 +1383,13 @@ class OrderController extends Controller
                             Product::where('id', $childProduct->id)
                                 ->update(['product_store' => DB::raw('product_store + ' . $product['quantity'])]);
                         } else {
-                            // Create new product for child shop (unique product code system-wide)
-                            $productCode = app(ProductCodeService::class)->generateNextCode();
+                            // Create new product for child shop (same product code as mother shop; unique per shop)
                             Product::create([
                                 'product_name' => $motherProduct->product_name,
                                 'category_id' => $motherProduct->category_id,
                                 'supplier_id' => $supplier->id,
                                 'shop_id' => $childShop->id,
-                                'product_code' => $productCode,
+                                'product_code' => $motherProduct->product_code,
                                 'product_garage' => $motherProduct->product_garage,
                                 'product_image' => $motherProduct->product_image,
                                 'product_store' => $product['quantity'],
