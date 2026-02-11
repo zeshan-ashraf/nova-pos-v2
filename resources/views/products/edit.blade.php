@@ -49,7 +49,16 @@
                         <!-- begin: Input Data -->
                         <div class=" row align-items-center">
                             <div class="form-group col-md-12">
-                                <label for="product_name">Product Name <span class="text-danger">*</span></label>
+                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <label for="product_name" class="mb-0">Product Name <span class="text-danger">*</span></label>
+                                    @if ($product->status === 'active')
+                                        <span class="badge rounded-pill bg-success">Active</span>
+                                    @elseif ($product->status === 'ordered')
+                                        <span class="badge rounded-pill bg-warning">Ordered</span>
+                                    @else
+                                        <span class="badge rounded-pill bg-secondary">{{ ucfirst($product->status ?? 'N/A') }}</span>
+                                    @endif
+                                </div>
                                 <input type="text" class="form-control @error('product_name') is-invalid @enderror" id="product_name" name="product_name" value="{{ old('product_name', $product->product_name) }}" required>
                                 @error('product_name')
                                 <div class="invalid-feedback">
