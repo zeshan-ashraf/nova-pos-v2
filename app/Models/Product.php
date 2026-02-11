@@ -37,6 +37,13 @@ class Product extends Model
         'id',
     ];
 
+    /**
+     * buying_price: moving weighted average cost (updated on purchase only).
+     */
+    protected $casts = [
+        'buying_price' => 'float',
+    ];
+
     protected $with = [
         'category',
         'shop'

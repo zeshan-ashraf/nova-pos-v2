@@ -162,6 +162,10 @@ class StockService
     /**
      * Insert one stock_log and update product_store. Call only inside an active DB::transaction with product locked.
      * WHY: Ensures ledger and product_store stay in sync; no silent failures.
+     *
+     * Moving Weighted Average Costing: on purchase (direction=in, source_type=purchase), recalculate
+     * product.buying_price (running average cost) and update product_store. On sale/out, only update
+     * product_store; never modify buying_price. stock_logs always stores original purchase price (price).
      */
     private function insertLogAndUpdateProduct(
         Product $product,
@@ -175,13 +179,14 @@ class StockService
         ?string $adjustmentDate = null
     ): StockLog {
         $shopId = $product->shop_id;
-        $current = (int) ($product->{self::STOCK_COLUMN} ?? 0);
+        $currentQty = (int) ($product->{self::STOCK_COLUMN} ?? 0);
+        $currentQty = max($currentQty, 0); // treat negative stock as 0 for avg calculation
         $delta = $direction === 'in' ? $qty : -$qty;
-        $newStock = $current + $delta;
+        $newStock = $currentQty + $delta;
 
         if ($newStock < 0) {
             throw new InvalidArgumentException(
-                "Stock would go negative. Current: {$current}, requested out: {$qty}."
+                "Stock would go negative. Current: {$currentQty}, requested out: {$qty}."
             );
         }
 
@@ -199,7 +204,26 @@ class StockService
             'stock_qty'        => $direction === 'out' ? -$qty : $qty, // legacy column
         ]);
 
-        $product->update([self::STOCK_COLUMN => $newStock]);
+        $updateData = [self::STOCK_COLUMN => $newStock];
+
+        if ($direction === 'in' && $sourceType === 'purchase') {
+            $currentAvgCost = (float) ($product->buying_price ?? 0);
+            $newQty = $qty;
+            $newCost = $price;
+            $totalQty = $currentQty + $newQty;
+
+            if ($totalQty > 0) {
+                $newAvgCost = (
+                    ($currentQty * $currentAvgCost) + ($newQty * $newCost)
+                ) / $totalQty;
+            } else {
+                $newAvgCost = 0.0;
+            }
+
+            $updateData['buying_price'] = round($newAvgCost, 4);
+        }
+
+        $product->update($updateData);
 
         // System expense for stock loss (non-cash; affects P&L only). Inside same transaction.
         if ($direction === 'out' && in_array($sourceType, ['loss', 'expired', 'theft'], true)) {

@@ -91,10 +91,11 @@ class PurchaseController extends Controller
             $suppliersQuery->whereRaw('1 = 0'); // Always false condition
         }
 
-        // Filter products by user's shop_id only (exclude child shops)
+        // Filter products by user's shop_id only (exclude child shops); include 'ordered' so they can receive first purchase
         $productsQuery = Product::where(function($query) {
                 $query->where('status', 'valid')
-                      ->orWhere('status', 'active');
+                      ->orWhere('status', 'active')
+                      ->orWhere('status', 'ordered');
             });
 
         if ($targetShopId) {
@@ -134,10 +135,11 @@ class PurchaseController extends Controller
         // For purchase/create page only: show products from user's shop_id only (exclude child shops)
         $targetShopId = $authUser->shop_id;
         
-        // Build base query with status filtering
+        // Build base query with status filtering (include 'ordered' for purchase create)
         $productsQuery = Product::where(function($query) {
             $query->where('status', 'valid')
-                  ->orWhere('status', 'active');
+                  ->orWhere('status', 'active')
+                  ->orWhere('status', 'ordered');
         });
         
         // Apply shop filtering - only user's specific shop_id (exclude child shops)
@@ -327,6 +329,11 @@ class PurchaseController extends Controller
                         $purchase_id,
                         $purchaseDate
                     );
+
+                    // Once buying price is set via purchase, mark product as active (was ordered)
+                    if ($productModel->status === 'ordered') {
+                        $productModel->update(['status' => 'active']);
+                    }
                 }
 
                 // 3. Create payment log if payment was made (shop_bank_id for bank/cheque)
