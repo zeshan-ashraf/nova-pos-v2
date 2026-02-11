@@ -1142,9 +1142,10 @@ class OrderController extends Controller
 
                         $productModel = Product::findOrFail($product['product_id']);
 
-                        if ($productModel->status !== 'active' || empty($productModel->selling_price) || $productModel->selling_price <= 0) {
-                            throw new \Exception("Product {$productModel->product_name} is not available for sale.");
-                        }
+                        // Commented out for now: require active status and valid selling_price
+                        // if ($productModel->status !== 'active' || empty($productModel->selling_price) || $productModel->selling_price <= 0) {
+                        //     throw new \Exception("Product {$productModel->product_name} is not available for sale.");
+                        // }
 
                         if ($authUser->shop_id && $productModel->shop_id !== $authUser->shop_id) {
                             throw new \Exception("Product {$productModel->product_name} does not belong to your shop.");
@@ -1342,10 +1343,10 @@ class OrderController extends Controller
 
                         $motherProduct = Product::findOrFail($product['product_id']);
 
-                        // Validate product status and selling_price
-                        if ($motherProduct->status !== 'active' || empty($motherProduct->selling_price) || $motherProduct->selling_price <= 0) {
-                            throw new \Exception("Product {$motherProduct->product_name} is not available for sale.");
-                        }
+                        // Commented out for now: require active status and valid selling_price
+                        // if ($motherProduct->status !== 'active' || empty($motherProduct->selling_price) || $motherProduct->selling_price <= 0) {
+                        //     throw new \Exception("Product {$motherProduct->product_name} is not available for sale.");
+                        // }
 
                         // Validate product belongs to mother shop
                         if ($motherProduct->shop_id !== $motherShop->id) {

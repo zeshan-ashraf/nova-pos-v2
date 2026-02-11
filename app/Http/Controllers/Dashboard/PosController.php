@@ -83,10 +83,10 @@ class PosController extends Controller
             return Redirect::back()->withErrors(['product' => 'Product not found.']);
         }
 
-        // Ensure product is active and has selling_price
-        if ($product->status !== 'active' || empty($product->selling_price) || $product->selling_price <= 0) {
-            return Redirect::back()->withErrors(['product' => 'This product is not available for sale.']);
-        }
+        // Commented out for now: require active status and valid selling_price
+        // if ($product->status !== 'active' || empty($product->selling_price) || $product->selling_price <= 0) {
+        //     return Redirect::back()->withErrors(['product' => 'This product is not available for sale.']);
+        // }
 
         Cart::add([
             'id' => $validatedData['id'],

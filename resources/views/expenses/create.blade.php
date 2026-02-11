@@ -22,9 +22,9 @@
                 <div class="card-body">
                     <form action="{{ route('expenses.store') }}" method="POST" enctype="multipart/form-data">
                         @csrf
-                        <!-- begin: Expense Category -->
+                        <!-- begin: Expense Category | Expense Date | Cost (same row) -->
                         <div class="form-group row">
-                            <div class="col-md-12">
+                            <div class="col-md-4">
                                 <div class="d-flex justify-content-between align-items-center mb-1">
                                     <label for="expense_id" class="mb-0">Expense Category <span class="text-danger">*</span></label>
                                     @if (auth()->user()->can('expense-categories.menu'))
@@ -43,8 +43,26 @@
                                 </div>
                                 @enderror
                             </div>
+                            <div class="col-md-4">
+                                <label for="date">Expense Date <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control @error('date') is-invalid @enderror" id="date" name="date" value="{{ old('date', now()->format('Y-m-d')) }}" required readonly>
+                                @error('date')
+                                <div class="invalid-feedback">
+                                    {{ $message }}
+                                </div>
+                                @enderror
+                            </div>
+                            <div class="col-md-4">
+                                <label for="activity_cost">Cost <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control @error('activity_cost') is-invalid @enderror" id="activity_cost" name="activity_cost" value="{{ old('activity_cost') }}" required>
+                                @error('activity_cost')
+                                <div class="invalid-feedback">
+                                    {{ $message }}
+                                </div>
+                                @enderror
+                            </div>
                         </div>
-                        <!-- end: Expense Category -->
+                        <!-- end: Expense Category | Expense Date | Cost -->
 
                         <!-- begin: Input Description -->
                         <div class="form-group row">
@@ -59,32 +77,6 @@
                             </div>
                         </div>
                         <!-- end: Input Description -->
-
-                        <!-- begin: Input Date and Cost -->
-                        <div class="form-group row">
-                            <!-- Expense Date -->
-                            <div class="col-md-6">
-                                <label for="date">Expense Date <span class="text-danger">*</span></label>
-                                <input type="date" class="form-control @error('date') is-invalid @enderror" id="date" name="date" value="{{ old('date', now()->format('Y-m-d')) }}" required readonly>
-                                @error('date')
-                                <div class="invalid-feedback">
-                                    {{ $message }}
-                                </div>
-                                @enderror
-                            </div>
-
-                            <!-- Cost -->
-                            <div class="col-md-6">
-                                <label for="activity_cost">Cost <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control @error('activity_cost') is-invalid @enderror" id="activity_cost" name="activity_cost" value="{{ old('activity_cost') }}" required>
-                                @error('activity_cost')
-                                <div class="invalid-feedback">
-                                    {{ $message }}
-                                </div>
-                                @enderror
-                            </div>
-                        </div>
-                        <!-- end: Input Date and Cost -->
 
                         <!-- begin: Payment method and Bank -->
                         <div class="form-group row">
