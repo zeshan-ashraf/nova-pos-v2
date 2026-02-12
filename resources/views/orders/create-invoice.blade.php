@@ -111,6 +111,8 @@
         .summary-label {
             font-weight: 600;
             color: #495057;
+            padding-top: 10px;
+            padding-bottom: 10px;
         }
         .summary-value {
             color: #212529;

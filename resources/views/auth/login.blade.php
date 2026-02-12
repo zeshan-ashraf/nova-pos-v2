@@ -17,6 +17,19 @@
     .login-content form .floating-input:not(:placeholder-shown) ~ label {
         top: 0;
     }
+    
+    /* Logo above form - centered, balanced size */
+    .login-logo-wrap {
+        text-align: center;
+        margin-bottom: 1.5rem;
+        padding-top: 0.5rem;
+    }
+    .login-logo-wrap img {
+        max-width: 220px;
+        height: auto;
+        display: inline-block;
+        object-fit: contain;
+    }
 </style>
 @endsection
 
@@ -28,7 +41,9 @@
                 <div class="d-flex align-items-center auth-content">
                     <div class="col-lg-7 align-self-center">
                         <div class="p-3">
-
+                            <div class="login-logo-wrap">
+                                <img src="{{ asset('assets/images/login/company-logo.png') }}" alt="Company logo">
+                            </div>
                             <h2 class="mb-2">Log In</h2>
                             <p>Login to stay connected.</p>
 
@@ -72,7 +87,7 @@
                     </div>
 
                     <div class="col-lg-5 content-right">
-                        <img src="{{ asset('assets/images/login/01.png') }}" class="img-fluid image-right" alt="">
+                        <img src="{{ asset('assets/images/login/company-logo.png') }}" class="img-fluid image-right" alt="Company logo">
                     </div>
                 </div>
             </div>
