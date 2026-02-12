@@ -6,8 +6,10 @@ use App\Http\Controllers\Dashboard\StockAdjustController;
 use App\Http\Controllers\Dashboard\ProfileController;
 use App\Http\Controllers\Dashboard\CategoryController;
 use App\Http\Controllers\Dashboard\CustomerController;
+use App\Http\Controllers\Dashboard\CustomerPaymentController;
 use App\Http\Controllers\Dashboard\EmployeeController;
 use App\Http\Controllers\Dashboard\SupplierController;
+use App\Http\Controllers\Dashboard\SupplierPaymentController;
 use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Dashboard\PaySalaryController;
 use App\Http\Controllers\Dashboard\AttendenceController;
@@ -144,8 +146,18 @@ Route::get('/customers/{customer}/credit-log', [CustomerController::class, 'cred
 Route::get('/customers/{customer}/ledger', [CustomerController::class, 'ledger'])->name('customers.ledger');
 Route::get('/customers/{customer}/ledger/pdf', [CustomerController::class, 'ledgerPdf'])->name('customers.ledgerPdf');
 
+Route::middleware(['permission:customer_payment.menu'])->group(function () {
+    Route::get('/customer-payments/create', [CustomerPaymentController::class, 'create'])->name('customer-payments.create');
+    Route::post('/customer-payments', [CustomerPaymentController::class, 'store'])->name('customer-payments.store');
+});
+
 Route::get('/suppliers/{supplier}/ledger', [SupplierController::class, 'ledger'])->name('suppliers.ledger');
 Route::get('/suppliers/{supplier}/ledger/pdf', [SupplierController::class, 'ledgerPdf'])->name('suppliers.ledgerPdf');
+
+Route::middleware(['permission:supplier_payment.menu'])->group(function () {
+    Route::get('/supplier-payments/create', [SupplierPaymentController::class, 'create'])->name('supplier-payments.create');
+    Route::post('/supplier-payments', [SupplierPaymentController::class, 'store'])->name('supplier-payments.store');
+});
 
 // ====== ORDERS ======
 Route::middleware(['permission:orders.menu'])->group(function () {

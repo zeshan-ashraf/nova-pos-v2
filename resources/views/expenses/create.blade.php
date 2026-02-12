@@ -194,8 +194,20 @@
 $(document).ready(function() {
     $('.expense-category-select').select2({
         theme: 'bootstrap-5',
-        placeholder: 'Select expense category',
-        allowClear: false
+        placeholder: 'Search expense category...',
+        allowClear: false,
+        width: '100%',
+        minimumResultsForSearch: 0
+    }).on('select2:open', function() {
+        var focusSearch = function() {
+            var el = document.querySelector('.select2-container--open .select2-search__field');
+            if (el) {
+                el.focus();
+            }
+        };
+        requestAnimationFrame(function() { focusSearch(); });
+        setTimeout(focusSearch, 50);
+        setTimeout(focusSearch, 200);
     });
 });
 </script>

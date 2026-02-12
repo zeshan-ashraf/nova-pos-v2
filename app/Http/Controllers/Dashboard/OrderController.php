@@ -24,6 +24,7 @@ use Haruncpi\LaravelIdGenerator\IdGenerator;
 use App\Models\PaymentLog;
 use App\Support\ActiveShop;
 use App\Services\CustomerCreditService;
+use App\Services\Ledger\SaleLedgerService;
 use App\Services\SalePaymentLedgerService;
 use App\Services\Stock\StockService;
 use App\Services\SupplierCreditService;
@@ -222,7 +223,7 @@ class OrderController extends Controller
         }
         
         $validatedData['order_date'] = Carbon::now()->format('Y-m-d');
-        $validatedData['order_status'] = 'pending';
+        $validatedData['order_status'] = 'complete';
         $validatedData['total_products'] = Cart::count();
         $validatedData['sub_total'] = Cart::subtotal();
         $validatedData['vat'] = Cart::tax();
@@ -239,6 +240,8 @@ class OrderController extends Controller
             // Use create() instead of insertGetId() to properly handle SoftDeletes
             $order = Order::create($validatedData);
             $order_id = $order->id;
+
+            app(SaleLedgerService::class)->recordInvoiceCustomerDebit($order);
 
             // Increase customer credit by pending amount (if any)
             $creditService->addPending($customer, $validatedData['due']);
@@ -634,7 +637,7 @@ class OrderController extends Controller
             'order' => [
                 'id' => $order->id,
                 'invoice_no' => $order->invoice_no,
-                'customer_name' => $order->customer->name ?? 'N/A',
+                'customer_name' => $order->customer?->name ?? $order->customer?->shopname ?? 'N/A',
                 'total' => $order->total,
                 'due' => $order->due ?? 0,
                 'pay' => $order->pay ?? 0,
@@ -1100,8 +1103,8 @@ class OrderController extends Controller
                     ->withInput();
             }
 
-            // Determine order status: if due == 0, mark complete, otherwise pending
-            $orderStatus = ($due == 0) ? 'complete' : 'pending';
+            // Sales invoices are always complete (no pending)
+            $orderStatus = 'complete';
 
             $orderData = [
                 'customer_id' => $validatedData['customer_id'],
@@ -1125,6 +1128,8 @@ class OrderController extends Controller
                 DB::transaction(function () use (&$order_id, $orderData, $validatedData, $creditService, $customer, $due, $pay1, $pay2, $paymentMethod1, $paymentMethod2, $shopBankId1, $shopBankId2, $authUser) {
                     $order = Order::create($orderData);
                     $order_id = $order->id;
+
+                    app(SaleLedgerService::class)->recordInvoiceCustomerDebit($order);
 
                     if ($due > 0) {
                         $creditService->addPending($customer, $due);
@@ -1223,8 +1228,9 @@ class OrderController extends Controller
                     ->withInput();
             }
 
-            // Ensure mother shop exists as supplier for child shop
-            $supplier = Supplier::where('shop_id', $childShop->id)
+            // Ensure mother shop exists as supplier for child shop (query child shop, so bypass shop scope)
+            $supplier = Supplier::withoutGlobalScope('shop')
+                ->where('shop_id', $childShop->id)
                 ->where('mother_shop_id', $motherShop->id)
                 ->first();
 
@@ -1244,20 +1250,20 @@ class OrderController extends Controller
                 ]);
             }
 
-            // Get or create system customer for child shop
-            $systemCustomer = Customer::where('shop_id', $childShop->id)
+            // Get or create system customer representing child shop (linked by child_shop_id); customer belongs to mother shop so it appears in mother shop's lists (global scope)
+            $systemCustomer = Customer::withoutGlobalScope('shop')
+                ->where('shop_id', $motherShop->id)
+                ->where('child_shop_id', $childShop->id)
                 ->where('is_system', true)
-                ->where('shopname', $childShop->name)
                 ->first();
 
             if (!$systemCustomer) {
-                // Use child shop ID to ensure phone uniqueness
-                $customerPhone = $childShop->phone . '-SYS-' . $childShop->id;
                 $systemCustomer = Customer::create([
-                    'shop_id' => $childShop->id,
+                    'shop_id' => $motherShop->id,
+                    'child_shop_id' => $childShop->id,
                     'shopname' => $childShop->name,
                     'name' => $childShop->name,
-                    'phone' => $customerPhone,
+                    'phone' => $childShop->phone . '-SYS-' . $childShop->id,
                     'email' => null,
                     'is_system' => true,
                     'address' => $childShop->address,
@@ -1331,6 +1337,8 @@ class OrderController extends Controller
                     $order = Order::create($orderData);
                     $order_id = $order->id;
 
+                    app(SaleLedgerService::class)->recordInvoiceCustomerDebit($order);
+
                     if ($pay1 > 0) {
                         $this->createPaymentLog($order_id, $pay1, $paymentMethod1, $shopBankId1);
                     }
@@ -1377,20 +1385,23 @@ class OrderController extends Controller
                         Product::where('id', $product['product_id'])
                             ->update(['product_store' => DB::raw('product_store - ' . $product['quantity'])]);
 
-                        // Check if child shop has this product
-                        $childProduct = Product::where('shop_id', $childShop->id)
+                        // Check if child shop has this product (query child shop, so bypass shop scope)
+                        $childProduct = Product::withoutGlobalScope('shop')
+                            ->where('shop_id', $childShop->id)
                             ->where('product_name', $motherProduct->product_name)
                             ->first();
 
                         if ($childProduct) {
-                            // Update stock only (keep existing attributes)
-                            Product::where('id', $childProduct->id)
+                            // Update stock only (keep existing attributes; child product is in child shop)
+                            Product::withoutGlobalScope('shop')
+                                ->where('id', $childProduct->id)
                                 ->update(['product_store' => DB::raw('product_store + ' . $product['quantity'])]);
                         } else {
-                            // Resolve category for child shop: find by name or create
-                            $motherCategory = Category::find($motherProduct->category_id);
+                            // Resolve category for child shop: find by name or create (query child shop, so bypass shop scope)
+                            $motherCategory = Category::withoutGlobalScope('shop')->find($motherProduct->category_id);
                             $categoryName = $motherCategory ? trim($motherCategory->name) : 'Uncategorized';
-                            $childCategory = Category::where('shop_id', $childShop->id)
+                            $childCategory = Category::withoutGlobalScope('shop')
+                                ->where('shop_id', $childShop->id)
                                 ->whereRaw('LOWER(TRIM(name)) = ?', [strtolower($categoryName)])
                                 ->first();
                             if (!$childCategory) {
@@ -1459,9 +1470,10 @@ class OrderController extends Controller
                             continue;
                         }
 
-                        // Find child shop's product (already created/updated above)
+                        // Find child shop's product (already created/updated above; query child shop, so bypass shop scope)
                         $motherProduct = Product::findOrFail($product['product_id']);
-                        $childProduct = Product::where('shop_id', $childShop->id)
+                        $childProduct = Product::withoutGlobalScope('shop')
+                            ->where('shop_id', $childShop->id)
                             ->where('product_name', $motherProduct->product_name)
                             ->firstOrFail();
 

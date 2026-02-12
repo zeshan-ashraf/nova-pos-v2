@@ -4,18 +4,22 @@ namespace App\Services;
 
 use App\Models\AccountTransaction;
 use App\Models\PaymentLog;
+use App\Services\Ledger\SaleLedgerService;
 
 class SalePaymentLedgerService
 {
-    /**
-     * Create a single ledger entry from a sale payment_log.
-     * One payment_log = at most one ledger entry.
-     *
-     * @param int $paymentLogId
-     * @return AccountTransaction
-     * @throws \Illuminate\Database\Eloquent\ModelNotFoundException
-     * @throws \InvalidArgumentException
-     */
+    public function __construct(
+        private SaleLedgerService $saleLedgerService
+    ) {}
+
+/**
+ * Create ledger entries from a sale payment_log (double-entry): (1) bank/cash debit (money in), (2) customer credit (AR decrease).
+ * One payment_log = one bank/cash entry + one customer entry (when order has customer_id).
+ * Rule: Receiving payment → increase asset (debit cash/bank), decrease receivable (credit customer).
+ *
+ * @param int $paymentLogId
+ * @return AccountTransaction The bank/cash entry
+ */
     public function createFromPaymentLog(int $paymentLogId): AccountTransaction
     {
         $paymentLog = PaymentLog::with('order')->findOrFail($paymentLogId);
@@ -37,16 +41,21 @@ class SalePaymentLedgerService
             ? \Illuminate\Support\Carbon::parse($order->order_date)->toDateString()
             : now()->toDateString();
 
-        return AccountTransaction::create([
+        // Cash/Bank DEBIT — money received (asset increase)
+        $bankOrCashEntry = AccountTransaction::create([
             'shop_id' => $order->shop_id,
             'account_type' => $accountType,
             'account_ref_id' => $accountRefId,
-            'direction' => AccountTransaction::DIRECTION_CREDIT,
+            'direction' => AccountTransaction::DIRECTION_DEBIT,
             'amount' => $paymentLog->amount_paid,
             'source_type' => AccountTransaction::SOURCE_SALE,
             'source_id' => $paymentLog->id,
             'description' => 'Sale payment – Invoice ' . ($order->invoice_no ?? $order->id),
             'transaction_date' => $transactionDate,
         ]);
+
+        $this->saleLedgerService->recordPaymentCustomerCredit($order, (float) $paymentLog->amount_paid, (int) $paymentLog->id);
+
+        return $bankOrCashEntry;
     }
 }

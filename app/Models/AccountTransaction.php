@@ -12,6 +12,14 @@ class AccountTransaction extends Model
 
     public const ACCOUNT_TYPE_CASH = 'cash';
     public const ACCOUNT_TYPE_BANK = 'bank';
+    public const ACCOUNT_TYPE_CUSTOMER = 'customer';
+    public const ACCOUNT_TYPE_SUPPLIER = 'supplier';
+    /** Revenue (credit increases). */
+    public const ACCOUNT_TYPE_SALE = 'sale';
+    /** Inventory / cost (debit increases). */
+    public const ACCOUNT_TYPE_PURCHASE = 'purchase';
+    /** Expense (debit increases). */
+    public const ACCOUNT_TYPE_EXPENSE = 'expense';
 
     public const DIRECTION_DEBIT = 'debit';
     public const DIRECTION_CREDIT = 'credit';
@@ -20,6 +28,8 @@ class AccountTransaction extends Model
     public const SOURCE_SALE = 'sale';
     public const SOURCE_PURCHASE = 'purchase';
     public const SOURCE_PURCHASE_PAYMENT = 'purchase_payment';
+    public const SOURCE_CUSTOMER_PAYMENT = 'customer_payment';
+    public const SOURCE_SUPPLIER_PAYMENT = 'supplier_payment';
     public const SOURCE_EXPENSE = 'expense';
     public const SOURCE_TRANSFER = 'transfer';
     public const SOURCE_ADJUSTMENT = 'adjustment';

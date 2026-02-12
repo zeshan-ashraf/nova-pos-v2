@@ -2,14 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\BelongsToShop;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-
 use Kyslik\ColumnSortable\Sortable;
 
 class Customer extends Model
 {
-    use HasFactory, Sortable;
+    use BelongsToShop, HasFactory, Sortable;
 
     protected $fillable = [
         'name',
@@ -24,6 +24,7 @@ class Customer extends Model
         'bank_branch',
         'city',
         'shop_id',
+        'child_shop_id',
         'credit_limit',
         'credit_amount',
         'credit_days',
@@ -57,5 +58,10 @@ class Customer extends Model
     public function shop()
     {
         return $this->belongsTo(Shop::class, 'shop_id');
+    }
+
+    public function childShop()
+    {
+        return $this->belongsTo(Shop::class, 'child_shop_id');
     }
 }

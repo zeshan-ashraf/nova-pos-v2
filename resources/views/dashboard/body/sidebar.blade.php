@@ -174,6 +174,34 @@
                 </li>
                 @endif
 
+                @if (auth()->user()->can('customer_payment.menu') || auth()->user()->can('supplier_payment.menu'))
+                <li>
+                    <a href="#payments" class="collapsed" data-toggle="collapse" aria-expanded="false">
+                        <i class="fa-solid fa-money-bill-transfer"></i>
+                        <span class="ml-3">Payments</span>
+                        <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="10 15 15 20 20 15"></polyline><path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
+                        </svg>
+                    </a>
+                    <ul id="payments" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
+                        @if (auth()->user()->can('customer_payment.menu'))
+                        <li class="{{ Request::is('customer-payments*') ? 'active' : '' }}">
+                            <a href="{{ route('customer-payments.create') }}">
+                                <i class="fa-solid fa-arrow-right"></i><span>Customer Payment</span>
+                            </a>
+                        </li>
+                        @endif
+                        @if (auth()->user()->can('supplier_payment.menu'))
+                        <li class="{{ Request::is('supplier-payments*') ? 'active' : '' }}">
+                            <a href="{{ route('supplier-payments.create') }}">
+                                <i class="fa-solid fa-arrow-right"></i><span>Supplier Payment</span>
+                            </a>
+                        </li>
+                        @endif
+                    </ul>
+                </li>
+                @endif
+
                 @if (auth()->user()->can('expense.menu'))
                 <li>
                     <a href="#expenses" class="collapsed" data-toggle="collapse" aria-expanded="false">

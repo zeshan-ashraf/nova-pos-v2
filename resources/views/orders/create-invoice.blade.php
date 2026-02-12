@@ -385,7 +385,7 @@
                                 <i class="ri-add-line"></i> Add Row
                             </button>
                             {{-- Add Product Button (modal will be included outside the form) --}}
-                            <button type="button" class="btn btn-success btn-add-row ml-2" id="addProductBtn" data-toggle="modal" data-target="#addProductModal">
+                            <button type="button" class="btn btn-success btn-add-row ml-4" id="addProductBtn" data-toggle="modal" data-target="#addProductModal">
                                 <i class="ri-add-line"></i> Add Product
                             </button>
                         </div>
@@ -542,11 +542,11 @@
                     <!-- Submit Button -->
                     <div class="mt-4">
                         <button type="button" class="btn btn-primary btn-lg" id="createInvoiceBtn">
-                            <i class="ri-file-add-line"></i> Create Invoice
+                            <i class="ri-file-add-line"></i> Save
                         </button>
                         <a href="{{ route('order.index') }}" class="btn btn-secondary btn-lg">Cancel</a>
                         <button type="button" class="btn btn-success btn-lg" id="createAndPrintInvoiceBtn">
-                            <i class="ri-printer-line"></i> Create and Print
+                            <i class="ri-printer-line"></i> Save & Print
                         </button>
                     </div>
                 </form>
@@ -684,8 +684,8 @@
                          $('#invoiceForm').find('.form-control.is-invalid').length > 0;
         
         if (hasErrors) {
-            $('#createInvoiceBtn').prop('disabled', false).html('<i class="ri-file-add-line"></i> Create Invoice');
-            $('#createAndPrintInvoiceBtn').prop('disabled', false).html('<i class="ri-printer-line"></i> Create and Print');
+            $('#createInvoiceBtn').prop('disabled', false).html('<i class="ri-file-add-line"></i> Save');
+            $('#createAndPrintInvoiceBtn').prop('disabled', false).html('<i class="ri-printer-line"></i> Save & Print');
             $('#invoiceForm').data('submitting', false);
             console.log('Errors detected on page load, re-enabling buttons');
         }
@@ -1620,7 +1620,7 @@
         return true;
         });
         
-        // Handle "Create and Print" button click
+        // Handle "Save & Print" button click
         $('#createAndPrintInvoiceBtn').on('click', function(e) {
             const $invoiceForm = $('#invoiceForm');
             

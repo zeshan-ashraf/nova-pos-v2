@@ -1,0 +1,43 @@
+---
+description: When adding Select2 to any dropdown in this project, use searchable dropdown with auto-focus on open.
+globs: ["**/*.blade.php", "**/*.php"]
+---
+
+# Select2 usage in Nova POS
+
+Whenever you add or update Select2 on a dropdown in this project, **always** include:
+
+1. **Search always visible**  
+   Set `minimumResultsForSearch: 0` so the search input is always shown when the dropdown opens.
+
+2. **Auto-focus search on open**  
+   Attach a `select2:open` handler that focuses the search field so the user can type immediately without clicking the input:
+   - Use `requestAnimationFrame` + `setTimeout(..., 50)` + `setTimeout(..., 200)` to focus `.select2-container--open .select2-search__field`.
+   - This ensures the search input receives focus reliably after the dropdown is rendered.
+
+3. **Standard options**  
+   Use `theme: 'bootstrap-5'`, `width: '100%'`, and a clear `placeholder` (e.g. "Search ...").
+
+## Example (apply to every Select2 init)
+
+```javascript
+$('.your-select-class').select2({
+    theme: 'bootstrap-5',
+    placeholder: 'Search ...',
+    allowClear: true,  // or false if required
+    width: '100%',
+    minimumResultsForSearch: 0
+}).on('select2:open', function() {
+    var focusSearch = function() {
+        var el = document.querySelector('.select2-container--open .select2-search__field');
+        if (el) {
+            el.focus();
+        }
+    };
+    requestAnimationFrame(function() { focusSearch(); });
+    setTimeout(focusSearch, 50);
+    setTimeout(focusSearch, 200);
+});
+```
+
+Reference implementations: `resources/views/customer-payments/create.blade.php`, `resources/views/supplier-payments/create.blade.php`, `resources/views/expenses/create.blade.php`.

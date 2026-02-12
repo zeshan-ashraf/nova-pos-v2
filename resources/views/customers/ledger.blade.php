@@ -8,6 +8,7 @@
             <p class="mb-0 text-muted">{{ $customer->shopname }} ({{ $customer->phone }})</p>
         </div>
         <div class="col-lg-4 text-right">
+            <a href="{{ route('customer-payments.create', ['customer_id' => $customer->id]) }}" class="btn btn-success mr-2">Record Payment</a>
             <a href="{{ route('customers.show', $customer->id) }}" class="btn btn-secondary">Back to Profile</a>
         </div>
     </div>

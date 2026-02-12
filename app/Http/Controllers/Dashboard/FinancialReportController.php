@@ -108,8 +108,10 @@ class FinancialReportController extends Controller
         $dateRange = $this->getDateRange($request);
         $shopFilter = $this->getShopFilter($request, $authUser);
 
+        // Cash flow: only cash and bank movements; customer/supplier ledger entries must NOT affect
         $baseQuery = AccountTransaction::query()
-            ->whereBetween('transaction_date', [$dateRange['start_datetime'], $dateRange['end_datetime']]);
+            ->whereBetween('transaction_date', [$dateRange['start_datetime'], $dateRange['end_datetime']])
+            ->whereIn('account_type', [AccountTransaction::ACCOUNT_TYPE_CASH, AccountTransaction::ACCOUNT_TYPE_BANK]);
         $this->applyShopFilter($baseQuery, $shopFilter['shop_ids']);
 
         // Cash flow UI mapping: credit = inflow (money received), debit = outflow (money spent). Defensive: empty set => zero.
@@ -117,11 +119,12 @@ class FinancialReportController extends Controller
         $totalOutflow = (float) (clone $baseQuery)->where('direction', AccountTransaction::DIRECTION_DEBIT)->sum('amount');
         $netCashFlow = $totalInflow - $totalOutflow;
 
-        // Group by transaction_date (by day), account_type, account_ref_id. Inflow = credit, outflow = debit. Defensive: empty shop list => no rows.
+        // Group by transaction_date (by day), account_type, account_ref_id. Inflow = credit, outflow = debit. Only cash/bank.
         $byDateAccountQuery = AccountTransaction::query()
             ->leftJoin('bank_shop', 'bank_shop.id', '=', 'account_transactions.account_ref_id')
             ->leftJoin('banks', 'banks.id', '=', 'bank_shop.bank_id')
-            ->whereBetween('account_transactions.transaction_date', [$dateRange['start_datetime'], $dateRange['end_datetime']]);
+            ->whereBetween('account_transactions.transaction_date', [$dateRange['start_datetime'], $dateRange['end_datetime']])
+            ->whereIn('account_transactions.account_type', [AccountTransaction::ACCOUNT_TYPE_CASH, AccountTransaction::ACCOUNT_TYPE_BANK]);
         $this->applyShopFilter($byDateAccountQuery, $shopFilter['shop_ids'], 'account_transactions.shop_id');
         $byDateAccountQuery
             ->select(

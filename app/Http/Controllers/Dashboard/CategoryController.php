@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Models\Category;
-use App\Support\ActiveShop;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
@@ -14,20 +13,7 @@ use Illuminate\Validation\Rule;
 class CategoryController extends Controller
 {
     /**
-     * Resolve current shop for category scope (logged-in user's shop or active shop for super admin).
-     */
-    private function currentShopId(): ?int
-    {
-        $user = auth()->user();
-        if ($user->shop_id) {
-            return (int) $user->shop_id;
-        }
-        $active = ActiveShop::current();
-        return $active ? (int) $active->id : null;
-    }
-
-    /**
-     * Display a listing of the resource (only categories belonging to current shop).
+     * Display a listing of the resource (only categories belonging to current shop; scope applied by BelongsToShop trait).
      */
     public function index()
     {
@@ -37,16 +23,9 @@ class CategoryController extends Controller
             abort(400, 'The per-page parameter must be an integer between 1 and 100.');
         }
 
-        $shopId = $this->currentShopId();
         $query = Category::with('shop')
             ->filter(request(['search']))
             ->sortable();
-
-        if ($shopId !== null) {
-            $query->where('shop_id', $shopId);
-        } else {
-            $query->whereNull('shop_id');
-        }
 
         return view('categories.index', [
             'categories' => $query->paginate($row)->appends(request()->query()),
@@ -69,16 +48,13 @@ class CategoryController extends Controller
     {
         $request->validate(['name' => 'required|string|max:255']);
 
-        $shopId = $this->currentShopId();
         $name = trim($request->input('name'));
         $slug = Str::slug($name);
 
-        // If category with same name (or slug) exists for this shop, return existing id (5.2: if slug already exist use that category id)
-        $existing = Category::when($shopId !== null, fn ($q) => $q->where('shop_id', $shopId), fn ($q) => $q->whereNull('shop_id'))
-            ->where(function ($q) use ($name, $slug) {
-                $q->where('name', $name)->orWhere('slug', $slug);
-            })
-            ->first();
+        // If category with same name (or slug) exists for this shop, return existing id (scope applied by trait)
+        $existing = Category::where(function ($q) use ($name, $slug) {
+            $q->where('name', $name)->orWhere('slug', $slug);
+        })->first();
 
         if ($existing) {
             if ($request->wantsJson() || $request->ajax()) {
@@ -95,9 +71,8 @@ class CategoryController extends Controller
         $baseSlug = $slug;
         $counter = 0;
         while (true) {
-            $exists = Category::when($shopId !== null, fn ($q) => $q->where('shop_id', $shopId), fn ($q) => $q->whereNull('shop_id'))
-                ->where('slug', $slug)->exists();
-            if (!$exists) {
+            $exists = Category::where('slug', $slug)->exists();
+            if (! $exists) {
                 break;
             }
             $counter++;
@@ -105,9 +80,8 @@ class CategoryController extends Controller
         }
 
         $category = Category::create([
-            'shop_id' => $shopId,
-            'name'    => $name,
-            'slug'    => $slug,
+            'name' => $name,
+            'slug' => $slug,
         ]);
 
         if ($request->wantsJson() || $request->ajax()) {
@@ -146,7 +120,7 @@ class CategoryController extends Controller
     public function update(Request $request, Category $category)
     {
         $this->ensureShopAccess($category);
-        $shopId = $this->currentShopId();
+        $shopId = $category->shop_id;
         $rules = [
             'name' => [
                 'required',
@@ -176,18 +150,15 @@ class CategoryController extends Controller
     }
 
     /**
-     * Ensure the category belongs to the current user's shop (or active shop for super admin).
+     * Ensure the category belongs to the current user's shop.
      */
     protected function ensureShopAccess(Category $category): void
     {
-        $shopId = $this->currentShopId();
-        if ($shopId === null) {
-            if ($category->shop_id !== null) {
-                abort(403, 'You do not have access to this category.');
-            }
-            return;
+        $userShopId = auth()->user()->shop_id;
+        if ($userShopId === null && $category->shop_id !== null) {
+            abort(403, 'You do not have access to this category.');
         }
-        if ((int) $category->shop_id !== $shopId) {
+        if ($userShopId !== null && (int) $category->shop_id !== (int) $userShopId) {
             abort(403, 'You do not have access to this category.');
         }
     }

@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\BelongsToShop;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Kyslik\ColumnSortable\Sortable;
 
 class Category extends Model
 {
-    use HasFactory, Sortable;
+    use BelongsToShop, HasFactory, Sortable;
 
     protected $fillable = [
         'shop_id',

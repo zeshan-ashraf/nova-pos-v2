@@ -209,7 +209,7 @@
                                 <i class="ri-add-line"></i> Add Row
                             </button>
                             {{-- Add Product Button (modal will be included outside the form) --}}
-                            <button type="button" class="btn btn-success btn-add-row ml-2" id="addProductBtn" data-toggle="modal" data-target="#addProductModal">
+                            <button type="button" class="btn btn-success btn-add-row ml-4" id="addProductBtn" data-toggle="modal" data-target="#addProductModal">
                                 <i class="ri-add-line"></i> Add Product
                             </button>
                         </div>

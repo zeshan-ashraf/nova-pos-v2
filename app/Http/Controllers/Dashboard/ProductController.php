@@ -38,31 +38,11 @@ class ProductController extends Controller
         }
 
         $authUser = auth()->user();
-        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
-        $isSuperAdmin = !$authUser->shop_id;
+        $isSuperAdmin = ! $authUser->shop_id;
 
         $productsQuery = Product::with(['category', 'supplier', 'shop.parent'])
             ->filter(request(['search']))
             ->sortable();
-
-        // Apply shop filtering
-        if ($authUser->shop_id) {
-            // Child shop or parent shop user - only see their allowed shops
-            $productsQuery->whereIn('shop_id', $visibleShopIds);
-        } else {
-            // Super admin - can see all, but can filter by shop
-            if (request()->has('shop_id') && request('shop_id')) {
-                $productsQuery->where('shop_id', request('shop_id'));
-            } else {
-                // Show all products (including unassigned)
-                $productsQuery->where(function ($query) use ($visibleShopIds) {
-                    $query->whereNull('shop_id');
-                    if ($visibleShopIds->isNotEmpty()) {
-                        $query->orWhereIn('shop_id', $visibleShopIds);
-                    }
-                });
-            }
-        }
 
         $products = $productsQuery->paginate($row)->appends(request()->query());
         Product::eagerLoadSameShopCategory($products->getCollection());
@@ -90,10 +70,7 @@ class ProductController extends Controller
      */
     public function create()
     {
-        $shopId = auth()->user()->shop_id ?? (ActiveShop::current()?->id);
-        $categories = $shopId
-            ? Category::where('shop_id', $shopId)->orderBy('name')->get()
-            : Category::whereNull('shop_id')->orderBy('name')->get();
+        $categories = Category::orderBy('name')->get();
 
         return view('products.create', [
             'categories' => $categories,
@@ -174,11 +151,6 @@ class ProductController extends Controller
             $validatedData['product_image'] = $fileName;
         }
 
-        // Set shop_id
-        if ($shopId) {
-            $validatedData['shop_id'] = $shopId;
-        }
-
         // Set default values for buying_price and selling_price if not provided
         if (!isset($validatedData['buying_price']) || $validatedData['buying_price'] === null) {
             $validatedData['buying_price'] = 0;
@@ -239,10 +211,7 @@ class ProductController extends Controller
     {
         $this->ensureShopAccess($product);
 
-        $shopId = auth()->user()->shop_id ?? (ActiveShop::current()?->id);
-        $categories = $shopId
-            ? Category::where('shop_id', $shopId)->orderBy('name')->get()
-            : Category::whereNull('shop_id')->orderBy('name')->get();
+        $categories = Category::orderBy('name')->get();
 
         return view('products.edit', [
             'categories' => $categories,

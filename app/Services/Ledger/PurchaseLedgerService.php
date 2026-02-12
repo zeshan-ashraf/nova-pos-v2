@@ -8,24 +8,101 @@ use App\Models\PurchasePaymentLog;
 use Illuminate\Support\Carbon;
 
 /**
- * Records purchase-related cash movements in the ledger (account_transactions).
- * - Purchase is NOT an expense; it affects inventory (stock_logs) and cash when paid.
- * - PAID purchase: one debit entry (cash outflow) at creation.
- * - CREDIT purchase: no ledger entry at creation; cash flow only when payment is made later.
- * - Paying credit purchase later: one debit entry (source_type = purchase_payment).
- * Append-only; duplicate protection by source_type + source_id.
+ * Double-entry ledger for purchases.
+ * Rule: Purchase (inventory) = debit; Supplier (AP) = credit (we owe more), debit (we owe less); Cash/Bank = credit when paying.
+ * - Credit purchase: purchase debit (total), supplier credit (due).
+ * - Paid at creation: purchase debit (total), cash/bank credit (pay).
+ * - Partial: purchase debit (total), cash/bank credit (pay), supplier credit (due).
+ * - Later payment: supplier debit, cash/bank credit.
  */
 class PurchaseLedgerService
 {
     /**
-     * Record paid amount at purchase creation (cash/bank outflow).
-     * Call only when payAmount > 0 and payment is cash/bank/cheque (not credit-only).
-     * Does NOT insert for credit-only purchases (no cash movement).
-     *
-     * @param Purchase $purchase Must have id, shop_id, purchase_date, total, pay, payment_status
-     * @param float $payAmount Amount paid at creation (debit)
-     * @param string|null $shopBankId bank_shop.id when payment_status is bank/cheque, null for cash
-     * @return AccountTransaction
+     * Record purchase DEBIT (inventory/cost increase). Call once per purchase inside same DB transaction as Purchase::create.
+     */
+    public function recordPurchaseDebit(Purchase $purchase): ?AccountTransaction
+    {
+        if (!$purchase->shop_id) {
+            return null;
+        }
+
+        $amount = (float) $purchase->total;
+        if ($amount <= 0) {
+            return null;
+        }
+
+        $existing = AccountTransaction::query()
+            ->where('account_type', AccountTransaction::ACCOUNT_TYPE_PURCHASE)
+            ->where('source_type', AccountTransaction::SOURCE_PURCHASE)
+            ->where('source_id', $purchase->id)
+            ->where('shop_id', $purchase->shop_id)
+            ->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        $transactionDate = $purchase->purchase_date
+            ? Carbon::parse($purchase->purchase_date)->toDateString()
+            : now()->toDateString();
+
+        return AccountTransaction::create([
+            'shop_id' => $purchase->shop_id,
+            'account_type' => AccountTransaction::ACCOUNT_TYPE_PURCHASE,
+            'account_ref_id' => null,
+            'direction' => AccountTransaction::DIRECTION_DEBIT,
+            'amount' => $amount,
+            'source_type' => AccountTransaction::SOURCE_PURCHASE,
+            'source_id' => $purchase->id,
+            'description' => 'Purchase ' . ($purchase->purchase_no ?? (string) $purchase->id),
+            'transaction_date' => $transactionDate,
+        ]);
+    }
+
+    /**
+     * Record supplier CREDIT when a purchase is created (amount we owe = due only).
+     * Call once per purchase when due > 0, inside same DB transaction as Purchase::create.
+     */
+    public function recordPurchaseSupplierCredit(Purchase $purchase): ?AccountTransaction
+    {
+        if (!$purchase->supplier_id || !$purchase->shop_id) {
+            return null;
+        }
+
+        $due = (float) ($purchase->due ?? 0);
+        if ($due <= 0) {
+            return null;
+        }
+
+        $existing = AccountTransaction::query()
+            ->where('account_type', AccountTransaction::ACCOUNT_TYPE_SUPPLIER)
+            ->where('account_ref_id', $purchase->supplier_id)
+            ->where('source_type', AccountTransaction::SOURCE_PURCHASE)
+            ->where('source_id', $purchase->id)
+            ->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        $transactionDate = $purchase->purchase_date
+            ? Carbon::parse($purchase->purchase_date)->toDateString()
+            : now()->toDateString();
+
+        return AccountTransaction::create([
+            'shop_id' => $purchase->shop_id,
+            'account_type' => AccountTransaction::ACCOUNT_TYPE_SUPPLIER,
+            'account_ref_id' => $purchase->supplier_id,
+            'direction' => AccountTransaction::DIRECTION_CREDIT,
+            'amount' => $due,
+            'source_type' => AccountTransaction::SOURCE_PURCHASE,
+            'source_id' => $purchase->id,
+            'description' => 'Purchase ' . ($purchase->purchase_no ?? (string) $purchase->id),
+            'transaction_date' => $transactionDate,
+        ]);
+    }
+
+    /**
+     * Record paid amount at purchase creation: cash/bank CREDIT only (money out).
+     * Call only when payAmount > 0. No supplier debit at creation (liability is already only "due").
      */
     public function recordPurchasePayment(
         Purchase $purchase,
@@ -36,22 +113,23 @@ class PurchaseLedgerService
             throw new \InvalidArgumentException('Purchase ledger requires positive pay amount.');
         }
 
-        $this->guardDuplicate(AccountTransaction::SOURCE_PURCHASE, $purchase->id);
+        $this->guardDuplicateCashBankPurchase($purchase->id);
+
+        $transactionDate = $purchase->purchase_date
+            ? Carbon::parse($purchase->purchase_date)->toDateString()
+            : now()->toDateString();
 
         $paymentStatus = strtolower((string) ($purchase->payment_status ?? ''));
         $isBank = in_array($paymentStatus, ['bank', 'cheque'], true);
         $accountType = $isBank ? AccountTransaction::ACCOUNT_TYPE_BANK : AccountTransaction::ACCOUNT_TYPE_CASH;
         $accountRefId = $isBank && $shopBankId !== null && $shopBankId !== '' ? (int) $shopBankId : null;
 
-        $transactionDate = $purchase->purchase_date
-            ? Carbon::parse($purchase->purchase_date)->toDateString()
-            : now()->toDateString();
-
+        // Cash/Bank CREDIT — money paid out (asset decrease)
         return AccountTransaction::create([
             'shop_id' => $purchase->shop_id,
             'account_type' => $accountType,
             'account_ref_id' => $accountRefId,
-            'direction' => AccountTransaction::DIRECTION_DEBIT,
+            'direction' => AccountTransaction::DIRECTION_CREDIT,
             'amount' => $payAmount,
             'source_type' => AccountTransaction::SOURCE_PURCHASE,
             'source_id' => $purchase->id,
@@ -82,27 +160,61 @@ class PurchaseLedgerService
             throw new \InvalidArgumentException('Purchase payment ledger requires positive amount_paid.');
         }
 
-        // One ledger row per payment log (source_id = payment log id for purchase_payment)
-        $existing = AccountTransaction::query()
+        // Cash/Bank CREDIT — money paid out (asset decrease); one row per payment log
+        $bankOrCashEntry = AccountTransaction::query()
+            ->whereIn('account_type', [AccountTransaction::ACCOUNT_TYPE_CASH, AccountTransaction::ACCOUNT_TYPE_BANK])
             ->where('source_type', AccountTransaction::SOURCE_PURCHASE_PAYMENT)
             ->where('source_id', $paymentLog->id)
             ->first();
-        if ($existing) {
-            return $existing;
+        if (!$bankOrCashEntry) {
+            $isBank = $paymentLog->shop_bank_id > 0;
+            $accountType = $isBank ? AccountTransaction::ACCOUNT_TYPE_BANK : AccountTransaction::ACCOUNT_TYPE_CASH;
+            $accountRefId = $isBank ? (int) $paymentLog->shop_bank_id : null;
+
+            $bankOrCashEntry = AccountTransaction::create([
+                'shop_id' => $purchase->shop_id,
+                'account_type' => $accountType,
+                'account_ref_id' => $accountRefId,
+                'direction' => AccountTransaction::DIRECTION_CREDIT,
+                'amount' => $paymentLog->amount_paid,
+                'source_type' => AccountTransaction::SOURCE_PURCHASE_PAYMENT,
+                'source_id' => $paymentLog->id,
+                'description' => 'Payment for purchase',
+                'transaction_date' => $transactionDate,
+            ]);
         }
 
-        $isBank = $paymentLog->shop_bank_id > 0;
-        $accountType = $isBank ? AccountTransaction::ACCOUNT_TYPE_BANK : AccountTransaction::ACCOUNT_TYPE_CASH;
-        $accountRefId = $isBank ? (int) $paymentLog->shop_bank_id : null;
+        $this->recordSupplierDebitForPayment($purchase, (float) $paymentLog->amount_paid, $transactionDate, $paymentLog->id, AccountTransaction::SOURCE_PURCHASE_PAYMENT);
 
-        return AccountTransaction::create([
+        return $bankOrCashEntry;
+    }
+
+    /**
+     * Insert supplier debit (reduces amount we owe). Duplicate-safe per source_type + source_id.
+     */
+    private function recordSupplierDebitForPayment(Purchase $purchase, float $amount, string $transactionDate, $sourceId, string $sourceType): void
+    {
+        if (!$purchase->supplier_id || $amount <= 0) {
+            return;
+        }
+
+        $exists = AccountTransaction::query()
+            ->where('account_type', AccountTransaction::ACCOUNT_TYPE_SUPPLIER)
+            ->where('source_type', $sourceType)
+            ->where('source_id', $sourceId)
+            ->exists();
+        if ($exists) {
+            return;
+        }
+
+        AccountTransaction::create([
             'shop_id' => $purchase->shop_id,
-            'account_type' => $accountType,
-            'account_ref_id' => $accountRefId,
+            'account_type' => AccountTransaction::ACCOUNT_TYPE_SUPPLIER,
+            'account_ref_id' => $purchase->supplier_id,
             'direction' => AccountTransaction::DIRECTION_DEBIT,
-            'amount' => $paymentLog->amount_paid,
-            'source_type' => AccountTransaction::SOURCE_PURCHASE_PAYMENT,
-            'source_id' => $paymentLog->id,
+            'amount' => $amount,
+            'source_type' => $sourceType,
+            'source_id' => $sourceId,
             'description' => 'Payment for purchase',
             'transaction_date' => $transactionDate,
         ]);
@@ -137,14 +249,16 @@ class PurchaseLedgerService
             ->delete();
     }
 
-    private function guardDuplicate(string $sourceType, $sourceId): void
+    /** Guard: only one bank/cash entry per purchase (source_type=purchase, source_id=purchase.id). */
+    private function guardDuplicateCashBankPurchase($purchaseId): void
     {
         $existing = AccountTransaction::query()
-            ->where('source_type', $sourceType)
-            ->where('source_id', $sourceId)
+            ->whereIn('account_type', [AccountTransaction::ACCOUNT_TYPE_CASH, AccountTransaction::ACCOUNT_TYPE_BANK])
+            ->where('source_type', AccountTransaction::SOURCE_PURCHASE)
+            ->where('source_id', $purchaseId)
             ->first();
         if ($existing) {
-            throw new \InvalidArgumentException("Ledger entry already exists for {$sourceType}:{$sourceId}.");
+            throw new \InvalidArgumentException("Ledger entry already exists for purchase:{$purchaseId}.");
         }
     }
 }

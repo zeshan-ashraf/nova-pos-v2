@@ -82,29 +82,12 @@ class PurchaseController extends Controller
         $authUser = auth()->user();
         $targetShopId = $authUser->shop_id;
 
-        // Filter suppliers by user's shop_id only (exclude child shops)
         $suppliersQuery = Supplier::query();
-        if ($targetShopId) {
-            $suppliersQuery->where('shop_id', $targetShopId);
-        } else {
-            // If no shop_id, show no suppliers
-            $suppliersQuery->whereRaw('1 = 0'); // Always false condition
-        }
-
-        // Filter products by user's shop_id only (exclude child shops); include 'ordered' so they can receive first purchase
-        $productsQuery = Product::where(function($query) {
-                $query->where('status', 'valid')
-                      ->orWhere('status', 'active')
-                      ->orWhere('status', 'ordered');
-            });
-
-        if ($targetShopId) {
-            // Only show products from the user's specific shop_id, not child shops
-            $productsQuery->where('shop_id', $targetShopId);
-        } else {
-            // If no shop_id, show no products
-            $productsQuery->whereRaw('1 = 0'); // Always false condition
-        }
+        $productsQuery = Product::where(function ($query) {
+            $query->where('status', 'valid')
+                ->orWhere('status', 'active')
+                ->orWhere('status', 'ordered');
+        });
 
         $shopBanks = [];
         if ($targetShopId) {
@@ -132,25 +115,13 @@ class PurchaseController extends Controller
         $page = $request->get('page', 1);
         $authUser = auth()->user();
         
-        // For purchase/create page only: show products from user's shop_id only (exclude child shops)
-        $targetShopId = $authUser->shop_id;
-        
-        // Build base query with status filtering (include 'ordered' for purchase create)
-        $productsQuery = Product::where(function($query) {
+        // Build base query with status filtering (include 'ordered' for purchase create); shop scope applied by model trait
+        $productsQuery = Product::where(function ($query) {
             $query->where('status', 'valid')
-                  ->orWhere('status', 'active')
-                  ->orWhere('status', 'ordered');
+                ->orWhere('status', 'active')
+                ->orWhere('status', 'ordered');
         });
-        
-        // Apply shop filtering - only user's specific shop_id (exclude child shops)
-        if ($targetShopId) {
-            // Only show products from the user's specific shop_id, not child shops
-            $productsQuery->where('shop_id', $targetShopId);
-        } else {
-            // If no shop_id available, show no products
-            $productsQuery->whereRaw('1 = 0'); // Always false condition
-        }
-        
+
         // Apply search filter (only if search term is provided)
         if (!empty($search)) {
             $productsQuery->where(function($query) use ($search) {
@@ -292,6 +263,10 @@ class PurchaseController extends Controller
                 // 1. Create purchase
                 $purchase = Purchase::create($purchaseData);
                 $purchase_id = $purchase->id;
+
+                // Double-entry: (1) purchase debit (total), (2) supplier credit (due), (3) cash/bank credit (pay) if any
+                $purchaseLedgerService->recordPurchaseDebit($purchase);
+                $purchaseLedgerService->recordPurchaseSupplierCredit($purchase);
 
                 // 2. Create purchase details and increase stock (stock_logs with purchase_date for COGS)
                 foreach ($validatedData['products'] as $product) {

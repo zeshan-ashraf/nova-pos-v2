@@ -80,7 +80,7 @@
                         <tr>
                             <td>{{ (($orders->currentPage() * $orders->perPage()) - $orders->perPage()) + $loop->iteration }}</td>
                             <td>{{ $order->invoice_no }}</td>
-                            <td>{{ $order->customer->name }}</td>
+                            <td>{{ $order->customer?->name ?? $order->customer?->shopname ?? '—' }}</td>
                             <td>{{ $order->order_date }}</td>
                             <td>{{ $order->pay }}</td>
                             <td>{{ $order->payment_status }}</td>

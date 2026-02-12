@@ -2,14 +2,15 @@
 
 namespace App\Models;
 
-use Kyslik\ColumnSortable\Sortable;
-use Illuminate\Database\Eloquent\Model;
+use App\Traits\BelongsToShop;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
+use Kyslik\ColumnSortable\Sortable;
 
 class Product extends Model
 {
-    use HasFactory, Sortable;
+    use BelongsToShop, HasFactory, Sortable;
 
     protected $fillable = [
         'product_name',

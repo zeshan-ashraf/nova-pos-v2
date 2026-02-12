@@ -27,26 +27,12 @@ class SupplierController extends Controller
             abort(400, 'The per-page parameter must be an integer between 1 and 100.');
         }
 
-        $authUser = auth()->user();
-        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
-
-        // Filter suppliers by shop
-        $suppliersQuery = Supplier::query();
-        if ($authUser->shop_id) {
-            // For users with shop_id, only show suppliers from their shop
-            $suppliersQuery->where('shop_id', $authUser->shop_id);
-        } else {
-            // For SuperAdmin, show all suppliers (including null shop_id)
-            $suppliersQuery->where(function ($query) use ($visibleShopIds) {
-                $query->whereNull('shop_id');
-                if ($visibleShopIds->isNotEmpty()) {
-                    $query->orWhereIn('shop_id', $visibleShopIds);
-                }
-            });
-        }
+        $suppliersQuery = Supplier::query()
+            ->filter(request(['search']))
+            ->sortable();
 
         return view('suppliers.index', [
-            'suppliers' => $suppliersQuery->filter(request(['search']))->sortable()->paginate($row)->appends(request()->query()),
+            'suppliers' => $suppliersQuery->paginate($row)->appends(request()->query()),
         ]);
     }
 
@@ -91,12 +77,6 @@ class SupplierController extends Controller
         $validatedData['credit_amount'] = $request->input('credit_amount', 0);
         $validatedData['credit_limit'] = $request->input('credit_limit', 0);
         $validatedData['credit_days'] = $request->input('credit_days', 0);
-
-        // Set shop_id from logged-in user's shop_id (SuperAdmin can have null shop_id)
-        $authUser = auth()->user();
-        if ($authUser->shop_id) {
-            $validatedData['shop_id'] = $authUser->shop_id;
-        }
 
         /**
          * Handle upload image with Storage.

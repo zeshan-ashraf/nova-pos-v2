@@ -28,19 +28,9 @@ class CustomerController extends Controller
             abort(400, 'The per-page parameter must be an integer between 1 and 100.');
         }
 
-        $authUser = auth()->user();
-
         $customersQuery = Customer::with('shop.parent')
             ->filter(request(['search']))
             ->sortable();
-
-        // Show only customers belonging to the logged-in user's shop
-        if ($authUser->shop_id) {
-            $customersQuery->where('shop_id', $authUser->shop_id);
-        } else {
-            // Super admin (no shop) - see all customers
-            // No extra filter; show all customers including unassigned (shop_id null)
-        }
 
         return view('customers.index', [
             'customers' => $customersQuery->paginate($row)->appends(request()->query()),
@@ -100,9 +90,6 @@ class CustomerController extends Controller
             $file->storeAs($path, $fileName);
             $validatedData['photo'] = $fileName;
         }
-
-        // Set shop_id from logged-in user
-        $validatedData['shop_id'] = auth()->user()->shop_id;
 
         $customer = Customer::create($validatedData);
 
