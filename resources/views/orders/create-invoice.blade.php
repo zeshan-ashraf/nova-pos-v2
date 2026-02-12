@@ -745,28 +745,7 @@
                 // Highlight invalid field
                 $(field).addClass('is-invalid').focus();
             });
-            alert("form found");
-            return;
-            console.error('All invalid fields:', invalidFields);
-            
-            // Also check specific required fields manually
-            console.log('Checking required fields:');
-            console.log('  customer_id:', $('#customer_id').val(), 'Required:', $('#customer_id').prop('required'));
-            console.log('  order_date:', $('#order_date').val(), 'Required:', $('#order_date').prop('required'));
-            console.log('  payment_method_1:', $('#payment_method_1').val(), 'Required:', $('#payment_method_1').prop('required'));
-            
-            // Check products
-            let productCount = 0;
-            $('.product-select').each(function() {
-                const productId = $(this).val();
-                if (productId) {
-                    productCount++;
-                    console.log('  Product found:', productId, 'in select:', $(this).attr('name'));
-                }
-            });
-            console.log('  Total products with ID:', productCount);
-            
-            // Show native validation
+            // Show native validation so user sees which field is missing
             $invoiceForm[0].reportValidity();
             return false;
         }

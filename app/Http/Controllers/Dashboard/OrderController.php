@@ -914,7 +914,7 @@ class OrderController extends Controller
 
     /**
      * Get all categories for dropdown (API endpoint).
-     */
+    */
     public function getCategories()
     {
         $categories = Category::orderBy('name')->get(['id', 'name']);
