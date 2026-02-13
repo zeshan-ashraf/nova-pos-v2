@@ -20,7 +20,7 @@ class SupplierCreditService
         // Lock row to avoid race conditions when multiple payments/purchases touch the same supplier.
         return DB::transaction(function () use ($supplier, $pendingAmount) {
             /** @var Supplier $locked */
-            $locked = Supplier::whereKey($supplier->getKey())->lockForUpdate()->firstOrFail();
+            $locked = Supplier::withoutGlobalScope('shop')->whereKey($supplier->getKey())->lockForUpdate()->firstOrFail();
             $locked->credit_amount = ($locked->credit_amount ?? 0) + $pendingAmount;
             $locked->save();
 
@@ -41,7 +41,7 @@ class SupplierCreditService
 
         return DB::transaction(function () use ($supplier, $paymentAmount) {
             /** @var Supplier $locked */
-            $locked = Supplier::whereKey($supplier->getKey())->lockForUpdate()->firstOrFail();
+            $locked = Supplier::withoutGlobalScope('shop')->whereKey($supplier->getKey())->lockForUpdate()->firstOrFail();
             $newAmount = max(0, ($locked->credit_amount ?? 0) - $paymentAmount);
             $locked->credit_amount = $newAmount;
             $locked->save();
@@ -78,7 +78,7 @@ class SupplierCreditService
 
         return DB::transaction(function () use ($supplier, $pendingAmount) {
             /** @var Supplier $locked */
-            $locked = Supplier::whereKey($supplier->getKey())->lockForUpdate()->firstOrFail();
+            $locked = Supplier::withoutGlobalScope('shop')->whereKey($supplier->getKey())->lockForUpdate()->firstOrFail();
             $newAmount = max(0, ($locked->credit_amount ?? 0) - $pendingAmount);
             $locked->credit_amount = $newAmount;
             $locked->save();
@@ -100,7 +100,7 @@ class SupplierCreditService
 
         return DB::transaction(function () use ($supplier, $paymentAmount) {
             /** @var Supplier $locked */
-            $locked = Supplier::whereKey($supplier->getKey())->lockForUpdate()->firstOrFail();
+            $locked = Supplier::withoutGlobalScope('shop')->whereKey($supplier->getKey())->lockForUpdate()->firstOrFail();
             $locked->credit_amount = ($locked->credit_amount ?? 0) + $paymentAmount;
             $locked->save();
 

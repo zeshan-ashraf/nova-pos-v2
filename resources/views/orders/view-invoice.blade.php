@@ -88,6 +88,7 @@
         }
         .summary-value {
             color: #212529;
+            padding-top: 10px;
         }
         .customer-info-item {
             margin-bottom: 8px;

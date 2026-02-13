@@ -3,6 +3,7 @@
 namespace App\Exceptions;
 
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Session\TokenMismatchException;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -44,5 +45,18 @@ class Handler extends ExceptionHandler
         $this->reportable(function (Throwable $e) {
             //
         });
+    }
+
+    /**
+     * When session/CSRF token expires (419), redirect to login instead of showing error page.
+     */
+    public function render($request, Throwable $e)
+    {
+        if ($e instanceof TokenMismatchException && $request->expectsJson() === false) {
+            return redirect()->route('login')
+                ->with('error', 'Your session has expired. Please log in again.');
+        }
+
+        return parent::render($request, $e);
     }
 }

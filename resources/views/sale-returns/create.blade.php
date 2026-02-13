@@ -77,6 +77,7 @@
         }
         .summary-value {
             color: #212529;
+            padding-top: 10px;
         }
         .order-info {
             background: #f8f9fa;

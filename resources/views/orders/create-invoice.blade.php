@@ -116,6 +116,7 @@
         }
         .summary-value {
             color: #212529;
+            padding-top: 10px;
         }
         .btn-add-row {
             margin: 15px 0;

@@ -46,6 +46,12 @@
                             </div>
                             <h2 class="mb-2">Log In</h2>
                             <p>Login to stay connected.</p>
+                            @if (session('error'))
+                                <div class="alert alert-danger" role="alert">{{ session('error') }}</div>
+                            @endif
+                            @if (session('success'))
+                                <div class="alert alert-success" role="alert">{{ session('success') }}</div>
+                            @endif
 
                             <form action="{{ route('login') }}" method="POST">
                                 @csrf

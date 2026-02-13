@@ -23,6 +23,7 @@ use App\Http\Controllers\Dashboard\UserController;
 use App\Http\Controllers\Dashboard\ExpenseController;
 use App\Http\Controllers\Dashboard\ExpenseCategoryController;
 use App\Http\Controllers\Dashboard\ActiveShopController;
+use App\Http\Controllers\Dashboard\ShopSwitchController;
 use App\Http\Controllers\Dashboard\SaleReturnController;
 use App\Http\Controllers\Dashboard\PurchaseController;
 use App\Http\Controllers\Dashboard\ReportController;
@@ -64,6 +65,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile/change-password', [ProfileController::class, 'changePassword'])->name('profile.change-password');
 
     Route::post('/active-shop', [ActiveShopController::class, 'update'])->name('active-shop.update');
+
+    Route::post('/switch-shop/reset', [ShopSwitchController::class, 'reset'])->name('shop-switch.reset');
+    Route::post('/switch-shop/{shop}', [ShopSwitchController::class, 'switch'])->name('shop-switch.switch')->whereNumber('shop');
 });
 
 // ====== USERS ======

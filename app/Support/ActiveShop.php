@@ -52,11 +52,13 @@ class ActiveShop
 
         $currentId = session('active_shop_id');
 
-        // If user has a shop_id, that should be the active shop
+        // If user has a shop_id, they may have switched to an allowed child shop — only reset when session is missing or invalid
         if ($user->shop_id) {
-            if ($currentId !== $user->shop_id) {
-                self::set($user->shop_id);
+            $allowedIds = self::allowedShopIds($user);
+            if ($currentId && $allowedIds->contains((int) $currentId)) {
+                return; // keep current selection (e.g. viewing a child shop)
             }
+            self::set($user->shop_id);
             return;
         }
 
@@ -107,8 +109,17 @@ class ActiveShop
 
         return Shop::with('parent')
             ->whereIn('id', $ids->all())
+            ->orderByRaw('CASE WHEN parent_shop_id IS NULL THEN 0 ELSE 1 END')
             ->orderBy('name')
             ->get();
+    }
+
+    /**
+     * Super admin = no shop_id; only they get the shop switcher dropdown.
+     */
+    public static function isSuperAdmin(User $user): bool
+    {
+        return $user->shop_id === null;
     }
 
     public static function canSwitch(User $user): bool
@@ -124,9 +135,18 @@ class ActiveShop
         return Shop::where('parent_shop_id', $user->shop_id)->exists();
     }
 
+    /**
+     * Shop IDs used for data filtering. When user has switched to a specific shop (session set),
+     * return only that shop so lists reflect the selected shop. Otherwise return all allowed shops.
+     */
     public static function visibleShopIds(User $user): Collection
     {
-        return self::allowedShopIds($user);
+        $allowedIds = self::allowedShopIds($user);
+        $activeId = self::id();
+        if ($activeId !== null && $allowedIds->contains($activeId)) {
+            return collect([$activeId]);
+        }
+        return $allowedIds;
     }
 
     public static function canManageUser(User $actor, User $target): bool
