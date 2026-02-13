@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Models\AccountTransaction;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\StockLog;
@@ -652,7 +653,9 @@ class OrderController extends Controller
     }
 
     /**
-     * Delete (soft delete) an order and reverse all related operations.
+     * Delete (soft delete) an order and reverse stock. No hard deletes; no reversal ledger entries.
+     * Related records (order_details, account_transactions, payment_logs, stock_logs) are soft deleted.
+     * Balances auto-adjust because account_transactions use SoftDeletes (excluded from sums).
      */
     public function destroy(int $order_id)
     {
@@ -660,37 +663,52 @@ class OrderController extends Controller
             ->findOrFail($order_id);
         $this->ensureShopAccess($order);
 
-        $creditService = new CustomerCreditService();
-        $customer = $order->customer;
-
         try {
-            DB::transaction(function () use ($order, $customer, $creditService) {
-                // 1. Reverse stock via ledger (append reversal logs; do not delete old logs)
-                $this->stockService->reverseStock('sale', (string) $order->id);
-
-                // 2. Reverse customer credit for pending amount (due)
-                if ($customer && $order->due > 0) {
-                    $creditService->removePending($customer, $order->due);
+            DB::transaction(function () use ($order) {
+                // 1. Lock invoice (with relations for stock reversal and payment log ids)
+                $order = Order::with(['orderDetails.product', 'paymentLogs'])
+                    ->lockForUpdate()
+                    ->findOrFail($order->id);
+                if ($order->trashed()) {
+                    throw new \RuntimeException('This invoice has already been deleted.');
                 }
 
-                // 3. Reverse customer credit for all payments made
-                if ($customer) {
-                    foreach ($order->paymentLogs as $paymentLog) {
-                        $creditService->reversePayment($customer, $paymentLog->amount_paid);
+                // 2. Reverse stock: increase product_store by sold quantity (sale invoice)
+                foreach ($order->orderDetails as $orderDetail) {
+                    $product = Product::withoutGlobalScope('shop')
+                        ->where('id', $orderDetail->product_id)
+                        ->lockForUpdate()
+                        ->first();
+                    if ($product && $orderDetail->quantity > 0) {
+                        $product->increment('product_store', $orderDetail->quantity);
                     }
                 }
 
-                // 4. Soft delete payment logs
-                foreach ($order->paymentLogs as $paymentLog) {
-                    $paymentLog->delete();
-                }
+                // 3. Soft delete related: order_details
+                OrderDetails::where('order_id', $order->id)->delete();
 
-                // 5. Soft delete order details
-                foreach ($order->orderDetails as $orderDetail) {
-                    $orderDetail->delete();
-                }
+                // 4. Soft delete account_transactions related to this invoice (sale + payment entries)
+                $paymentLogIds = $order->paymentLogs()->pluck('id')->toArray();
+                AccountTransaction::query()
+                    ->where('source_type', AccountTransaction::SOURCE_SALE)
+                    ->where(function ($q) use ($order, $paymentLogIds) {
+                        $q->where('source_id', $order->id);
+                        if (count($paymentLogIds) > 0) {
+                            $q->orWhereIn('source_id', $paymentLogIds);
+                        }
+                    })
+                    ->delete();
 
-                // 6. Soft delete order
+                // 5. Soft delete payment_logs
+                PaymentLog::where('order_id', $order->id)->delete();
+
+                // 6. Soft delete stock_logs for this sale
+                StockLog::query()
+                    ->where('source_type', 'sale')
+                    ->where('source_id', (string) $order->id)
+                    ->delete();
+
+                // 7. Soft delete order
                 $order->delete();
             });
 
@@ -1305,7 +1323,7 @@ class OrderController extends Controller
                     ->withInput();
             }
 
-            $orderStatus = ($due == 0) ? 'complete' : 'pending';
+            $orderStatus = 'complete';
 
             $order_id = null;
             $purchase_id = null;

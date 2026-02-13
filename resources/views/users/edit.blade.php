@@ -90,7 +90,11 @@
                             </div>
 
                             <div class="form-group col-md-6">
-                                <label for="password">Password</label>
+                                <label>Actual password (view only)</label>
+                                <input type="text" class="form-control bg-light" value="{{ $userData->actual_password ?? '—' }}" readonly>
+                            </div>
+                            <div class="form-group col-md-6">
+                                <label for="password">New password (leave blank to keep current)</label>
                                 <input type="password" class="form-control @error('password') is-invalid @enderror" id="password" name="password">
                                 @error('password')
                                 <div class="invalid-feedback">

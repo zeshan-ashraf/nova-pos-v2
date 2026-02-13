@@ -100,8 +100,6 @@
                                                                 <span>{{ $shopOption->name }}</span>
                                                                 @if($activeShop && $activeShop->id === $shopOption->id)
                                                                     <i class="ri-check-line"></i>
-                                                                @elseif($shopOption->parent)
-                                                                    <small class="text-muted">Child of {{ $shopOption->parent->name }}</small>
                                                                 @endif
                                                             </button>
                                                         </form>

@@ -26,20 +26,20 @@ class UserController extends Controller
         }
 
         $authUser = auth()->user();
-        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+        // Super admin and mother shop see all users in their scope (not filtered by active shop)
+        $allowedShopIds = ActiveShop::allowedShopIds($authUser);
 
         $usersQuery = User::with(['roles', 'shop.parent'])
             ->filter(request(['search']))
             ->sortable();
 
         if ($authUser->shop_id) {
-            $usersQuery->whereIn('shop_id', $visibleShopIds);
+            $usersQuery->whereIn('shop_id', $allowedShopIds);
         } else {
-            $usersQuery->where(function ($query) use ($visibleShopIds) {
+            $usersQuery->where(function ($query) use ($allowedShopIds) {
                 $query->whereNull('shop_id');
-
-                if ($visibleShopIds->isNotEmpty()) {
-                    $query->orWhereIn('shop_id', $visibleShopIds);
+                if ($allowedShopIds->isNotEmpty()) {
+                    $query->orWhereIn('shop_id', $allowedShopIds);
                 }
             });
         }

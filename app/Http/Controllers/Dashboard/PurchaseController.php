@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Models\AccountTransaction;
 use App\Models\Purchase;
 use App\Models\PurchaseDetail;
 use App\Models\PurchasePaymentLog;
 use App\Models\Product;
+use App\Models\StockLog;
 use App\Models\Supplier;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
@@ -461,7 +463,9 @@ class PurchaseController extends Controller
     }
 
     /**
-     * Delete (soft delete) a purchase and reverse all related operations.
+     * Delete (soft delete) a purchase and reverse stock. No hard deletes; no reversal ledger entries.
+     * Related records (purchase_details, account_transactions, purchase_payment_logs, stock_logs) are soft deleted.
+     * Balances auto-adjust because account_transactions use SoftDeletes (excluded from sums).
      */
     public function destroy(int $purchase_id)
     {
@@ -469,41 +473,57 @@ class PurchaseController extends Controller
             ->findOrFail($purchase_id);
         $this->ensureShopAccess($purchase);
 
-        $creditService = new SupplierCreditService();
-        $supplier = $purchase->supplier;
-
-        $purchaseLedgerService = app(PurchaseLedgerService::class);
         try {
-            DB::transaction(function () use ($purchase, $supplier, $creditService, $purchaseLedgerService) {
-                // 1. Reverse stock via ledger (append reversal logs; do not delete old logs)
-                $this->stockService->reverseStock('purchase', (string) $purchase->id);
-
-                // 2. Remove purchase ledger entries (account_transactions: purchase + purchase_payment)
-                $purchaseLedgerService->reverseForPurchase($purchase);
-
-                // 3. Reverse supplier credit for pending amount (due)
-                if ($supplier && $purchase->due > 0) {
-                    $creditService->removePending($supplier, $purchase->due);
+            DB::transaction(function () use ($purchase) {
+                // 1. Lock invoice (with relations for stock reversal and payment log ids)
+                $purchase = Purchase::with(['purchaseDetails.product', 'paymentLogs'])
+                    ->lockForUpdate()
+                    ->findOrFail($purchase->id);
+                if ($purchase->trashed()) {
+                    throw new \RuntimeException('This purchase invoice has already been deleted.');
                 }
 
-                // 4. Reverse supplier credit for all payments made
-                if ($supplier) {
-                    foreach ($purchase->paymentLogs as $paymentLog) {
-                        if ($paymentLog->type === 'payment' && $paymentLog->amount_paid > 0) {
-                            $creditService->reversePayment($supplier, $paymentLog->amount_paid);
+                // 2. Reverse stock: decrease product_store by purchased quantity (purchase invoice)
+                foreach ($purchase->purchaseDetails as $purchaseDetail) {
+                    $product = Product::withoutGlobalScope('shop')
+                        ->where('id', $purchaseDetail->product_id)
+                        ->lockForUpdate()
+                        ->first();
+                    if ($product && $purchaseDetail->quantity > 0) {
+                        $current = (int) $product->product_store;
+                        if ($current < $purchaseDetail->quantity) {
+                            throw new \RuntimeException(
+                                'Cannot delete purchase: product "' . ($product->product_name ?? $product->id) . '" would have negative stock.'
+                            );
                         }
+                        $product->decrement('product_store', $purchaseDetail->quantity);
                     }
                 }
 
-                // 5. Soft delete payment logs
-                foreach ($purchase->paymentLogs as $paymentLog) {
-                    $paymentLog->delete();
-                }
+                // 3. Soft delete related: purchase_details
+                PurchaseDetail::where('purchase_id', $purchase->id)->delete();
 
-                // 6. Soft delete purchase details
-                foreach ($purchase->purchaseDetails as $purchaseDetail) {
-                    $purchaseDetail->delete();
-                }
+                // 4. Soft delete account_transactions related to this purchase (purchase + purchase_payment entries)
+                $paymentLogIds = $purchase->paymentLogs()->pluck('id')->toArray();
+                AccountTransaction::query()
+                    ->where(function ($q) use ($purchase, $paymentLogIds) {
+                        $q->where('source_type', AccountTransaction::SOURCE_PURCHASE)
+                            ->where('source_id', $purchase->id);
+                        if (count($paymentLogIds) > 0) {
+                            $q->orWhere('source_type', AccountTransaction::SOURCE_PURCHASE_PAYMENT)
+                                ->whereIn('source_id', $paymentLogIds);
+                        }
+                    })
+                    ->delete();
+
+                // 5. Soft delete purchase_payment_logs
+                PurchasePaymentLog::where('purchase_id', $purchase->id)->delete();
+
+                // 6. Soft delete stock_logs for this purchase
+                StockLog::query()
+                    ->where('source_type', 'purchase')
+                    ->where('source_id', (string) $purchase->id)
+                    ->delete();
 
                 // 7. Soft delete purchase
                 $purchase->delete();

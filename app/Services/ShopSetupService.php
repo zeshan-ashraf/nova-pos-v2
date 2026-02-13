@@ -97,12 +97,14 @@ class ShopSetupService
                 $counter++;
             }
 
-            // Create admin user
+            // Create admin user (actual_password so admin can view it in user list/edit)
+            $plainPassword = 'password';
             $user = User::create([
                 'name' => $shop->owner_name,
                 'username' => $username,
                 'email' => $email,
-                'password' => Hash::make('password'),
+                'password' => Hash::make($plainPassword),
+                'actual_password' => $plainPassword,
                 'email_verified_at' => now(),
                 'shop_id' => $shop->id,
             ]);
