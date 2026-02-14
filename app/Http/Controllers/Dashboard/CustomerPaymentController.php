@@ -23,7 +23,6 @@ class CustomerPaymentController extends Controller
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
 
         $customers = Customer::query()
-            ->where('is_system', '!=', 1)
             ->orderBy('shopname')
             ->get(['id', 'name', 'shopname', 'shop_id']);
 
