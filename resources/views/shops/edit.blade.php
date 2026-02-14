@@ -113,6 +113,7 @@
                                 <div class="alert alert-danger">
                                     {{ $message }}
                                 </div>
+                                @enderror
                                 @php
                                     $selectedBankIds = old('bank_ids', $shop->banks->pluck('id')->toArray());
                                 @endphp
