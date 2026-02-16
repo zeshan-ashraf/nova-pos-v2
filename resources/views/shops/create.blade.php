@@ -115,7 +115,7 @@
                                 @enderror
                                 <select name="bank_ids[]" id="bank_ids" class="form-control bank-select @error('bank_ids') is-invalid @enderror" multiple>
                                     @foreach ($banks as $bank)
-                                        <option value="{{ $bank->id }}" data-name="{{ $bank->name }}" {{ in_array($bank->id, old('bank_ids', [])) ? 'selected' : '' }}>{{ $bank->name }}</option>
+                                        <option value="{{ $bank->id }}" data-name="{{ $bank->name }}" {{ in_array($bank->id, old('bank_ids', $defaultBankIds ?? [])) ? 'selected' : '' }}>{{ $bank->name }}</option>
                                     @endforeach
                                 </select>
                                 <small class="form-text text-muted">Selected banks appear as badges; click × on a badge to remove. Each selected bank must have an opening balance (≥ 0).</small>

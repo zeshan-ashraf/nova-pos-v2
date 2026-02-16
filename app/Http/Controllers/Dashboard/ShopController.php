@@ -51,9 +51,13 @@ class ShopController extends Controller
      */
     public function create()
     {
+        // Default banks: Meezan (9), Faysal (10), UBL (3), HBL (2), Bank AL Habib (8)
+        $defaultBankIds = [2, 3, 8, 9, 10];
+
         return view('shops.create', [
             'rootShops' => Shop::where('is_parent', true)->orderBy('name')->get(),
             'banks' => Bank::orderBy('name')->get(),
+            'defaultBankIds' => $defaultBankIds,
         ]);
     }
 
