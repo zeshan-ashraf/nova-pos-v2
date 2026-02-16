@@ -8,7 +8,6 @@
                 <i class="ri-menu-line wrapper-menu"></i>
                 <a href="{{ route('dashboard') }}" class="header-logo">
                     <img src="{{ asset('assets/images/login/company-logo.png') }}" class="img-fluid rounded-normal" alt="logo">
-                    <h5 class="logo-title ml-3">Mahab</h5>
                 </a>
             </div>
             <div class="d-flex align-items-center">

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Dashboard;
 use App\Models\AccountTransaction;
 use App\Models\Customer;
 use App\Http\Controllers\Controller;
+use App\Services\CustomerCreditService;
 use App\Services\Ledger\LedgerBalanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -90,8 +91,9 @@ class CustomerPaymentController extends Controller
     /**
      * Store customer payment (double-entry): (1) cash/bank debit (money in), (2) customer credit (AR decrease).
      * Rule: Receiving payment → increase asset (debit cash/bank), decrease receivable (credit customer).
+     * Also syncs customers.credit_amount via CustomerCreditService.
      */
-    public function store(Request $request)
+    public function store(Request $request, CustomerCreditService $creditService)
     {
         $validated = $request->validate([
             'customer_id' => 'required|numeric|exists:customers,id',
@@ -122,7 +124,7 @@ class CustomerPaymentController extends Controller
         $isBank = $validated['payment_method'] === 'bank';
         $accountRefId = $isBank ? (int) $validated['shop_bank_id'] : null;
 
-        DB::transaction(function () use ($validated, $shopId, $amount, $transactionDate, $isBank, $accountRefId) {
+        DB::transaction(function () use ($validated, $shopId, $amount, $transactionDate, $isBank, $accountRefId, $customer, $creditService) {
             // Row 1: Cash/Bank DEBIT — money received (asset increase)
             AccountTransaction::create([
                 'shop_id' => $shopId,
@@ -148,6 +150,9 @@ class CustomerPaymentController extends Controller
                 'description' => $validated['description'] ?? 'Customer payment',
                 'transaction_date' => $transactionDate,
             ]);
+
+            // Sync customers.credit_amount (decrease by payment amount)
+            $creditService->applyPayment($customer, $amount);
         });
 
         return Redirect::route('customer-payments.create')->with('success', 'Customer payment recorded successfully.');

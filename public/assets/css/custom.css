@@ -166,6 +166,31 @@ body {
     padding-top: 6px !important;
 }
 
+/* Header logo: logo only (no title), image fills available space */
+.iq-sidebar-logo .header-logo,
+.iq-navbar-logo .header-logo {
+    display: flex !important;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+}
+.iq-sidebar-logo .header-logo img,
+.iq-navbar-logo .header-logo img {
+    max-height: 40px;
+    width: auto;
+    object-fit: contain;
+}
+.iq-sidebar-logo img {
+    height: 60px;
+}
+.iq-sidebar-logo .header-logo img {
+    height: 60px;
+    max-height: none;
+}
+.iq-navbar-logo .header-logo img {
+    max-height: 38px;
+}
+
 /* Shop bank select: small pills for selected banks (Select2 multiselect) */
 .bank-select + .select2-container .select2-selection__choice {
     padding: 0.3em 0.6em !important;

@@ -25,6 +25,7 @@ use Haruncpi\LaravelIdGenerator\IdGenerator;
 use App\Models\PaymentLog;
 use App\Support\ActiveShop;
 use App\Services\CustomerCreditService;
+use App\Services\Ledger\LedgerBalanceService;
 use App\Services\Ledger\SaleLedgerService;
 use App\Services\SalePaymentLedgerService;
 use App\Services\Stock\StockService;
@@ -291,6 +292,7 @@ class OrderController extends Controller
         $this->ensureShopAccess($order);
 
         $paymentBankName = $this->getPaymentBankNameForOrder($order);
+        $salePayments = $this->getSalePaymentsFromAccountTransactions($order);
 
         $orderDetails = OrderDetails::with('product')
                         ->where('order_id', $order_id)
@@ -301,6 +303,7 @@ class OrderController extends Controller
             'order' => $order,
             'orderDetails' => $orderDetails,
             'paymentBankName' => $paymentBankName,
+            'salePayments' => $salePayments,
         ]);
     }
 
@@ -342,6 +345,15 @@ class OrderController extends Controller
         $this->ensureShopAccess($order);
 
         $paymentBankName = $this->getPaymentBankNameForOrder($order);
+        $salePayments = $this->getSalePaymentsFromAccountTransactions($order);
+
+        $customerBalance = null;
+        if ($order->customer_id && $order->shop_id) {
+            $customerBalance = app(LedgerBalanceService::class)->getCustomerBalance(
+                (int) $order->customer_id,
+                $order->shop_id
+            );
+        }
 
         $orderDetails = OrderDetails::with('product')
                         ->where('order_id', $order_id)
@@ -359,7 +371,55 @@ class OrderController extends Controller
             'orderDetails' => $orderDetails,
             'shouldPrint' => $shouldPrint,
             'paymentBankName' => $paymentBankName,
+            'salePayments' => $salePayments,
+            'customerBalance' => $customerBalance,
         ]);
+    }
+
+    /**
+     * Get sale payment entries from account_transactions (bank/cash debits for this order).
+     * Returns collection of { account_type, amount, bank_name }.
+     */
+    private function getSalePaymentsFromAccountTransactions(Order $order): \Illuminate\Support\Collection
+    {
+        $paymentLogIds = PaymentLog::where('order_id', $order->id)->pluck('id');
+        if ($paymentLogIds->isEmpty()) {
+            return collect();
+        }
+
+        $transactions = AccountTransaction::query()
+            ->where('source_type', AccountTransaction::SOURCE_SALE)
+            ->whereIn('source_id', $paymentLogIds->all())
+            ->whereIn('account_type', [AccountTransaction::ACCOUNT_TYPE_BANK, AccountTransaction::ACCOUNT_TYPE_CASH])
+            ->where('direction', AccountTransaction::DIRECTION_DEBIT)
+            ->orderBy('id')
+            ->get(['id', 'account_type', 'account_ref_id', 'amount']);
+
+        $bankShopIds = $transactions
+            ->where('account_type', AccountTransaction::ACCOUNT_TYPE_BANK)
+            ->pluck('account_ref_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $bankNames = collect();
+        if (!empty($bankShopIds)) {
+            $bankNames = DB::table('bank_shop')
+                ->whereIn('bank_shop.id', $bankShopIds)
+                ->join('banks', 'bank_shop.bank_id', '=', 'banks.id')
+                ->pluck('banks.name', 'bank_shop.id');
+        }
+
+        return $transactions->map(function ($t) use ($bankNames) {
+            return (object) [
+                'account_type' => $t->account_type,
+                'amount' => (float) $t->amount,
+                'bank_name' => $t->account_type === AccountTransaction::ACCOUNT_TYPE_BANK
+                    ? ($bankNames->get($t->account_ref_id) ?? 'Bank')
+                    : 'Cash',
+            ];
+        });
     }
 
     /**

@@ -25,7 +25,7 @@
                             <div class="row">
                                 <div class="col-lg-6 col-sm-6">
                                     <div class="logo">
-                                        <img class="logo" src="{{ asset('assets/images/logo.png') }}" alt="logo">
+                                        <img class="logo" src="{{ asset('assets/images/login/company-logo.png') }}" alt="logo">
                                     </div>
                                 </div>
                                 <div class="col-lg-6 col-sm-6">
@@ -37,7 +37,7 @@
                         </div>
                         <div class="invoice-info">
                             <div class="row">
-                                <div class="col-sm-6 mb-50">
+                                <div class="col-sm-6 mb-2">
                                     <div class="invoice-number">
                                         <h4 class="inv-title-1">Invoice date:</h4>
                                         <p class="invo-addr-1">
@@ -45,7 +45,7 @@
                                         </p>
                                     </div>
                                 </div>
-                                <div class="col-sm-6 text-end mb-50">
+                                <div class="col-sm-6 text-end mb-2">
                                     <h4 class="inv-title-1">@php
                                         $shop = $order->shop ?? auth()->user()->shop ?? null;
                                     @endphp</h4>
@@ -54,21 +54,25 @@
                                 </div>
                             </div>
                             <div class="row">
-                                <div class="col-sm-6 mb-50">
+                                <div class="col-sm-6 mb-2">
                                     <h4 class="inv-title-1">Customer</h4>
                                     <p class="inv-from-1">{{ $order->customer->name }}</p>
                                     <p class="inv-from-1">{{ $order->customer->email }}</p>
                                     <p class="inv-from-1">{{ $order->customer->phone }}</p>
                                     <p class="inv-from-2">{{ $order->customer->address }}</p>
                                 </div>
-                                <div class="col-sm-6 text-end mb-50">
+                                <div class="col-sm-6 text-end mb-2">
                                     <h4 class="inv-title-1">Details</h4>
-                                    <p class="inv-from-1">Payment Status: {{ $order->payment_status }}</p>
-                                    @if(in_array(strtolower($order->payment_status ?? ''), ['bank', 'cheque']) && !empty($paymentBankName ?? null))
+                                    <p class="inv-from-1">Customer Balance: {{ isset($customerBalance) ? number_format($customerBalance, 2) : number_format($order->customer?->credit_amount ?? 0, 2) }}</p>
+                                    @if(($salePayments ?? collect())->isNotEmpty())
+                                    @foreach($salePayments as $payment)
+                                    <p class="inv-from-1">{{ $payment->bank_name }}: {{ number_format($payment->amount, 2) }}</p>
+                                    @endforeach
+                                    @elseif(in_array(strtolower($order->payment_status ?? ''), ['bank', 'cheque']) && !empty($paymentBankName ?? null))
                                     <p class="inv-from-1">Bank: {{ $paymentBankName }}</p>
                                     @endif
-                                    <p class="inv-from-1">Total Pay: {{ $order->pay }}</p>
-                                    <p class="inv-from-1">Due: {{ $order->due }}</p>
+                                    <p class="inv-from-1">Total Pay: {{ number_format($order->pay ?? 0, 2) }}</p>
+                                    <p class="inv-from-1">Due: {{ number_format($order->due ?? 0, 2) }}</p>
                                 </div>
                             </div>
                             @if($shop && $shop->invoice_policy)

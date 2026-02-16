@@ -159,7 +159,7 @@ Version:    1.1.0
 }
 
 .invoice-content .inv-title-1 {
-    font-weight: 500;
+    font-weight: bold;
     font-size: 16px;
 }
 
@@ -4221,10 +4221,10 @@ table th{
 
 .invoice-16 .default-table thead th {
     position: relative;
-    padding: 20px 30px;
-    font-size: 16px;
-    color: #25cc7e;
-    font-weight: 500;
+    padding: 5px 10px;
+    font-size: 13px;
+    color: #080808;
+    font-weight: 600;
     line-height: 30px;
     white-space: nowrap;
 }
@@ -4236,8 +4236,8 @@ table th{
 
 .invoice-16 .default-table tr td {
     position: relative;
-    padding: 21px 30px;
-    font-size: 14px;
+    padding: 10px 10px;
+    font-size: 12px;
     color: #535353;
     font-weight: 400;
 }
@@ -4251,11 +4251,11 @@ table th{
 }
 
 .invoice-16 .invoice-top .logo img {
-    height: 25px;
+    height: 60px;
 }
 
 .invoice-16 .invoice-top {
-    padding: 100px 150px 50px;
+    padding: 20px 150px 10px;
 }
 
 .invoice-16 .invoice-top .invoice {
@@ -4270,7 +4270,7 @@ table th{
 }
 
 .invoice-16 .invoice-info {
-    padding: 0 150px 50px;
+    padding: 0 60px 5px;
 }
 
 .invoice-16 .invoice-info .inv-from-2 {
@@ -4279,7 +4279,7 @@ table th{
 }
 
 .invoice-16 .order-summary{
-    padding: 0 150px 100px;
+    padding: 0 60px 100px;
 }
 
 .invoice-16 .invoice-informeshon-footer{
@@ -4382,7 +4382,7 @@ table th{
     }
 
     .invoice-16 .invoice-top .logo img {
-        height: 20px;
+        height: 60px;
     }
 
     .invoice-16 .invoice-top .invoice h1 {

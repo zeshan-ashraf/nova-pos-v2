@@ -933,6 +933,8 @@
             $('#customer_id').prop('required', false).val('');
             $('#btn-shop-type').addClass('active');
             $('#btn-customer-type').removeClass('active');
+            // Shop transfer: payment 1 method should be credit
+            $('#payment_method_1').val('credit').trigger('change');
         } else {
             $('#customer-group').show();
             $('#shop-group').hide();
@@ -947,7 +949,7 @@
         if (o.vat != null && o.vat !== '') $('#vat').val(o.vat);
         if (o.invoice_discount != null && o.invoice_discount !== '') $('#invoice_discount').val(o.invoice_discount);
         if (o.comment != null && o.comment !== '') $('#comment').val(o.comment);
-        if (o.payment_method_1) {
+        if (selectType !== 'shop' && o.payment_method_1) {
             $('#payment_method_1').val(o.payment_method_1);
             $('#payment_method_1').trigger('change');
             if (o.pay_1 != null && o.pay_1 !== '') $('#pay_1').val(o.pay_1);
@@ -1020,6 +1022,8 @@
             $('#shop_id').prop('required', true);
             $('#btn-shop-type').addClass('active');
             $('#btn-customer-type').removeClass('active');
+            // Shop transfer: payment 1 method should be credit
+            $('#payment_method_1').val('credit').trigger('change');
             // Hide credit warning for shop transfers
             $('#credit_warning_row').hide();
         }

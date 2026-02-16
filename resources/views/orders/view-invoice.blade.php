@@ -292,7 +292,18 @@
                                 <span class="summary-label">Payment Method:</span>
                                 <span class="summary-value text-capitalize">{{ $order->payment_status ?? 'N/A' }}</span>
                             </div>
-                            @if(in_array(strtolower($order->payment_status ?? ''), ['bank', 'cheque']) && !empty($paymentBankName ?? null))
+                            @if(($salePayments ?? collect())->isNotEmpty())
+                            <div class="summary-row">
+                                <span class="summary-label">Payments:</span>
+                                <span class="summary-value">
+                                    <ul class="list-unstyled mb-0">
+                                        @foreach($salePayments as $payment)
+                                        <li>{{ $payment->bank_name }}: {{ number_format($payment->amount, 2) }}</li>
+                                        @endforeach
+                                    </ul>
+                                </span>
+                            </div>
+                            @elseif(in_array(strtolower($order->payment_status ?? ''), ['bank', 'cheque']) && !empty($paymentBankName ?? null))
                             <div class="summary-row">
                                 <span class="summary-label">Bank:</span>
                                 <span class="summary-value">{{ $paymentBankName }}</span>

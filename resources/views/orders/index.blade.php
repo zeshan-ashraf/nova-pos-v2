@@ -82,7 +82,7 @@
                             <td>{{ $order->invoice_no }}</td>
                             <td>{{ $order->customer?->name ?? $order->customer?->shopname ?? '—' }}</td>
                             <td>{{ $order->order_date }}</td>
-                            <td>{{ $order->pay }}</td>
+                            <td>{{ strtolower($order->payment_status ?? '') === 'credit' ? number_format($order->due ?? 0, 2) : number_format($order->pay ?? 0, 2) }}</td>
                             <td>{{ $order->payment_status }}</td>
                             <td>
                                 <span class="badge
