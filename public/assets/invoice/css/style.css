@@ -4225,7 +4225,7 @@ table th{
     font-size: 13px;
     color: #080808;
     font-weight: 600;
-    line-height: 30px;
+    line-height: 20px;
     white-space: nowrap;
 }
 
@@ -4236,7 +4236,7 @@ table th{
 
 .invoice-16 .default-table tr td {
     position: relative;
-    padding: 10px 10px;
+    padding: 5px 10px;
     font-size: 12px;
     color: #535353;
     font-weight: 400;
@@ -4315,6 +4315,15 @@ table th{
 
 .invoice-16 .text-muted {
     color: #535353 !important;
+}
+
+.invoice-16 .invoice-policy-footer {
+    text-align: center;
+}
+
+.invoice-16 .invoice-policy-footer .inv-title-1,
+.invoice-16 .invoice-policy-footer .inv-from-1 {
+    text-align: center;
 }
 
 .invoice-16 .invoice-footer {
@@ -4731,7 +4740,17 @@ table th{
 /** Invoice 17 end **/
 
 /** Print **/
+@page {
+    size: auto;
+    margin: 0;
+}
+
 @media print {
+    html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
     .col-sm-12 {
         width: 100%;
     }
@@ -5005,6 +5024,14 @@ table th{
 
     .invoice-16 .invoice-top .invoice h1 {
         color: #262525;
+    }
+
+    /* Invoice 16: start at top of page when printing (no vertical centering) */
+    .invoice-16 {
+        min-height: auto !important;
+        padding: 0 !important;
+        align-items: flex-start !important;
+        justify-content: flex-start !important;
     }
 
     .invoice-17 .invoice-contact-us ul li i {

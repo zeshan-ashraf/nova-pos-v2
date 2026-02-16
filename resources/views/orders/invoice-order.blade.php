@@ -75,14 +75,6 @@
                                     <p class="inv-from-1">Due: {{ number_format($order->due ?? 0, 2) }}</p>
                                 </div>
                             </div>
-                            @if($shop && $shop->invoice_policy)
-                            <div class="row">
-                                <div class="col-sm-12 mb-30">
-                                    <h4 class="inv-title-1">Invoice Policy</h4>
-                                    <p class="inv-from-1" style="white-space: pre-wrap;">{{ $shop->invoice_policy }}</p>
-                                </div>
-                            </div>
-                            @endif
                         </div>
                         <div class="order-summary">
                             <div class="table-outer">
@@ -120,6 +112,12 @@
                                 </table>
                             </div>
                         </div>
+                        @if($shop && $shop->invoice_policy)
+                        <div class="invoice-policy-footer mt-4">
+                            <h4 class="inv-title-1">Invoice Policy</h4>
+                            <p class="inv-from-1 mb-0" style="white-space: pre-wrap;">{{ $shop->invoice_policy }}</p>
+                        </div>
+                        @endif
                         {{-- <div class="invoice-informeshon-footer">
                             <ul>
                                 <li><a href="https://themeforest.net/user/themevessel/portfolio">www.themevessel.com</a></li>
