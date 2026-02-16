@@ -69,6 +69,7 @@
                             <th>Invoice No</th>
                             <th>@sortablelink('customer.name', 'name')</th>
                             <th>@sortablelink('order_date', 'order date')</th>
+                            <th>@sortablelink('total', 'Total')</th>
                             <th>@sortablelink('pay')</th>
                             <th>Payment</th>
                             <th>Status</th>
@@ -82,7 +83,8 @@
                             <td>{{ $order->invoice_no }}</td>
                             <td>{{ $order->customer?->name ?? $order->customer?->shopname ?? '—' }}</td>
                             <td>{{ $order->order_date }}</td>
-                            <td>{{ strtolower($order->payment_status ?? '') === 'credit' ? number_format($order->due ?? 0, 2) : number_format($order->pay ?? 0, 2) }}</td>
+                            <td>{{ number_format($order->total ?? 0, 2) }}</td>
+                            <td>{{ strtolower($order->payment_status ?? '') === 'credit' ? number_format(0, 2) : number_format($order->pay ?? 0, 2) }}</td>
                             <td>{{ $order->payment_status }}</td>
                             <td>
                                 <span class="badge
@@ -99,16 +101,16 @@
 
                             <td>
                                 <div class="d-flex align-items-center list-action">
-                                    <a class="btn btn-info mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Details" href="{{ route('order.orderDetails', $order->id) }}">
+                                    <a class="btn btn-sm btn-info mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Details" href="{{ route('order.orderDetails', $order->id) }}">
                                         Details
                                     </a>
-                                    <a class="btn btn-success mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Print" href="{{ route('order.invoiceDownload', $order->id) }}">
+                                    <a class="btn btn-sm btn-success mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Print" href="{{ route('order.invoiceDownload', $order->id) }}">
                                         Print
                                     </a>
-                                    <a class="btn btn-secondary mr-2" data-toggle="tooltip" data-placement="top" title="View Payment Log" data-original-title="View Stock Log" href="{{ route('order.paymentLog', $order->id) }}">
+                                    <a class="btn btn-sm btn-secondary mr-2" data-toggle="tooltip" data-placement="top" title="View Payment Log" data-original-title="View Stock Log" href="{{ route('order.paymentLog', $order->id) }}">
                                         <i class="ri-archive-line mr-0"></i>
                                     </a>
-                                    <button type="button" class="btn btn-danger mr-2 border-none" data-toggle="tooltip" data-placement="top" title="" data-original-title="Delete" onclick="showDeleteModal({{ $order->id }})">
+                                    <button type="button" class="btn btn-sm btn-danger mr-2 border-none" data-toggle="tooltip" data-placement="top" title="" data-original-title="Delete" onclick="showDeleteModal({{ $order->id }})">
                                         <i class="ri-delete-bin-line mr-0"></i>
                                     </button>
                                 </div>
