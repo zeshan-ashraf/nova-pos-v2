@@ -715,16 +715,16 @@ class OrderController extends Controller
     /**
      * Delete (soft delete) an order and reverse stock. No hard deletes; no reversal ledger entries.
      * Related records (order_details, account_transactions, payment_logs, stock_logs) are soft deleted.
-     * Balances auto-adjust because account_transactions use SoftDeletes (excluded from sums).
+     * Ledger balance auto-adjusts (excluded from sums). customers.credit_amount is synced from ledger.
      */
-    public function destroy(int $order_id)
+    public function destroy(int $order_id, LedgerBalanceService $balanceService)
     {
         $order = Order::with(['customer', 'orderDetails.product', 'paymentLogs'])
             ->findOrFail($order_id);
         $this->ensureShopAccess($order);
 
         try {
-            DB::transaction(function () use ($order) {
+            DB::transaction(function () use ($order, $balanceService) {
                 // 1. Lock invoice (with relations for stock reversal and payment log ids)
                 $order = Order::with(['orderDetails.product', 'paymentLogs'])
                     ->lockForUpdate()
@@ -770,6 +770,12 @@ class OrderController extends Controller
 
                 // 7. Soft delete order
                 $order->delete();
+
+                // 8. Sync customer balance in customers table (ledger already excludes soft-deleted transactions)
+                if ($order->customer_id) {
+                    $balance = $balanceService->getCustomerBalance((int) $order->customer_id, $order->shop_id);
+                    Customer::where('id', $order->customer_id)->update(['credit_amount' => $balance]);
+                }
             });
 
             return Redirect::route('order.index')->with('success', 'Order has been deleted successfully! Stock has been reversed and payments have been removed.');

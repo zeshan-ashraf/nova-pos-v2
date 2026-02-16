@@ -426,10 +426,46 @@ class ProductController extends Controller
                     $rowData['shop_id'] = $shopId;
                 }
 
-                // Optional fields - only add if they have values
-                $supplierId = $sheet->getCell( 'C' . $row )->getValue();
-                if ($supplierId) {
-                    $rowData['supplier_id'] = $supplierId;
+                // Supplier (column C): empty → null; numeric → use as DB id if exists in shop; else lookup by name or create
+                $supplierValue = $sheet->getCell( 'C' . $row )->getValue();
+                $supplierValue = is_scalar($supplierValue) ? trim((string) $supplierValue) : '';
+                if ($supplierValue !== '') {
+                    $resolvedSupplierId = null;
+                    if (is_numeric($supplierValue) && (float) $supplierValue == (int) (float) $supplierValue) {
+                        $id = (int) (float) $supplierValue;
+                        $supplier = Supplier::withoutGlobalScope('shop')
+                            ->where('id', $id)
+                            ->when($shopId !== null, fn ($q) => $q->where('shop_id', $shopId))
+                            ->when($shopId === null, fn ($q) => $q->whereNull('shop_id'))
+                            ->first();
+                        if ($supplier) {
+                            $resolvedSupplierId = $supplier->id;
+                        }
+                    } else {
+                        $name = $supplierValue;
+                        $query = Supplier::withoutGlobalScope('shop');
+                        if ($shopId !== null) {
+                            $query->where('shop_id', $shopId);
+                        } else {
+                            $query->whereNull('shop_id');
+                        }
+                        $supplier = $query->whereRaw('LOWER(TRIM(name)) = ?', [strtolower($name)])->first();
+                        if ($supplier) {
+                            $resolvedSupplierId = $supplier->id;
+                        } else {
+                            $supplier = Supplier::withoutGlobalScope('shop')->create([
+                                'name'     => $name,
+                                'shopname' => $name,
+                                'type'     => 'Distributor',
+                                'phone'    => '123456789',
+                                'shop_id'  => $shopId,
+                            ]);
+                            $resolvedSupplierId = $supplier->id;
+                        }
+                    }
+                    if ($resolvedSupplierId !== null) {
+                        $rowData['supplier_id'] = $resolvedSupplierId;
+                    }
                 }
 
                 $expireDate = $sheet->getCell( 'I' . $row )->getValue();
