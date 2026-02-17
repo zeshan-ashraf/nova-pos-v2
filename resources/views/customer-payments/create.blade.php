@@ -37,7 +37,7 @@
                                 <select class="form-control customer-select @error('customer_id') is-invalid @enderror" id="customer_id" name="customer_id" required>
                                     <option value="">Select customer</option>
                                     @foreach($customers ?? [] as $c)
-                                        <option value="{{ $c->id }}" {{ old('customer_id', request('customer_id')) == $c->id ? 'selected' : '' }}>{{ $c->shopname ?: $c->name }}</option>
+                                        <option value="{{ $c->id }}" {{ old('customer_id', request('customer_id')) == $c->id ? 'selected' : '' }}>{{ $c->shopname ? ($c->name ? $c->shopname . ' (' . $c->name . ')' : $c->shopname) : ($c->name ?? '—') }}</option>
                                     @endforeach
                                 </select>
                                 @error('customer_id')<div class="invalid-feedback">{{ $message }}</div>@enderror

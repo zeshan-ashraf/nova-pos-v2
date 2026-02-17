@@ -57,22 +57,12 @@
                                 <div class="col-sm-6 mb-2">
                                     <h4 class="inv-title-1">Customer</h4>
                                     <p class="inv-from-1">{{ $order->customer->name }}</p>
-                                    <p class="inv-from-1">{{ $order->customer->email }}</p>
                                     <p class="inv-from-1">{{ $order->customer->phone }}</p>
-                                    <p class="inv-from-2">{{ $order->customer->address }}</p>
                                 </div>
                                 <div class="col-sm-6 text-end mb-2">
                                     <h4 class="inv-title-1">Details</h4>
-                                    <p class="inv-from-1">Customer Balance: {{ isset($customerBalance) ? number_format($customerBalance, 2) : number_format($order->customer?->credit_amount ?? 0, 2) }}</p>
-                                    @if(($salePayments ?? collect())->isNotEmpty())
-                                    @foreach($salePayments as $payment)
-                                    <p class="inv-from-1">{{ $payment->bank_name }}: {{ number_format($payment->amount, 2) }}</p>
-                                    @endforeach
-                                    @elseif(in_array(strtolower($order->payment_status ?? ''), ['bank', 'cheque']) && !empty($paymentBankName ?? null))
-                                    <p class="inv-from-1">Bank: {{ $paymentBankName }}</p>
-                                    @endif
-                                    <p class="inv-from-1">Total Pay: {{ number_format($order->pay ?? 0, 2) }}</p>
-                                    <p class="inv-from-1">Due: {{ number_format($order->due ?? 0, 2) }}</p>
+                                    <p class="inv-from-1">{{ $order->customer->email ?? '—' }}</p>
+                                    <p class="inv-from-2">{{ $order->customer->address ?? '—' }}</p>
                                 </div>
                             </div>
                         </div>
@@ -81,7 +71,9 @@
                                 <table class="default-table invoice-table">
                                     <thead>
                                     <tr>
+                                        <th>#</th>
                                         <th>Description</th>
+                                        <th>Product Code</th>
                                         <th>Price</th>
                                         <th>Quantity</th>
                                         <th>Total</th>
@@ -91,25 +83,53 @@
                                     <tbody>
                                         @foreach ($orderDetails as $item)
                                         <tr>
-                                            <td>
-                                                {{ $item->product->product_name }}
-                                                @if($item->product->product_code)
-                                                    <small class="text-muted">({{ $item->product->product_code }})</small>
-                                                @endif
-                                            </td>
+                                            <td>{{ $loop->iteration }}</td>
+                                            <td>{{ $item->product->product_name }}</td>
+                                            <td>{{ $item->product->product_code ?? '—' }}</td>
                                             <td>{{ $item->unitcost }}</td>
                                             <td>{{ $item->quantity }}</td>
                                             <td>{{ $item->total }}</td>
                                         </tr>
                                         @endforeach
                                         <tr>
-                                            <td><strong class="text-danger">Total</strong></td>
+                                            <td></td>
+                                            <td><strong class="text-danger">Sub Total</strong></td>
                                             <td></td>
                                             <td></td>
-                                            <td><strong class="text-danger">{{ $order->total }}</strong></td>
+                                            <td></td>
+                                            <td><strong class="text-danger">{{ $orderDetails->sum('total') }}</strong></td>
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+                        <div class="row mt-3 order-summary">
+                            @php
+                                    $subtotal = $orderDetails->sum('total');
+                                    $laborCharges = (float)($order->vat ?? 0);
+                                    $invoiceDiscount = (float)($order->invoice_discount ?? 0);
+                                    $invoiceTotal = $subtotal + $laborCharges - $invoiceDiscount;
+                                @endphp
+                            <div class="col-sm-6">
+                                <div class="border rounded p-3 bg-light">
+                                    <p class="inv-from-1 mb-1"><strong>Previous Balance:</strong> {{ isset($customerBalance) ? number_format($customerBalance, 2) : number_format($order->customer?->credit_amount ?? 0, 2) }}</p>
+                                    @if(($salePayments ?? collect())->isNotEmpty())
+                                    @foreach($salePayments as $payment)
+                                    <p class="inv-from-1 mb-1"><strong>{{ $payment->bank_name }}:</strong> {{ number_format($payment->amount, 2) }}</p>
+                                    @endforeach
+                                    @elseif(in_array(strtolower($order->payment_status ?? ''), ['bank', 'cheque']) && !empty($paymentBankName ?? null))
+                                    <p class="inv-from-1 mb-1"><strong>Bank:</strong> {{ $paymentBankName }}</p>
+                                    @endif
+                                    <p class="inv-from-1 mb-0"><strong>Total Paid:</strong> {{ number_format($order->pay ?? 0, 2) }}</p>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="text-end border rounded p-3 bg-light">
+                                    <p class="inv-from-1 mb-1"><strong>Subtotal:</strong> {{ number_format($subtotal, 2) }}</p>
+                                    <p class="inv-from-1 mb-1"><strong>Labor Charges:</strong> +{{ number_format($laborCharges, 2) }}</p>
+                                    <p class="inv-from-1 mb-1"><strong>Discount on Invoice:</strong> -{{ number_format($invoiceDiscount, 2) }}</p>
+                                    <p class="inv-from-1 mb-0"><strong>Invoice Total:</strong> {{ number_format($invoiceTotal, 2) }}</p>
+                                </div>
                             </div>
                         </div>
                         @if($shop && $shop->invoice_policy)

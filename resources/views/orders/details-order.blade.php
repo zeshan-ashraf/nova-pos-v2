@@ -106,7 +106,7 @@
                             <th>Product Code</th>
                             <th>Quantity</th>
                             <th>Price</th>
-                            <th>Total(+vat)</th>
+                            <th>Total (+Labor Charges)</th>
                         </tr>
                     </thead>
                     <tbody class="ligth-body">

@@ -1450,7 +1450,7 @@ class OrderController extends Controller
 
                         // Validate stock
                         if ($motherProduct->product_store < $product['quantity']) {
-                            throw new \Exception("Insufficient stock for product: {$motherProduct->product_name}. Available: {$motherProduct->product_store}");
+                            throw new \Exception("Insufficient stock for product: " . ($motherProduct->product_code ?? $motherProduct->product_name) . ". Available: {$motherProduct->product_store}");
                         }
 
                         // Create order detail

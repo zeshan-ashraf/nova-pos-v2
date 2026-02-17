@@ -4278,8 +4278,8 @@ table th{
     font-weight: 400;
 }
 
-.invoice-16 .order-summary{
-    padding: 0 60px 100px;
+.invoice-16 .order-summary {
+    padding: 0 60px 10px;
 }
 
 .invoice-16 .invoice-informeshon-footer{

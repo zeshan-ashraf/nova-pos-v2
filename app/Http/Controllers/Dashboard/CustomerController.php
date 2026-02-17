@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Models\AccountTransaction;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\PaymentLog;
@@ -272,275 +273,185 @@ class CustomerController extends Controller
     }
 
     /**
-     * Display customer ledger with all transactions.
+     * Display customer ledger from account_transactions only (journal-based).
+     * No invoice/order table for calculations; running balance from ledger entries.
      */
     public function ledger(Customer $customer, Request $request)
     {
         $this->ensureShopAccess($customer);
+        $ledgerData = $this->buildCustomerLedgerData($customer, $request);
 
-        // Get date filter parameters
-        $dateFilter = $request->get('date_filter', 'current_month'); // current_month, last_30_days, custom
-        $startDate = $request->get('start_date');
-        $endDate = $request->get('end_date');
-
-        // Set date range based on filter
-        if ($dateFilter === 'current_month') {
-            $startDate = Carbon::now()->startOfMonth()->format('Y-m-d');
-            $endDate = Carbon::now()->endOfMonth()->format('Y-m-d');
-        } elseif ($dateFilter === 'last_30_days') {
-            $startDate = Carbon::now()->subDays(30)->format('Y-m-d');
-            $endDate = Carbon::now()->format('Y-m-d');
-        } elseif ($dateFilter === 'custom' && $startDate && $endDate) {
-            // Use provided dates
-            $startDate = Carbon::parse($startDate)->format('Y-m-d');
-            $endDate = Carbon::parse($endDate)->format('Y-m-d');
-        } else {
-            // Default to current month if custom dates not provided
-            $startDate = Carbon::now()->startOfMonth()->format('Y-m-d');
-            $endDate = Carbon::now()->endOfMonth()->format('Y-m-d');
-            $dateFilter = 'current_month';
-        }
-
-        $startDateTime = Carbon::parse($startDate)->startOfDay();
-        $endDateTime = Carbon::parse($endDate)->endOfDay();
-
-        // Get all orders for this customer (exclude deleted orders)
-        $orders = Order::where('customer_id', $customer->id)
-            ->whereBetween('order_date', [$startDate, $endDate])
-            ->orderBy('order_date', 'desc')
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        // Get all payments for this customer's orders (exclude deleted payments)
-        $payments = PaymentLog::with(['order'])
-            ->whereHas('order', function ($query) use ($customer) {
-                $query->where('customer_id', $customer->id);
-            })
-            ->whereBetween('created_at', [$startDateTime, $endDateTime])
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        // Calculate opening balance (credit amount before start date)
-        $openingBalance = $this->calculateOpeningBalance($customer, $startDateTime);
-
-        // Build transactions array
-        $transactions = collect();
-
-        // Add orders
-        foreach ($orders as $order) {
-            $transactions->push([
-                'date' => $order->order_date,
-                'datetime' => $order->created_at,
-                'type' => 'Order',
-                'type_badge' => $order->order_status === 'complete' ? 'badge-success' : 'badge-warning',
-                'invoice_no' => $order->invoice_no,
-                'order_id' => $order->id,
-                'description' => 'Order - ' . $order->invoice_no,
-                'order_status' => $order->order_status,
-                'payment_status' => $order->payment_status,
-                'total' => $order->total ?? 0,
-                'paid' => $order->pay ?? 0,
-                'due' => $order->due ?? 0,
-                'debit' => $order->due ?? 0, // Credit added (debit from customer perspective)
-                'credit' => 0,
-                'is_order' => true,
-            ]);
-        }
-
-        // Add payments
-        foreach ($payments as $payment) {
-            $transactions->push([
-                'date' => $payment->created_at->format('Y-m-d'),
-                'datetime' => $payment->created_at,
-                'type' => 'Payment',
-                'type_badge' => 'badge-info',
-                'invoice_no' => optional($payment->order)->invoice_no,
-                'order_id' => optional($payment->order)->id,
-                'description' => 'Payment for ' . (optional($payment->order)->invoice_no ?? 'Order #' . optional($payment->order)->id),
-                'order_status' => optional($payment->order)->order_status,
-                'payment_status' => optional($payment->order)->payment_status,
-                'total' => optional($payment->order)->total ?? 0,
-                'paid' => $payment->amount_paid,
-                'due' => 0,
-                'debit' => 0,
-                'credit' => $payment->amount_paid, // Payment received (credit from customer perspective)
-                'is_order' => false,
-            ]);
-        }
-
-        // Sort by datetime descending (newest first)
-        $transactions = $transactions->sortByDesc('datetime')->values();
-
-        // Calculate running balance
-        $runningBalance = $openingBalance;
-        $transactions = $transactions->map(function ($transaction) use (&$runningBalance) {
-            $runningBalance = $runningBalance + $transaction['debit'] - $transaction['credit'];
-            $transaction['balance'] = $runningBalance;
-            return $transaction;
-        });
-
-        // Calculate closing balance
-        $closingBalance = $runningBalance;
-
-        // Calculate summary totals
-        $summary = [
-            'total_orders' => $orders->count(),
-            'total_order_amount' => $orders->sum('total'),
-            'total_paid' => $orders->sum('pay'),
-            'total_due' => $orders->sum('due'),
-            'total_payments' => $payments->count(),
-            'total_payment_amount' => $payments->sum('amount_paid'),
-        ];
-
-        return view('customers.ledger', [
-            'customer' => $customer,
-            'transactions' => $transactions,
-            'opening_balance' => $openingBalance,
-            'closing_balance' => $closingBalance,
-            'summary' => $summary,
-            'date_filter' => $dateFilter,
-            'start_date' => $startDate,
-            'end_date' => $endDate,
-        ]);
+        return view('customers.ledger', array_merge($ledgerData, ['customer' => $customer]));
     }
 
     /**
-     * Export ledger as PDF.
+     * Build ledger data from account_transactions for a customer.
+     * Journal-based: all figures from account_transactions only. Respects date filter and shop_id.
+     */
+    protected function buildCustomerLedgerData(Customer $customer, Request $request): array
+    {
+        $dateFilter = $request->get('date_filter', 'today');
+        $startDate = $request->get('start_date');
+        $endDate = $request->get('end_date');
+
+        $fromDateTime = null;
+        $toDateTime = null;
+        $startDateStr = null;
+        $endDateStr = null;
+
+        if ($dateFilter === 'all') {
+            // from_date = null, to_date = null
+        } elseif ($dateFilter === 'today') {
+            $fromDateTime = Carbon::today()->startOfDay();
+            $toDateTime = Carbon::today()->endOfDay();
+            $startDateStr = $fromDateTime->format('Y-m-d');
+            $endDateStr = $toDateTime->format('Y-m-d');
+        } elseif ($dateFilter === 'yesterday') {
+            $fromDateTime = Carbon::yesterday()->startOfDay();
+            $toDateTime = Carbon::yesterday()->endOfDay();
+            $startDateStr = $fromDateTime->format('Y-m-d');
+            $endDateStr = $toDateTime->format('Y-m-d');
+        } elseif ($dateFilter === 'last_7_days') {
+            $fromDateTime = Carbon::today()->subDays(6)->startOfDay();
+            $toDateTime = Carbon::today()->endOfDay();
+            $startDateStr = $fromDateTime->format('Y-m-d');
+            $endDateStr = $toDateTime->format('Y-m-d');
+        } elseif ($dateFilter === 'current_month') {
+            $fromDateTime = Carbon::now()->startOfMonth();
+            $toDateTime = Carbon::now()->endOfMonth();
+            $startDateStr = $fromDateTime->format('Y-m-d');
+            $endDateStr = $toDateTime->format('Y-m-d');
+        } elseif ($dateFilter === 'last_30_days') {
+            $fromDateTime = Carbon::today()->subDays(29)->startOfDay();
+            $toDateTime = Carbon::today()->endOfDay();
+            $startDateStr = $fromDateTime->format('Y-m-d');
+            $endDateStr = $toDateTime->format('Y-m-d');
+        } elseif ($dateFilter === 'custom' && $startDate && $endDate) {
+            $fromDateTime = Carbon::parse($startDate)->startOfDay();
+            $toDateTime = Carbon::parse($endDate)->endOfDay();
+            $startDateStr = $fromDateTime->format('Y-m-d');
+            $endDateStr = $toDateTime->format('Y-m-d');
+        } else {
+            $dateFilter = 'today';
+            $fromDateTime = Carbon::today()->startOfDay();
+            $toDateTime = Carbon::today()->endOfDay();
+            $startDateStr = $fromDateTime->format('Y-m-d');
+            $endDateStr = $toDateTime->format('Y-m-d');
+        }
+
+        $shopId = $customer->shop_id;
+        $customerId = $customer->id;
+
+        $baseQuery = function () use ($shopId, $customerId) {
+            return AccountTransaction::query()
+                ->where('account_type', AccountTransaction::ACCOUNT_TYPE_CUSTOMER)
+                ->where('account_ref_id', $customerId)
+                ->where('shop_id', $shopId);
+        };
+
+        // Opening balance: only when date filter is not "all"
+        $openingBalance = 0.0;
+        if ($dateFilter !== 'all' && $fromDateTime) {
+            $openingBalance = (float) (clone $baseQuery())
+                ->where('transaction_date', '<', $fromDateTime)
+                ->selectRaw("SUM(CASE WHEN direction = ? THEN amount WHEN direction = ? THEN -amount ELSE 0 END) as bal", [
+                    AccountTransaction::DIRECTION_DEBIT,
+                    AccountTransaction::DIRECTION_CREDIT,
+                ])
+                ->value('bal') ?? 0;
+        }
+
+        // Period total debits (aggregated)
+        $debitsQuery = (clone $baseQuery())->where('direction', AccountTransaction::DIRECTION_DEBIT);
+        if ($dateFilter !== 'all' && $fromDateTime && $toDateTime) {
+            $debitsQuery->whereBetween('transaction_date', [$fromDateTime, $toDateTime]);
+        }
+        $totalDebits = (float) $debitsQuery->sum('amount');
+
+        // Period total credits (aggregated)
+        $creditsQuery = (clone $baseQuery())->where('direction', AccountTransaction::DIRECTION_CREDIT);
+        if ($dateFilter !== 'all' && $fromDateTime && $toDateTime) {
+            $creditsQuery->whereBetween('transaction_date', [$fromDateTime, $toDateTime]);
+        }
+        $totalCredits = (float) $creditsQuery->sum('amount');
+
+        // Closing balance
+        $closingBalance = $dateFilter === 'all'
+            ? ($totalDebits - $totalCredits)
+            : ($openingBalance + $totalDebits - $totalCredits);
+
+        // Ledger rows: same date filter (all = no date range; else between from_date and to_date)
+        $rowsQuery = $baseQuery();
+        if ($dateFilter !== 'all' && $fromDateTime && $toDateTime) {
+            $rowsQuery->whereBetween('transaction_date', [$fromDateTime, $toDateTime]);
+        }
+        $rows = $rowsQuery->orderBy('transaction_date')->orderBy('id')
+            ->get(['id', 'source_type', 'source_id', 'direction', 'amount', 'transaction_date', 'description']);
+
+        // Resolve invoice numbers for sale entries (one query)
+        $saleSourceIds = $rows->where('source_type', AccountTransaction::SOURCE_SALE)->pluck('source_id')->unique()->filter()->values()->all();
+        $invoiceNos = [];
+        if (!empty($saleSourceIds)) {
+            $invoiceNos = Order::query()->whereIn('id', $saleSourceIds)->pluck('invoice_no', 'id')->all();
+        }
+
+        $transactions = [];
+        $runningBalance = $openingBalance;
+
+        foreach ($rows as $r) {
+            $debit = $r->direction === AccountTransaction::DIRECTION_DEBIT ? (float) $r->amount : 0.0;
+            $credit = $r->direction === AccountTransaction::DIRECTION_CREDIT ? (float) $r->amount : 0.0;
+            $runningBalance += $debit - $credit;
+
+            if ($r->source_type === AccountTransaction::SOURCE_SALE) {
+                $reference = $invoiceNos[$r->source_id] ?? ('#' . $r->source_id);
+            } elseif ($r->source_type === AccountTransaction::SOURCE_CUSTOMER_PAYMENT) {
+                $reference = 'Payment';
+            } else {
+                $reference = $r->description ?? '—';
+            }
+
+            $transactions[] = [
+                'date' => $r->transaction_date->format('Y-m-d'),
+                'reference' => $reference,
+                'description' => $r->description ?? '—',
+                'debit' => $debit,
+                'credit' => $credit,
+                'balance' => $runningBalance,
+            ];
+        }
+
+        return [
+            'transactions' => $transactions,
+            'opening_balance' => $openingBalance,
+            'total_debits' => $totalDebits,
+            'total_credits' => $totalCredits,
+            'closing_balance' => $closingBalance,
+            'date_filter' => $dateFilter,
+            'start_date' => $startDateStr,
+            'end_date' => $endDateStr,
+        ];
+    }
+
+    /**
+     * Export ledger as PDF (same data as ledger view: account_transactions only).
      */
     public function ledgerPdf(Customer $customer, Request $request)
     {
         $this->ensureShopAccess($customer);
+        $ledgerData = $this->buildCustomerLedgerData($customer, $request);
 
-        // Get the same data as ledger view
-        $dateFilter = $request->get('date_filter', 'current_month');
-        $startDate = $request->get('start_date');
-        $endDate = $request->get('end_date');
-
-        if ($dateFilter === 'current_month') {
-            $startDate = Carbon::now()->startOfMonth()->format('Y-m-d');
-            $endDate = Carbon::now()->endOfMonth()->format('Y-m-d');
-        } elseif ($dateFilter === 'last_30_days') {
-            $startDate = Carbon::now()->subDays(30)->format('Y-m-d');
-            $endDate = Carbon::now()->format('Y-m-d');
-        } elseif ($dateFilter === 'custom' && $startDate && $endDate) {
-            $startDate = Carbon::parse($startDate)->format('Y-m-d');
-            $endDate = Carbon::parse($endDate)->format('Y-m-d');
-        } else {
-            $startDate = Carbon::now()->startOfMonth()->format('Y-m-d');
-            $endDate = Carbon::now()->endOfMonth()->format('Y-m-d');
-        }
-
-        $startDateTime = Carbon::parse($startDate)->startOfDay();
-        $endDateTime = Carbon::parse($endDate)->endOfDay();
-
-        $orders = Order::where('customer_id', $customer->id)
-            ->whereBetween('order_date', [$startDate, $endDate])
-            ->orderBy('order_date', 'desc')
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        $payments = PaymentLog::with(['order'])
-            ->whereHas('order', function ($query) use ($customer) {
-                $query->where('customer_id', $customer->id);
-            })
-            ->whereBetween('created_at', [$startDateTime, $endDateTime])
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        $openingBalance = $this->calculateOpeningBalance($customer, $startDateTime);
-
-        $transactions = collect();
-        foreach ($orders as $order) {
-            $transactions->push([
-                'date' => $order->order_date,
-                'datetime' => $order->created_at,
-                'type' => 'Order',
-                'invoice_no' => $order->invoice_no,
-                'order_id' => $order->id,
-                'description' => 'Order - ' . $order->invoice_no,
-                'order_status' => $order->order_status,
-                'payment_status' => $order->payment_status,
-                'total' => $order->total ?? 0,
-                'paid' => $order->pay ?? 0,
-                'due' => $order->due ?? 0,
-                'debit' => $order->due ?? 0,
-                'credit' => 0,
-                'is_order' => true,
-            ]);
-        }
-
-        foreach ($payments as $payment) {
-            $transactions->push([
-                'date' => $payment->created_at->format('Y-m-d'),
-                'datetime' => $payment->created_at,
-                'type' => 'Payment',
-                'invoice_no' => optional($payment->order)->invoice_no,
-                'order_id' => optional($payment->order)->id,
-                'description' => 'Payment for ' . (optional($payment->order)->invoice_no ?? 'Order #' . optional($payment->order)->id),
-                'order_status' => optional($payment->order)->order_status,
-                'payment_status' => optional($payment->order)->payment_status,
-                'total' => optional($payment->order)->total ?? 0,
-                'paid' => $payment->amount_paid,
-                'due' => 0,
-                'debit' => 0,
-                'credit' => $payment->amount_paid,
-                'is_order' => false,
-            ]);
-        }
-
-        $transactions = $transactions->sortByDesc('datetime')->values();
-        $runningBalance = $openingBalance;
-        $transactions = $transactions->map(function ($transaction) use (&$runningBalance) {
-            $runningBalance = $runningBalance + $transaction['debit'] - $transaction['credit'];
-            $transaction['balance'] = $runningBalance;
-            return $transaction;
-        });
-
-        $closingBalance = $runningBalance;
-        $summary = [
-            'total_orders' => $orders->count(),
-            'total_order_amount' => $orders->sum('total'),
-            'total_paid' => $orders->sum('pay'),
-            'total_due' => $orders->sum('due'),
-            'total_payments' => $payments->count(),
-            'total_payment_amount' => $payments->sum('amount_paid'),
-        ];
-
-        $pdf = Pdf::loadView('customers.ledger-pdf', [
+        $pdf = Pdf::loadView('customers.ledger-pdf', array_merge($ledgerData, [
             'customer' => $customer,
-            'transactions' => $transactions,
-            'opening_balance' => $openingBalance,
-            'closing_balance' => $closingBalance,
-            'summary' => $summary,
-            'start_date' => $startDate,
-            'end_date' => $endDate,
-        ]);
+        ]));
 
-        return $pdf->download('customer-ledger-' . $customer->id . '-' . $startDate . '-to-' . $endDate . '.pdf');
-    }
-
-    /**
-     * Calculate opening balance (credit amount before start date).
-     */
-    protected function calculateOpeningBalance(Customer $customer, Carbon $startDate): float
-    {
-        // Get all orders before start date (exclude deleted orders)
-        $ordersBefore = Order::where('customer_id', $customer->id)
-            ->where('order_date', '<', $startDate->format('Y-m-d'))
-            ->get();
-
-        // Get all payments before start date (exclude deleted payments)
-        $paymentsBefore = PaymentLog::whereHas('order', function ($query) use ($customer) {
-                $query->where('customer_id', $customer->id);
-            })
-            ->where('created_at', '<', $startDate)
-            ->get();
-
-        // Calculate balance: sum of all dues minus sum of all payments
-        $totalDue = $ordersBefore->sum('due');
-        $totalPaid = $paymentsBefore->sum('amount_paid');
-
-        return max(0, $totalDue - $totalPaid);
+        $filename = 'customer-ledger-' . $customer->id;
+        if (!empty($ledgerData['start_date']) && !empty($ledgerData['end_date'])) {
+            $filename .= '-' . $ledgerData['start_date'] . '-to-' . $ledgerData['end_date'];
+        } else {
+            $filename .= '-all';
+        }
+        return $pdf->download($filename . '.pdf');
     }
 
     /**

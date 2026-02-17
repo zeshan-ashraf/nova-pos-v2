@@ -26,6 +26,7 @@
         .product-table {
             width: 100%;
             border-collapse: collapse;
+            table-layout: fixed;
         }
         .product-table thead {
             background-color: #f8f9fa;
@@ -277,7 +278,7 @@
                                 <span class="summary-value">{{ number_format($order->sub_total ?? 0, 2) }}</span>
                             </div>
                             <div class="summary-row">
-                                <span class="summary-label">VAT:</span>
+                                <span class="summary-label">Labor Charges:</span>
                                 <span class="summary-value">{{ number_format($order->vat ?? 0, 2) }}</span>
                             </div>
                             <div class="summary-row">

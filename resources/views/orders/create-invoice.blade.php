@@ -77,6 +77,14 @@
             width: 6%;
             text-align: center;
         }
+        .product-row-error {
+            background-color: #fff5f5 !important;
+            border-left: 3px solid #dc3545 !important;
+        }
+        .product-row-error .product-select,
+        .product-row-error .form-control {
+            border-color: #dc3545 !important;
+        }
         .invoice-summary {
             margin-top: 30px;
             padding-top: 20px;
@@ -182,7 +190,7 @@
                 
                 <!-- Error Messages -->
                 @if ($errors->any())
-                    <div class="alert alert-danger mb-3">
+                    <div class="alert alert-danger mb-3" id="validationErrorsAlert">
                         <ul class="mb-0">
                             @foreach ($errors->all() as $error)
                                 <li>{{ $error }}</li>
@@ -424,6 +432,7 @@
                                         </td>
                                         <td>
                                             <span class="stock-label stock-display" data-row="0">0</span>
+                                            <input type="hidden" class="stock-value" name="products[0][stock]" value="0">
                                         </td>
                                         <td>
                                             <input type="number" class="form-control quantity" name="products[0][quantity]" value="1" data-row="0" min="1">
@@ -470,7 +479,7 @@
                                     <span class="summary-value" id="subtotal">0.00</span>
                                 </div>
                                 <div class="summary-row">
-                                    <span class="summary-label">VAT:</span>
+                                    <span class="summary-label">Labor Charges:</span>
                                     <input type="number" step="0.01" class="form-control d-inline-block" id="vat" name="vat" value="0" min="0" style="width: 150px; display: inline-block;">
                                 </div>
                                 <div class="summary-row">
@@ -676,6 +685,17 @@
         var invoiceOldInput = @json($invoiceOldInput);
         var productIdToText = @json($productIdToText);
         var productIdToCode = @json($productIdToCode);
+
+        @if($errors->any())
+        var validationErrorKeys = @json(array_keys($errors->getMessageBag()->getMessages()));
+        var validationProductErrorIndices = validationErrorKeys
+            .filter(function(k) { return /^products\.\d+\./.test(k); })
+            .map(function(k) { var m = k.match(/^products\.(\d+)\./); return m ? parseInt(m[1], 10) : -1; })
+            .filter(function(i) { return i >= 0; })
+            .filter(function(v, i, a) { return a.indexOf(v) === i; });
+        @else
+        var validationProductErrorIndices = [];
+        @endif
         
         // Re-enable buttons if there are errors on the page
         // This handles the case when form submission fails and page reloads with errors
@@ -846,7 +866,9 @@
             
             $row.find('.original-price').val(data.price || 0);
             $row.find('.unit-price').val(data.price || 0);
-            $row.find('.stock-display').text(data.stock || 0);
+            var stockVal = data.stock != null && data.stock !== '' ? data.stock : 0;
+            $row.find('.stock-display').text(stockVal);
+            $row.find('.stock-value').val(stockVal);
             $row.find('.product-code-display').text(data.code || '-');
             
             console.log('Product selected - Row:', rowIdx, 'Product ID:', data.id, 'Select value:', $selectElement.val());
@@ -862,6 +884,7 @@
             $row.find('.original-price').val(0);
             $row.find('.unit-price').val(0);
             $row.find('.stock-display').text(0);
+            $row.find('.stock-value').val(0);
             $row.find('.product-code-display').text('-');
             
             calculateRowTotal(rowIdx);
@@ -975,31 +998,57 @@
             for (var i = 0; i < products.length; i++) {
                 var p = products[i];
                 var pid = String(p.product_id || '');
-                if (!pid) continue;
                 if (i > 0) addRow();
                 var $row = $tbody.find('tr[data-row-index="' + i + '"]');
-                var $select = $row.find('.product-select');
-                if ($select.data('select2')) $select.select2('destroy');
-                var text = productIdToText && productIdToText[pid] ? productIdToText[pid] : 'Product #' + pid;
-                var code = productIdToCode && productIdToCode[pid] ? productIdToCode[pid] : '-';
-                $select.append(new Option(text, pid, true, true));
-                initializeSelect2($select);
-                $select.val(pid).trigger('change');
-                $row.find('.original-price').val(p.original_price || p.unit_price || 0);
-                $row.find('.unit-price').val(p.unit_price || 0);
-                $row.find('.quantity').val(p.quantity || 1);
-                $row.find('.item-discount-value').val(p.item_discount || 0);
-                $row.find('.total-value').val(p.total || 0);
-                $row.find('.product-code-display').text(code);
-                $row.find('.discount-display').text(parseFloat(p.item_discount || 0).toFixed(2));
-                $row.find('.total-display').text(parseFloat(p.total || 0).toFixed(2));
-                var stock = p.stock != null ? p.stock : 0;
+                if (pid) {
+                    var $select = $row.find('.product-select');
+                    if ($select.data('select2')) $select.select2('destroy');
+                    var text = productIdToText && productIdToText[pid] ? productIdToText[pid] : 'Product #' + pid;
+                    var code = productIdToCode && productIdToCode[pid] ? productIdToCode[pid] : '-';
+                    $select.append(new Option(text, pid, true, true));
+                    initializeSelect2($select);
+                    $select.val(pid).trigger('change');
+                    $row.find('.original-price').val(p.original_price || p.unit_price || 0);
+                    $row.find('.unit-price').val(p.unit_price || 0);
+                    $row.find('.quantity').val(p.quantity || 1);
+                    $row.find('.item-discount-value').val(p.item_discount || 0);
+                    $row.find('.total-value').val(p.total || 0);
+                    $row.find('.product-code-display').text(code);
+                    $row.find('.discount-display').text(parseFloat(p.item_discount || 0).toFixed(2));
+                    $row.find('.total-display').text(parseFloat(p.total || 0).toFixed(2));
+var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
                 $row.find('.stock-display').text(stock);
+                $row.find('.stock-value').val(stock);
+                }
             }
             calculateInvoiceTotal();
             calculateDue();
         }
+        // Trigger customer change so details (and walk-in => cash) are applied on reload
+        if (o.customer_id) {
+            setTimeout(function() { $('#customer_id').trigger('change'); }, 100);
+        }
     }
+
+    // Highlight product rows that have validation errors and scroll to first invalid row
+    if (typeof validationProductErrorIndices !== 'undefined' && validationProductErrorIndices.length > 0) {
+        var $tbody = $('#productTableBody');
+        validationProductErrorIndices.forEach(function(idx) {
+            var $row = $tbody.find('tr[data-row-index="' + idx + '"]');
+            if ($row.length) {
+                $row.addClass('product-row-error');
+            }
+        });
+        var $firstErrorRow = $tbody.find('tr.product-row-error').first();
+        if ($firstErrorRow.length) {
+            $firstErrorRow[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+
+    // Remove error highlight when user selects a product in that row
+    $(document).on('change', '.product-select', function() {
+        $(this).closest('tr.product-row').removeClass('product-row-error');
+    });
 
     // Focus on customer dropdown on page load
     $('#customer_id').focus();
@@ -1297,6 +1346,8 @@
                     if (isWalkIn) {
                         // Hide customer info panel for walk-in customers
                         $customerInfoCard.hide();
+                        // Walk-in: first payment method should be cash
+                        $('#payment_method_1').val('cash').trigger('change');
                         return;
                     }
                     
@@ -1409,6 +1460,7 @@
                 </td>
                 <td>
                     <span class="stock-label stock-display" data-row="${rowCount}">0</span>
+                    <input type="hidden" class="stock-value" name="products[${rowCount}][stock]" value="0">
                 </td>
                 <td>
                     <input type="number" class="form-control quantity" name="products[${rowCount}][quantity]" value="1" data-row="${rowCount}" min="1">

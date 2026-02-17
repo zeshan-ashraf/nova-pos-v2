@@ -32,7 +32,7 @@ class Customer extends Model
         'is_walkin',
     ];
     public $sortable = [
-        // 'name', // Removed from UI - may be needed in future
+        'name',
         'email',
         'phone',
         'shopname',
@@ -51,7 +51,10 @@ class Customer extends Model
     public function scopeFilter($query, array $filters)
     {
         $query->when($filters['search'] ?? false, function ($query, $search) {
-            return $query->where('shopname', 'like', '%' . $search . '%');
+            return $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', '%' . $search . '%')
+                    ->orWhere('shopname', 'like', '%' . $search . '%');
+            });
         });
     }
 

@@ -45,7 +45,7 @@ class StockValidator
         $available = (int) ($product->product_store ?? 0);
         if ($available < $qtyOut) {
             throw new InvalidArgumentException(
-                "Insufficient stock for product: {$product->product_name}. Available: {$available}, requested: {$qtyOut}."
+                "Insufficient stock for product: " . ($product->product_code ?? $product->product_name) . ". Available: {$available}, requested: {$qtyOut}."
             );
         }
     }

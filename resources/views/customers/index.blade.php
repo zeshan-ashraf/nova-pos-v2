@@ -62,7 +62,7 @@
                         <tr class="ligth ligth-data">
                             <th>No.</th>
                             {{-- <th>@sortablelink('name')</th> --}} {{-- Name column removed from UI - may be needed in future --}}
-                            <th>@sortablelink('shopname', 'Customer Name')</th>
+                            <th>@sortablelink('name', 'Customer Name')</th>
                             <th>@sortablelink('phone')</th>
                             <th>Credit Limit</th>
                             <th>Credit Amount</th>
@@ -74,8 +74,7 @@
                         @foreach ($customers as $customer)
                         <tr>
                             <td>{{ (($customers->currentPage() * $customers->perPage()) - $customers->perPage()) + $loop->iteration  }}</td>
-                            {{-- <td>{{ $customer->name }}</td> --}} {{-- Name column removed from UI - may be needed in future --}}
-                            <td>{{ $customer->shopname }}</td>
+                            <td>{{ $customer->name }}</td>
                             <td>{{ $customer->phone }}</td>
                             <td>{{ number_format($customer->credit_limit ?? 0, 2) }}</td>
                             <td>{{ number_format($customer->credit_amount ?? 0, 2) }}</td>
