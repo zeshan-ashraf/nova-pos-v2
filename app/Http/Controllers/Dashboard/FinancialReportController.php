@@ -7,6 +7,7 @@ use App\Http\Controllers\Dashboard\Traits\ReportTrait;
 use App\Models\AccountTransaction;
 use App\Models\Activity;
 use App\Models\Order;
+use App\Models\OrderDetails;
 use App\Models\StockLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -162,8 +163,8 @@ class FinancialReportController extends Controller
     /**
      * REPORT 4: Profit & Loss Report
      * URL: /reports/financial/profit-loss
-     * Definition: Profit = Sales Revenue - Purchases (only). Payments do NOT affect P&L.
-     * Source: account_transactions only (sale credit = revenue, purchase debit = cost). Soft-deleted rows excluded.
+     * Definition: Revenue = Sales (ledger). COGS = cost of sold products (order_details × buying_price).
+     * Gross Profit = Sales Revenue - Cost of Goods Sold. Direct inventory costing; no purchases/opening/closing stock in P&L.
      */
     public function profitLoss(Request $request)
     {
@@ -182,22 +183,37 @@ class FinancialReportController extends Controller
         $this->applyShopFilter($salesQuery, $shopFilter['shop_ids']);
         $totalSales = (float) (clone $salesQuery)->sum('amount');
 
-        // 2) Purchase Cost: account_type = purchase, direction = debit
-        $purchasesQuery = AccountTransaction::query()
-            ->where('account_type', AccountTransaction::ACCOUNT_TYPE_PURCHASE)
-            ->where('direction', AccountTransaction::DIRECTION_DEBIT)
-            ->whereBetween('transaction_date', [$start, $end]);
-        $this->applyShopFilter($purchasesQuery, $shopFilter['shop_ids']);
-        $totalPurchases = (float) (clone $purchasesQuery)->sum('amount');
+        // 2) COGS: from sold products only. SUM(order_details.quantity * products.buying_price)
+        //    orders → order_details → products; filter by orders.shop_id, orders.order_date; exclude soft-deleted
+        $cogsQuery = Order::query()
+            ->join('order_details', function ($join) {
+                $join->on('orders.id', '=', 'order_details.order_id')
+                    ->whereNull('order_details.deleted_at');
+            })
+            ->join('products', 'order_details.product_id', '=', 'products.id')
+            ->whereBetween('orders.order_date', [$start, $end])
+            ->selectRaw('SUM(order_details.quantity * COALESCE(products.buying_price, 0)) as cost_of_goods_sold');
+        $this->applyShopFilter($cogsQuery, $shopFilter['shop_ids'], 'orders.shop_id');
+        $cogs = (float) $cogsQuery->value('cost_of_goods_sold');
 
-        // 3) Gross Profit = Sales - Purchases (no payments, no expenses in P&L)
-        $grossProfit = $totalSales - $totalPurchases;
+        // 3) Gross Profit = Sales Revenue - COGS
+        $grossProfit = $totalSales - $cogs;
 
-        // Map to existing UI: Revenue = sales, COGS = purchases, Expenses = 0, Net = Gross
+        // 4) Total Operating Expenses: account_transactions where source_type = 'expense', direction = 'debit'
+        $expensesQuery = AccountTransaction::query()
+            ->where('source_type', AccountTransaction::SOURCE_EXPENSE)
+            ->where('direction', AccountTransaction::DIRECTION_DEBIT);
+        $this->applyShopFilter($expensesQuery, $shopFilter['shop_ids']);
+        if (($dateRange['date_filter'] ?? '') !== 'all') {
+            $expensesQuery->whereBetween('transaction_date', [$start, $end]);
+        }
+        $expenses = (float) $expensesQuery->sum('amount');
+
+        // Operating Profit = Gross Profit - Total Operating Expenses
+        $operatingProfit = $grossProfit - $expenses;
+        // Net Profit (other income/expenses = 0 for now)
+        $netProfit = $operatingProfit;
         $revenue = $totalSales;
-        $cogs = $totalPurchases;
-        $expenses = 0.0;
-        $netProfit = $grossProfit;
         $profitMargin = $revenue > 0 ? (($netProfit / $revenue) * 100) : 0;
 
         return view('reports.financial.profit-loss', [
