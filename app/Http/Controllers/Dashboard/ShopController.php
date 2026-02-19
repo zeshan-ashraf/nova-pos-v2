@@ -239,7 +239,10 @@ class ShopController extends Controller
             $validatedData['parent_shop_id'] = $parentShopId;
         }
 
-        if ($file = $request->file('logo')) {
+        if ($request->boolean('remove_logo') && $shop->logo) {
+            Storage::delete('public/shops/' . $shop->logo);
+            $validatedData['logo'] = null;
+        } elseif ($file = $request->file('logo')) {
             $fileName = hexdec(uniqid()) . '.' . $file->getClientOriginalExtension();
             $path = 'public/shops/';
             if ($shop->logo) {

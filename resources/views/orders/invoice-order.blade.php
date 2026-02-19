@@ -21,11 +21,16 @@
             <div class="row">
                 <div class="col-lg-12">
                     <div class="invoice-inner-9" id="invoice_wrapper">
+                        @php
+                            $userShop = auth()->user()->shop ?? null;
+                            $logoUrl = ($userShop && $userShop->logo) ? asset('storage/shops/' . $userShop->logo) : asset('assets/images/login/company-logo.png');
+                            $shop = $order->shop ?? $userShop;
+                        @endphp
                         <div class="invoice-top">
                             <div class="row">
                                 <div class="col-lg-6 col-sm-6">
                                     <div class="logo">
-                                        <img class="logo" src="{{ asset('assets/images/login/company-logo.png') }}" alt="logo">
+                                        <img class="logo" src="{{ $logoUrl }}" alt="logo">
                                     </div>
                                 </div>
                                 <div class="col-lg-6 col-sm-6">
@@ -46,9 +51,7 @@
                                     </div>
                                 </div>
                                 <div class="col-sm-6 text-end mb-2">
-                                    <h4 class="inv-title-1">@php
-                                        $shop = $order->shop ?? auth()->user()->shop ?? null;
-                                    @endphp</h4>
+                                    <h4 class="inv-title-1">Shop</h4>
                                     <p class="inv-from-1">{{ $shop->phone ?? 'POS' }}</p>
                                     <p class="inv-from-2">{{ $shop->owner_name ?? auth()->user()->name }}</p>
                                 </div>

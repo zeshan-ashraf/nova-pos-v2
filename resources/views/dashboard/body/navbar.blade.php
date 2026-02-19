@@ -7,7 +7,7 @@
             <div class="iq-navbar-logo d-flex align-items-center justify-content-between">
                 <i class="ri-menu-line wrapper-menu"></i>
                 <a href="{{ route('dashboard') }}" class="header-logo">
-                    <img src="{{ asset('assets/images/login/company-logo.png') }}" class="img-fluid rounded-normal" alt="logo">
+                    <img src="{{ (auth()->user()->shop && auth()->user()->shop->logo) ? asset('storage/shops/' . auth()->user()->shop->logo) : asset('assets/images/login/company-logo.png') }}" class="img-fluid rounded-normal" alt="logo">
                 </a>
             </div>
             <div class="d-flex align-items-center">

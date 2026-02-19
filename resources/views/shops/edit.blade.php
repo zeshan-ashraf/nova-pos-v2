@@ -24,7 +24,7 @@
                             <div class="col-md-12">
                                 <div class="profile-img-edit">
                                     <div class="crm-profile-img-edit">
-                                        <img class="crm-profile-pic rounded-circle avatar-100" id="image-preview" src="{{ $shop->logo ? asset('storage/shops/'.$shop->logo) : asset('assets/images/user/1.png') }}" alt="shop-logo">
+                                        <img class="crm-profile-pic rounded-circle avatar-100" id="image-preview" src="{{ $shop->logo_url }}" alt="shop-logo">
                                     </div>
                                 </div>
                             </div>
@@ -42,6 +42,14 @@
                                 </div>
                                 @enderror
                             </div>
+                            @if($shop->logo)
+                            <div class="form-group col-lg-6 d-flex align-items-end">
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" id="remove_logo" name="remove_logo" value="1" {{ old('remove_logo') ? 'checked' : '' }}>
+                                    <label class="custom-control-label" for="remove_logo">Remove current logo</label>
+                                </div>
+                            </div>
+                            @endif
                         </div>
 
                         <div class="row align-items-center">

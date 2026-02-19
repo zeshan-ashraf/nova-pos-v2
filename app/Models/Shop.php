@@ -38,6 +38,16 @@ class Shop extends Model
         'is_parent',
     ];
 
+    /**
+     * URL for the shop logo. Returns default placeholder if no logo.
+     */
+    public function getLogoUrlAttribute(): string
+    {
+        return $this->logo
+            ? asset('storage/shops/' . $this->logo)
+            : asset('assets/images/user/1.png');
+    }
+
     public function scopeFilter($query, array $filters): void
     {
         $query->when($filters['search'] ?? false, function ($query, $search) {

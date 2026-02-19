@@ -2,7 +2,7 @@
 <div class="iq-sidebar sidebar-default ">
     <div class="iq-sidebar-logo d-flex align-items-center justify-content-between">
         <a href="{{ route('dashboard') }}" class="header-logo">
-            <img src="{{ asset('assets/images/login/company-logo.png') }}" class="img-fluid rounded-normal light-logo" alt="logo">
+            <img src="{{ (auth()->user()->shop && auth()->user()->shop->logo) ? asset('storage/shops/' . auth()->user()->shop->logo) : asset('assets/images/login/company-logo.png') }}" class="img-fluid rounded-normal light-logo" alt="logo">
         </a>
         <div class="iq-menu-bt-sidebar ml-0">
             <i class="las la-bars wrapper-menu"></i>

@@ -20,7 +20,7 @@
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-3 text-center mb-3">
-                            <img class="rounded-circle avatar-120" src="{{ $shop->logo ? asset('storage/shops/'.$shop->logo) : asset('assets/images/user/1.png') }}" alt="{{ $shop->name }}">
+                            <img class="rounded-circle avatar-120" src="{{ $shop->logo_url }}" alt="{{ $shop->name }}">
                         </div>
                         <div class="col-md-9">
                             <div class="row">
