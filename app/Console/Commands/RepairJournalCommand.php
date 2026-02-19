@@ -58,8 +58,9 @@ class RepairJournalCommand extends Command
     {
         // Missing sale journal = no matching account_transactions row (source_type=sale, source_id=order.id,
         // account_type=sale, direction=credit, deleted_at IS NULL, shop_id match). Use LEFT JOIN so we only
-        // get orders with no such row. Orders.deleted_at IS NULL applied via Order::query() (SoftDeletes).
+        // get orders with no such row. Explicitly exclude soft-deleted orders (orders.deleted_at IS NULL).
         $query = Order::query()
+            ->whereNull('orders.deleted_at')
             ->select([
                 'orders.id',
                 'orders.invoice_no',
