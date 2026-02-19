@@ -58,8 +58,8 @@ class RepairJournalCommand extends Command
     {
         // Missing sale journal = no matching account_transactions row (source_type=sale, source_id=order.id,
         // account_type=sale, direction=credit, deleted_at IS NULL, shop_id match). Use LEFT JOIN so we only
-        // get orders with no such row. Explicitly exclude soft-deleted orders (orders.deleted_at IS NULL).
-        $query = Order::query()
+        // get orders with no such row. Exclude soft-deleted orders via DB::table (no Eloquent scope quirks).
+        $query = DB::table('orders')
             ->whereNull('orders.deleted_at')
             ->select([
                 'orders.id',
@@ -139,7 +139,7 @@ class RepairJournalCommand extends Command
                     $this->saleEntriesInserted += 2;
                 }
             }
-        }, 'id');
+        }, 'orders.id', 'id');
 
         if ($this->missingOrderRows !== []) {
             $this->newLine();
