@@ -56,11 +56,21 @@ class RepairJournalCommand extends Command
 
     protected function repairSalesJournals(bool $dryRun, ?string $shopId, ?string $fromDate): void
     {
-        // Missing sale journal = no matching account_transactions row (source_type=sale, source_id=order.id,
-        // account_type=sale, direction=credit, deleted_at IS NULL, shop_id match). Use LEFT JOIN so we only
-        // get orders with no such row. Exclude soft-deleted orders via DB::table (no Eloquent scope quirks).
+        // Missing sale journal = no matching non-deleted account_transactions row. Exclude:
+        // 1) Soft-deleted orders (orders.deleted_at)
+        // 2) Orders whose sale journal was soft-deleted (at row exists with deleted_at set - don't re-add)
         $query = DB::table('orders')
             ->whereNull('orders.deleted_at')
+            ->whereNotExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('account_transactions as at_del')
+                    ->whereColumn('at_del.source_id', 'orders.id')
+                    ->where('at_del.source_type', 'sale')
+                    ->where('at_del.account_type', 'sale')
+                    ->where('at_del.direction', 'credit')
+                    ->whereColumn('at_del.shop_id', 'orders.shop_id')
+                    ->whereNotNull('at_del.deleted_at');
+            })
             ->select([
                 'orders.id',
                 'orders.invoice_no',
