@@ -30,7 +30,7 @@ class CustomerCreditService
 
     /**
      * Decrease customer's credit balance when payment is applied.
-     * Will not allow credit_amount to go negative.
+     * Negative credit_amount = advance (customer has overpaid / we owe them).
      * Returns the new credit_amount.
      */
     public function applyPayment(Customer $customer, float $paymentAmount): float
@@ -42,8 +42,7 @@ class CustomerCreditService
         return DB::transaction(function () use ($customer, $paymentAmount) {
             /** @var Customer $locked */
             $locked = Customer::whereKey($customer->getKey())->lockForUpdate()->firstOrFail();
-            $newAmount = max(0, ($locked->credit_amount ?? 0) - $paymentAmount);
-            $locked->credit_amount = $newAmount;
+            $locked->credit_amount = ($locked->credit_amount ?? 0) - $paymentAmount;
             $locked->save();
 
             return $locked->credit_amount;
@@ -68,7 +67,7 @@ class CustomerCreditService
     /**
      * Decrease customer's credit balance by pending amount (reverse of addPending).
      * Used when deleting an order that had a due amount.
-     * Returns the new credit_amount.
+     * Negative credit_amount = advance. Returns the new credit_amount.
      */
     public function removePending(Customer $customer, float $pendingAmount): float
     {
@@ -79,8 +78,7 @@ class CustomerCreditService
         return DB::transaction(function () use ($customer, $pendingAmount) {
             /** @var Customer $locked */
             $locked = Customer::whereKey($customer->getKey())->lockForUpdate()->firstOrFail();
-            $newAmount = max(0, ($locked->credit_amount ?? 0) - $pendingAmount);
-            $locked->credit_amount = $newAmount;
+            $locked->credit_amount = ($locked->credit_amount ?? 0) - $pendingAmount;
             $locked->save();
 
             return $locked->credit_amount;

@@ -87,8 +87,8 @@
                                     <a class="badge bg-success mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Edit"
                                         href="{{ route('customers.edit', $customer->id) }}""><i class="ri-pencil-line mr-0"></i>
                                     </a>
-                                    <a class="badge badge-warning mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Credit Log"
-                                        href="{{ route('customers.creditLog', $customer->id) }}"><i class="ri-file-list-line mr-0"></i>
+                                    <a class="badge badge-warning mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Ledger"
+                                        href="{{ route('customers.ledger', $customer) }}"><i class="ri-file-list-line mr-0"></i>
                                     </a>
                                     <form action="{{ route('customers.destroy', $customer->id) }}" method="POST" style="margin-bottom: 5px">
                                         @method('delete')

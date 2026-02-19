@@ -473,6 +473,10 @@ class PurchaseController extends Controller
             ->findOrFail($purchase_id);
         $this->ensureShopAccess($purchase);
 
+        if ($purchase->is_system_generated ?? false) {
+            return Redirect::back()->with('error', 'System generated purchase cannot be deleted.');
+        }
+
         try {
             DB::transaction(function () use ($purchase) {
                 // 1. Lock invoice (with relations for stock reversal and payment log ids)

@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Models\AccountTransaction;
 use App\Models\Activity;
 use App\Models\Expense;
+use App\Http\Controllers\Dashboard\Traits\ReportTrait;
 use App\Services\Ledger\ExpenseLedgerService;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
@@ -13,46 +15,64 @@ use App\Support\ActiveShop;
 
 class ExpenseController extends Controller
 {
+    use ReportTrait;
+
     public function __construct(
         protected ExpenseLedgerService $expenseLedgerService
     ) {}
 
     /**
      * Display a listing of the expenses.
+     * Date filter defaults to Today. Group by: None (default), Date, or Category.
      */
-    public function index()
+    public function index(Request $request)
     {
-        // Get the number of rows per page, default to 10
-        $row = (int) request('row', 50);
-
-        // Validate that the 'row' is between 1 and 100
+        $row = (int) $request->input('row', 50);
         if ($row < 1 || $row > 100) {
             abort(400, 'The per-page parameter must be an integer between 1 and 100.');
         }
 
         $authUser = auth()->user();
+        $dateRange = $this->getDateRange($request);
+        $groupBy = $request->input('group_by', 'none');
+        if (!in_array($groupBy, ['none', 'date', 'category'], true)) {
+            $groupBy = 'none';
+        }
+
         $expensesQuery = Activity::query();
 
-        // Apply shop filtering - super admin can see all expenses, others only their shop
+        // Shop filter: use logged-in user's shop_id when set
         if ($authUser && $authUser->shop_id) {
             $expensesQuery->where('activities.shop_id', $authUser->shop_id);
         }
-        // Super admin (no shop_id) can see all expenses, no filtering needed
 
-        // Eager load expense category to avoid N+1
+        // Date filter (default today)
+        $expensesQuery->whereBetween('date', [$dateRange['start_datetime'], $dateRange['end_datetime']]);
+
+        // Search filter
+        if ($request->filled('search')) {
+            $term = $request->input('search');
+            $expensesQuery->where(function ($query) use ($term) {
+                $query->where('description', 'like', "%{$term}%")
+                    ->orWhere('date', 'like', "%{$term}%")
+                    ->orWhere('activity_cost', 'like', "%{$term}%")
+                    ->orWhereHas('expense', fn ($q) => $q->where('expense_title', 'like', "%{$term}%"));
+            });
+        }
+
         $expensesQuery->with('expense');
 
-        // Default: newest first (reverse order by id). Sortable overrides when user clicks a column.
-        if (!request()->has('sort')) {
+        if (!$request->has('sort')) {
             $expensesQuery->orderBy('id', 'desc');
         }
         $expensesQuery->sortable();
 
-        // Paginate expenses with the specified number of rows per page
-        $expenses = $expensesQuery->paginate($row);
+        $expenses = $expensesQuery->paginate($row)->withQueryString();
 
         return view('expenses.index', [
             'expenses' => $expenses,
+            'dateRange' => $dateRange,
+            'groupBy' => $groupBy,
         ]);
     }
 
@@ -371,13 +391,22 @@ class ExpenseController extends Controller
 
 
     /**
-     * Remove the specified expense from storage.
+     * Soft delete the expense (activity) and its related account_transactions.
      */
     public function destroy(Activity $expense)
     {
         $this->ensureShopAccess($expense);
         $this->rejectSystemExpenseModification($expense, 'delete');
-        $expense->delete();
+
+        DB::transaction(function () use ($expense) {
+            // Soft delete related account_transactions (source_type = expense, source_id = activity id)
+            AccountTransaction::query()
+                ->where('source_type', AccountTransaction::SOURCE_EXPENSE)
+                ->where('source_id', $expense->id)
+                ->delete();
+            $expense->delete();
+        });
+
         return Redirect::route('expenses.index')->with('success', 'Expense has been deleted!');
     }
     

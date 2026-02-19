@@ -11,9 +11,27 @@ class Purchase extends Model
 {
     use HasFactory, Sortable, SoftDeletes;
 
+    protected static function booted(): void
+    {
+        static::deleting(function (Purchase $purchase) {
+            if ($purchase->is_system_generated) {
+                AccountTransaction::query()
+                    ->where('source_type', AccountTransaction::SOURCE_PURCHASE)
+                    ->where('source_id', $purchase->id)
+                    ->delete();
+                AccountTransaction::query()
+                    ->where('source_type', AccountTransaction::SOURCE_PURCHASE_PAYMENT)
+                    ->where('source_id', $purchase->id)
+                    ->delete();
+            }
+        });
+    }
+
     protected $fillable = [
         'supplier_id',
         'shop_id',
+        'source_sale_id',
+        'is_system_generated',
         'purchase_date',
         'purchase_status',
         'total_products',
@@ -38,6 +56,10 @@ class Purchase extends Model
 
     protected $guarded = [
         'id',
+    ];
+
+    protected $casts = [
+        'is_system_generated' => 'boolean',
     ];
 
     public function supplier()

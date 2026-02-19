@@ -4282,6 +4282,28 @@ table th{
     padding: 0 60px 10px;
 }
 
+.invoice-16 .invoice-summary-boxes {
+    display: flex;
+    align-items: stretch;
+}
+
+.invoice-16 .invoice-summary-boxes .col-sm-6 {
+    display: flex;
+}
+
+.invoice-16 .invoice-summary-box {
+    flex: 1;
+    min-height: 100%;
+}
+
+.invoice-16 .invoice-notes {
+    padding: 0 60px 10px;
+}
+
+.invoice-16 .invoice-notes .inv-title-1 {
+    margin-bottom: 8px;
+}
+
 .invoice-16 .invoice-informeshon-footer{
     position: relative;
     padding: 50px 180px 40px;
@@ -4372,6 +4394,10 @@ table th{
         padding: 0 50px 50px;
     }
 
+    .invoice-16 .invoice-notes {
+        padding: 0 50px 10px;
+    }
+
     .invoice-16 .invoice-footer {
         padding: 50px;
     }
@@ -4416,6 +4442,10 @@ table th{
 
     .invoice-16 .order-summary {
         padding: 0 30px 30px;
+    }
+
+    .invoice-16 .invoice-notes {
+        padding: 0 30px 10px;
     }
 
     .invoice-16 .invoice-informeshon-footer {

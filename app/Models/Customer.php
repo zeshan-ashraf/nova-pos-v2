@@ -5,11 +5,12 @@ namespace App\Models;
 use App\Traits\BelongsToShop;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Kyslik\ColumnSortable\Sortable;
 
 class Customer extends Model
 {
-    use BelongsToShop, HasFactory, Sortable;
+    use BelongsToShop, HasFactory, SoftDeletes, Sortable;
 
     protected $fillable = [
         'name',

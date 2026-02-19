@@ -103,7 +103,7 @@
                                 </table>
                             </div>
                         </div>
-                        <div class="row mt-3 order-summary">
+                        <div class="row mt-3 order-summary align-items-stretch invoice-summary-boxes">
                             @php
                                     $subtotal = $orderDetails->sum('total');
                                     $laborCharges = (float)($order->vat ?? 0);
@@ -111,7 +111,7 @@
                                     $invoiceTotal = $subtotal + $laborCharges - $invoiceDiscount;
                                 @endphp
                             <div class="col-sm-6">
-                                <div class="border rounded p-3 bg-light">
+                                <div class="border rounded p-3 bg-light invoice-summary-box h-100">
                                     <p class="inv-from-1 mb-1"><strong>Previous Balance:</strong> {{ isset($customerBalance) ? number_format($customerBalance, 2) : number_format($order->customer?->credit_amount ?? 0, 2) }}</p>
                                     @if(($salePayments ?? collect())->isNotEmpty())
                                     @foreach($salePayments as $payment)
@@ -124,7 +124,7 @@
                                 </div>
                             </div>
                             <div class="col-sm-6">
-                                <div class="text-end border rounded p-3 bg-light">
+                                <div class="text-end border rounded p-3 bg-light invoice-summary-box h-100">
                                     <p class="inv-from-1 mb-1"><strong>Subtotal:</strong> {{ number_format($subtotal, 2) }}</p>
                                     <p class="inv-from-1 mb-1"><strong>Labor Charges:</strong> +{{ number_format($laborCharges, 2) }}</p>
                                     <p class="inv-from-1 mb-1"><strong>Discount on Invoice:</strong> -{{ number_format($invoiceDiscount, 2) }}</p>
@@ -132,6 +132,12 @@
                                 </div>
                             </div>
                         </div>
+                        @if($order->comment ?? null)
+                        <div class="invoice-notes mt-4">
+                            <h4 class="inv-title-1">Invoice Notes</h4>
+                            <p class="inv-from-1 mb-0" style="white-space: pre-wrap;">{{ $order->comment }}</p>
+                        </div>
+                        @endif
                         @if($shop && $shop->invoice_policy)
                         <div class="invoice-policy-footer mt-4">
                             <h4 class="inv-title-1">Invoice Policy</h4>

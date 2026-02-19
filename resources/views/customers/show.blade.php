@@ -15,7 +15,7 @@
                             <h4 class="mb-1">{{ $customer->shopname }}</h4>
                             {{-- <p class="mb-2">{{ $customer->shopname }}</p> --}} {{-- Removed duplicate shopname display --}}
                             <a href="{{ route('customers.edit', $customer->id) }}" class="btn btn-primary font-size-14">Edit</a>
-                            <a href="{{ route('customers.creditLog', $customer->id) }}" class="btn btn-info font-size-14">Credit Log</a>
+                            <a href="{{ route('customers.ledger', $customer) }}" class="btn btn-info font-size-14">Ledger</a>
                             <a href="{{ route('customers.ledger', $customer->id) }}" class="btn btn-success font-size-14">Ledger</a>
                             <a href="{{ route('customers.index') }}" class="btn btn-danger font-size-14">Back</a>
                         </div>

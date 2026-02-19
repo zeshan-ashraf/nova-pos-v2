@@ -157,4 +157,57 @@ class CustomerPaymentController extends Controller
 
         return Redirect::route('customer-payments.create')->with('success', 'Customer payment recorded successfully.');
     }
+
+    /**
+     * Soft delete a customer payment: soft delete the customer-side and cash/bank account_transactions,
+     * then recalculate and sync the customer balance. All in a transaction.
+     */
+    public function destroy($id, LedgerBalanceService $balanceService)
+    {
+        $request = request();
+        if (!$request->expectsJson()) {
+            return response()->json(['success' => false, 'message' => 'Invalid request.'], 400);
+        }
+
+        try {
+            DB::transaction(function () use ($id, $balanceService) {
+                $customerRow = AccountTransaction::query()
+                    ->where('source_type', AccountTransaction::SOURCE_CUSTOMER_PAYMENT)
+                    ->where('account_type', AccountTransaction::ACCOUNT_TYPE_CUSTOMER)
+                    ->findOrFail($id);
+
+                $customerRow->delete(); // soft delete
+
+                $desc = $customerRow->description ?? '';
+                $siblingQuery = AccountTransaction::query()
+                    ->where('source_type', AccountTransaction::SOURCE_CUSTOMER_PAYMENT)
+                    ->whereIn('account_type', [AccountTransaction::ACCOUNT_TYPE_CASH, AccountTransaction::ACCOUNT_TYPE_BANK])
+                    ->where('shop_id', $customerRow->shop_id)
+                    ->where('transaction_date', $customerRow->transaction_date)
+                    ->where('amount', $customerRow->amount);
+                if ($desc === '') {
+                    $siblingQuery->where(function ($q) {
+                        $q->whereNull('description')->orWhere('description', '');
+                    });
+                } else {
+                    $siblingQuery->where('description', $desc);
+                }
+                $siblings = $siblingQuery->get();
+
+                foreach ($siblings as $trans) {
+                    $trans->delete(); // soft delete
+                }
+
+                $customerId = (int) $customerRow->account_ref_id;
+                $balance = $balanceService->getCustomerBalance($customerId, $customerRow->shop_id);
+                Customer::where('id', $customerId)->update(['credit_amount' => $balance]);
+            });
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['success' => false, 'message' => 'Payment not found.'], 404);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => 'Error deleting payment.'], 500);
+        }
+
+        return response()->json(['success' => true]);
+    }
 }

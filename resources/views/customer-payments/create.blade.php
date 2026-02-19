@@ -112,6 +112,7 @@
                                     <th>Amount</th>
                                     <th>Method</th>
                                     <th>Description</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -123,10 +124,13 @@
                                     <td>{{ number_format($p->amount, 2) }}</td>
                                     <td>{{ ucfirst($p->payment_method) }}</td>
                                     <td>{{ $p->description ?? '—' }}</td>
+                                    <td>
+                                        <button type="button" class="btn btn-danger btn-sm delete-payment" data-id="{{ $p->id }}">Delete</button>
+                                    </td>
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="6" class="text-center text-muted py-4">No customer payments recorded yet.</td>
+                                    <td colspan="7" class="text-center text-muted py-4">No customer payments recorded yet.</td>
                                 </tr>
                                 @endforelse
                             </tbody>
@@ -173,6 +177,34 @@
             setTimeout(focusSearch, 200);
         });
     }
+
+    document.querySelectorAll('.delete-payment').forEach(function(button) {
+        button.addEventListener('click', function() {
+            var paymentId = this.getAttribute('data-id');
+            if (confirm('Are you sure you want to delete this payment?')) {
+                fetch('/customer-payments/' + paymentId, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') && document.querySelector('meta[name="csrf-token"]').getAttribute('content')) || (document.querySelector('input[name="_token"]') && document.querySelector('input[name="_token"]').value),
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        alert('Payment deleted successfully!');
+                        location.reload();
+                    } else {
+                        alert(data.message || 'Error deleting payment!');
+                    }
+                })
+                .catch(function() {
+                    alert('Error deleting payment!');
+                });
+            }
+        });
+    });
 })();
 </script>
 @endsection

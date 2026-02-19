@@ -733,6 +733,64 @@ class OrderController extends Controller
                     throw new \RuntimeException('This invoice has already been deleted.');
                 }
 
+                // 1b. If this is a mother sale with a linked child purchase, delete the child side first (inter-branch cascade).
+                $childPurchase = Purchase::with(['purchaseDetails.product', 'paymentLogs'])
+                    ->where('source_sale_id', $order->id)
+                    ->first();
+
+                if ($childPurchase && !$childPurchase->trashed()) {
+                    $childPurchase = Purchase::with(['purchaseDetails.product', 'paymentLogs'])
+                        ->lockForUpdate()
+                        ->find($childPurchase->id);
+                    if ($childPurchase && !$childPurchase->trashed()) {
+                        // 2A: Reverse child stock (decrement product_store for purchased quantity).
+                        // Use explicit query for purchase_details so we always have rows; update products directly to avoid any shop scope.
+                        $childDetails = PurchaseDetail::where('purchase_id', $childPurchase->id)->get();
+                        foreach ($childDetails as $purchaseDetail) {
+                            if ((int) $purchaseDetail->quantity <= 0) {
+                                continue;
+                            }
+                            $productId = (int) $purchaseDetail->product_id;
+                            $qty = (int) $purchaseDetail->quantity;
+                            $current = (int) DB::table('products')->where('id', $productId)->value('product_store');
+                            if ($current < $qty) {
+                                $productName = DB::table('products')->where('id', $productId)->value('product_name');
+                                throw new \RuntimeException(
+                                    'Cannot delete: linked child purchase would make product "' . ($productName ?? $productId) . '" negative.'
+                                );
+                            }
+                            DB::table('products')->where('id', $productId)->decrement('product_store', $qty);
+                        }
+                        // 2B: Soft delete child account_transactions (purchase + purchase_payment).
+                        $childPaymentLogIds = $childPurchase->paymentLogs()->pluck('id')->toArray();
+                        AccountTransaction::query()
+                            ->where(function ($q) use ($childPurchase, $childPaymentLogIds) {
+                                $q->where('source_type', AccountTransaction::SOURCE_PURCHASE)
+                                    ->where('source_id', $childPurchase->id);
+                                if (count($childPaymentLogIds) > 0) {
+                                    $q->orWhere(function ($q2) use ($childPaymentLogIds) {
+                                        $q2->where('source_type', AccountTransaction::SOURCE_PURCHASE_PAYMENT)
+                                            ->whereIn('source_id', $childPaymentLogIds);
+                                    });
+                                }
+                                // System-generated child purchase uses source_id = purchase_id for payment entry
+                                $q->orWhere(function ($q2) use ($childPurchase) {
+                                    $q2->where('source_type', AccountTransaction::SOURCE_PURCHASE_PAYMENT)
+                                        ->where('source_id', $childPurchase->id);
+                                });
+                            })
+                            ->delete();
+                        // 2C: Soft delete child purchase_details, payment_logs, stock_logs, then purchase.
+                        PurchaseDetail::where('purchase_id', $childPurchase->id)->delete();
+                        PurchasePaymentLog::where('purchase_id', $childPurchase->id)->delete();
+                        StockLog::query()
+                            ->where('source_type', 'purchase')
+                            ->where('source_id', (string) $childPurchase->id)
+                            ->delete();
+                        $childPurchase->delete();
+                    }
+                }
+
                 // 2. Reverse stock: increase product_store by sold quantity (sale invoice)
                 foreach ($order->orderDetails as $orderDetail) {
                     $product = Product::withoutGlobalScope('shop')
@@ -1525,10 +1583,12 @@ class OrderController extends Controller
                         'prefix' => 'PUR-'
                     ]);
 
-                    // 4. Create Purchase (Purchase Invoice)
+                    // 4. Create Purchase (Purchase Invoice) — link to mother sale for cascade delete
                     $purchaseData = [
                         'supplier_id' => $supplier->id,
                         'shop_id' => $childShop->id,
+                        'source_sale_id' => $order_id,
+                        'is_system_generated' => true,
                         'purchase_date' => Carbon::parse($validatedData['order_date'])->format('Y-m-d'),
                         'purchase_status' => 'pending',
                         'total_products' => $totalProducts,
@@ -1547,6 +1607,51 @@ class OrderController extends Controller
 
                     $purchase = Purchase::create($purchaseData);
                     $purchase_id = $purchase->id;
+
+                    // 4b. Accounting entries for system-generated child purchase (prevent duplicates)
+                    if (!AccountTransaction::where('source_type', AccountTransaction::SOURCE_PURCHASE)->where('source_id', $purchase_id)->exists()) {
+                        $transactionDate = Carbon::parse($validatedData['order_date'])->format('Y-m-d');
+                        $descPurchase = 'Purchase ' . $purchase_no;
+
+                        AccountTransaction::create([
+                            'shop_id' => $childShop->id,
+                            'account_type' => AccountTransaction::ACCOUNT_TYPE_PURCHASE,
+                            'account_ref_id' => null,
+                            'direction' => AccountTransaction::DIRECTION_DEBIT,
+                            'amount' => $total,
+                            'source_type' => AccountTransaction::SOURCE_PURCHASE,
+                            'source_id' => $purchase_id,
+                            'description' => $descPurchase,
+                            'transaction_date' => $transactionDate,
+                        ]);
+
+                        AccountTransaction::create([
+                            'shop_id' => $childShop->id,
+                            'account_type' => AccountTransaction::ACCOUNT_TYPE_SUPPLIER,
+                            'account_ref_id' => $supplier->id,
+                            'direction' => AccountTransaction::DIRECTION_CREDIT,
+                            'amount' => $total,
+                            'source_type' => AccountTransaction::SOURCE_PURCHASE,
+                            'source_id' => $purchase_id,
+                            'description' => $descPurchase,
+                            'transaction_date' => $transactionDate,
+                        ]);
+
+                        if ($pay > 0) {
+                            $accountType = $paymentMethod1 === 'bank' ? AccountTransaction::ACCOUNT_TYPE_BANK : AccountTransaction::ACCOUNT_TYPE_CASH;
+                            AccountTransaction::create([
+                                'shop_id' => $childShop->id,
+                                'account_type' => $accountType,
+                                'account_ref_id' => null,
+                                'direction' => AccountTransaction::DIRECTION_CREDIT,
+                                'amount' => $pay,
+                                'source_type' => AccountTransaction::SOURCE_PURCHASE_PAYMENT,
+                                'source_id' => $purchase_id,
+                                'description' => 'Purchase Payment ' . $purchase_no,
+                                'transaction_date' => $transactionDate,
+                            ]);
+                        }
+                    }
 
                     // 5. Create Purchase Details
                     foreach ($validatedData['products'] as $product) {

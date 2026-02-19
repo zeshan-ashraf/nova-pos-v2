@@ -153,6 +153,7 @@ Route::get('/customers/{customer}/ledger/pdf', [CustomerController::class, 'ledg
 Route::middleware(['permission:customer_payment.menu'])->group(function () {
     Route::get('/customer-payments/create', [CustomerPaymentController::class, 'create'])->name('customer-payments.create');
     Route::post('/customer-payments', [CustomerPaymentController::class, 'store'])->name('customer-payments.store');
+    Route::delete('/customer-payments/{id}', [CustomerPaymentController::class, 'destroy'])->name('customer-payments.destroy');
 });
 
 Route::get('/suppliers/{supplier}/ledger', [SupplierController::class, 'ledger'])->name('suppliers.ledger');

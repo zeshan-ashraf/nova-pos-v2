@@ -175,13 +175,21 @@ class FinancialReportController extends Controller
         $start = $dateRange['start_datetime'];
         $end = $dateRange['end_datetime'];
 
-        // 1) Sales Revenue: account_type = sale, direction = credit (SoftDeletes excludes deleted_at)
+        // 1) Sales Revenue: sum of sale-account credits (all sales: cash + credit). Ledger is source of truth.
+        //    Fallback to orders.total when ledger has no sale entries (e.g. legacy data or backfill not run).
         $salesQuery = AccountTransaction::query()
             ->where('account_type', AccountTransaction::ACCOUNT_TYPE_SALE)
             ->where('direction', AccountTransaction::DIRECTION_CREDIT)
             ->whereBetween('transaction_date', [$start, $end]);
         $this->applyShopFilter($salesQuery, $shopFilter['shop_ids']);
         $totalSales = (float) (clone $salesQuery)->sum('amount');
+
+        if ($totalSales == 0) {
+            $ordersRevenueQuery = Order::query()
+                ->whereBetween('order_date', [$start, $end]);
+            $this->applyShopFilter($ordersRevenueQuery, $shopFilter['shop_ids']);
+            $totalSales = (float) (clone $ordersRevenueQuery)->sum('total');
+        }
 
         // 2) COGS: from sold products only. SUM(order_details.quantity * products.buying_price)
         //    orders → order_details → products; filter by orders.shop_id, orders.order_date; exclude soft-deleted
