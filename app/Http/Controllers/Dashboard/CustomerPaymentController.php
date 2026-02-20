@@ -159,6 +159,63 @@ class CustomerPaymentController extends Controller
     }
 
     /**
+     * Return payment detail HTML for ledger modal (AJAX). Id is the account_transaction id (customer-side row).
+     */
+    public function paymentDetailContent($id)
+    {
+        $authUser = auth()->user();
+        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+
+        $customerRow = AccountTransaction::query()
+            ->where('source_type', AccountTransaction::SOURCE_CUSTOMER_PAYMENT)
+            ->where('account_type', AccountTransaction::ACCOUNT_TYPE_CUSTOMER)
+            ->findOrFail($id);
+
+        if ($visibleShopIds->isNotEmpty() && !$visibleShopIds->contains($customerRow->shop_id)) {
+            abort(404);
+        }
+
+        $customer = Customer::find($customerRow->account_ref_id);
+        $desc = $customerRow->description ?? '';
+        $siblingQuery = AccountTransaction::query()
+            ->where('source_type', AccountTransaction::SOURCE_CUSTOMER_PAYMENT)
+            ->whereIn('account_type', [AccountTransaction::ACCOUNT_TYPE_CASH, AccountTransaction::ACCOUNT_TYPE_BANK])
+            ->where('shop_id', $customerRow->shop_id)
+            ->where('transaction_date', $customerRow->transaction_date)
+            ->where('amount', $customerRow->amount);
+        if ($desc === '') {
+            $siblingQuery->where(function ($q) {
+                $q->whereNull('description')->orWhere('description', '');
+            });
+        } else {
+            $siblingQuery->where('description', $desc);
+        }
+        $sibling = $siblingQuery->first();
+
+        $paymentMethod = '—';
+        $bankName = null;
+        if ($sibling) {
+            $paymentMethod = $sibling->account_type === AccountTransaction::ACCOUNT_TYPE_BANK ? 'Bank' : 'Cash';
+            if ($sibling->account_type === AccountTransaction::ACCOUNT_TYPE_BANK && $sibling->account_ref_id) {
+                $bankName = DB::table('bank_shop')
+                    ->where('bank_shop.id', $sibling->account_ref_id)
+                    ->join('banks', 'bank_shop.bank_id', '=', 'banks.id')
+                    ->value('banks.name');
+            }
+        }
+
+        $html = view('customer-payments.partials.payment-detail-content', [
+            'transaction' => $customerRow,
+            'customer' => $customer,
+            'payment_method' => $paymentMethod,
+            'bank_name' => $bankName,
+            'in_modal' => true,
+        ])->render();
+
+        return response()->json(['html' => $html]);
+    }
+
+    /**
      * Soft delete a customer payment: soft delete the customer-side and cash/bank account_transactions,
      * then recalculate and sync the customer balance. All in a transaction.
      */

@@ -46,8 +46,8 @@
 
                     <div class="form-group row">
                         <label class="control-label col-sm-3 align-self-center" for="search">Search:</label>
-                        <div class="input-group col-sm-8">
-                            <input type="text" id="search" class="form-control" name="search" placeholder="Search product" value="{{ request('search') }}">
+                        <div class="input-group flex-nowrap col-sm-8">
+                            <input type="text" id="search" class="form-control" name="search" placeholder="Search product" value="{{ request('search') }}" style="min-width: 200px;">
                             <div class="input-group-append">
                                 <button type="submit" class="input-group-text bg-primary"><i class="las la-search"></i></button>
                                 <a href="{{ route('order.stockManage') }}" class="input-group-text bg-danger"><i class="las la-trash"></i></a>

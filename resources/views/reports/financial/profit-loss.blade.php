@@ -17,13 +17,13 @@
     $netRevenue = $revenue;
     $operatingProfit = $grossProfit - $expenses;
 @endphp
-<div class="container-fluid">
+<div class="container-fluid reports-profit-loss">
     <div class="row">
         <div class="col-lg-12">
-            <div class="d-flex flex-wrap align-items-center justify-content-between mb-4">
+            <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 pl-report-header">
                 <div>
-                    <h4 class="mb-1">Profit & Loss Report</h4>
-                    <p class="mb-0 text-muted small">{{ $dateRange['start_date'] ?? '' }} to {{ $dateRange['end_date'] ?? '' }}</p>
+                    <h4 class="mb-1 pl-report-title">Profit & Loss Report</h4>
+                    <p class="mb-0 text-muted small pl-report-period">{{ $dateRange['start_date'] ?? '' }} to {{ $dateRange['end_date'] ?? '' }}</p>
                 </div>
                 <div>
                     <a href="{{ route('reports.index') }}" class="btn btn-secondary btn-sm">Back to Reports</a>
@@ -90,10 +90,7 @@
 
                         {{-- Cost of Goods Sold --}}
                         <tr><td colspan="2" class="pt-4"><strong>Cost of Goods Sold</strong></td></tr>
-                        <tr><td class="pl-indent">Opening Stock</td><td class="pl-amount text-right">{{ $fmt(0) }}</td></tr>
                         <tr><td class="pl-indent">Purchases</td><td class="pl-amount text-right">{{ $fmt($cogs) }}</td></tr>
-                        <tr><td class="pl-indent">Purchase Returns</td><td class="pl-amount text-right">{{ $fmt(0) }}</td></tr>
-                        <tr><td class="pl-indent">Closing Stock</td><td class="pl-amount text-right">{{ $fmt(0) }}</td></tr>
                         <tr><td colspan="2" class="pl-rule border-top pt-2 pb-1"></td></tr>
                         <tr><td class="pl-indent"><strong>Cost of Goods Sold</strong></td><td class="pl-amount text-right"><strong>{{ $fmt($cogs) }}</strong></td></tr>
 
@@ -107,14 +104,6 @@
                         <tr><td colspan="2" class="pl-rule border-top pt-2 pb-1"></td></tr>
                         <tr><td class="pl-indent"><strong>Total Operating Expenses</strong></td><td class="pl-amount text-right"><strong>{{ $fmt($expenses) }}</strong></td></tr>
 
-                        {{-- Operating Profit --}}
-                        <tr><td colspan="2" class="pl-rule border-top pt-3 pb-2"></td></tr>
-                        <tr><td class="pl-major"><strong>Operating Profit</strong></td><td class="pl-amount text-right"><strong>{{ $fmt($operatingProfit) }}</strong></td></tr>
-
-                        {{-- Other --}}
-                        <tr><td class="pl-indent pt-2">Other Income</td><td class="pl-amount text-right pt-2">{{ $fmt(0) }}</td></tr>
-                        <tr><td class="pl-indent">Other Expenses</td><td class="pl-amount text-right">{{ $fmt(0) }}</td></tr>
-
                         {{-- Net Profit --}}
                         <tr><td colspan="2" class="pl-rule border-top pt-3 pb-2"></td></tr>
                         <tr><td class="pl-net"><strong>Net Profit</strong></td><td class="pl-amount pl-net-amount text-right"><strong>{{ $fmt($netProfit) }}</strong></td></tr>
@@ -127,18 +116,37 @@
 </div>
 
 <style>
-.pl-statement { max-width: 640px; }
-.pl-table { font-size: 14px; color: #333; }
-.pl-table td { vertical-align: middle; padding: 2px 0; }
+/* Full width for report content */
+.reports-profit-loss.container-fluid { max-width: 100%; }
+.reports-profit-loss .row { max-width: 100%; }
+.reports-profit-loss .col-lg-12 { max-width: 100%; }
+.pl-statement { width: 100%; max-width: 100%; }
+.pl-table { width: 100%; max-width: 100%; font-size: 16px; color: #333; table-layout: fixed; }
+.pl-table td { vertical-align: middle; padding: 2px 0; line-height: 18px; }
+.pl-table td:first-child { width: 1%; white-space: normal; }
+.pl-table td.pl-amount { width: 140px; }
+.pl-table strong { font-size: 13px; }
 .pl-indent { padding-left: 24px !important; }
 .pl-major { padding-left: 0; }
 .pl-amount { white-space: nowrap; font-variant-numeric: tabular-nums; min-width: 120px; }
 .pl-rule { border-top-color: #ddd !important; }
-.pl-net { font-size: 15px; padding-top: 4px; }
-.pl-net-amount { font-size: 15px; }
+.pl-net { font-size: 18px; padding-top: 4px; }
+.pl-net-amount { font-size: 18px; }
 @media print {
-    .pl-statement { border: none !important; box-shadow: none !important; }
-    .btn, .border.rounded.p-3 { display: none !important; }
+    /* Full width: remove layout padding and use full page */
+    body, .wrapper, .content-page, .container-fluid, .reports-profit-loss .row, .reports-profit-loss .col-lg-12 { width: 100% !important; max-width: 100% !important; padding-left: 0 !important; padding-right: 0 !important; margin: 0 !important; }
+    .content-page { padding-top: 0 !important; }
+    /* Hide non-print UI */
+    .iq-sidebar, .iq-top-navbar, .btn, .border.rounded.p-3, form.border.rounded, #date_filter, #start_date_group, #end_date_group, .pl-report-header .btn { display: none !important; }
+    /* Report header: center title and date, title 2px bigger */
+    .pl-report-header { display: block !important; text-align: center !important; margin-bottom: 1rem !important; }
+    .pl-report-title { font-size: calc(1em + 2px) !important; text-align: center !important; margin: 0 auto 0.25rem !important; }
+    .pl-report-period { text-align: center !important; margin: 0 !important; }
+    /* Statement and table full width */
+    .pl-statement { width: 100% !important; max-width: 100% !important; border: none !important; box-shadow: none !important; padding: 0 !important; }
+    .pl-table { width: 100% !important; max-width: 100% !important; table-layout: fixed !important; }
+    /* Clean print colors */
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 </style>
 <script>

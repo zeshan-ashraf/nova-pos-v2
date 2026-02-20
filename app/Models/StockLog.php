@@ -23,6 +23,7 @@ class StockLog extends Model
         'source_type',    // opening, purchase, sale, purchase_return, sale_return, adjustment, loss
         'source_id',      // e.g. order_id, purchase_id (nullable for opening/adjustment)
         'price',
+        'cost_per_unit',  // cost at time of sale (for sales); nullable for other source types
         'reason',
         'adjustment_date',
     ];

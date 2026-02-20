@@ -77,8 +77,8 @@
                                         <th>#</th>
                                         <th>Description</th>
                                         <th>Product Code</th>
-                                        <th>Price</th>
                                         <th>Quantity</th>
+                                        <th>Price</th>
                                         <th>Total</th>
                                     </tr>
                                     </thead>
@@ -89,8 +89,8 @@
                                             <td>{{ $loop->iteration }}</td>
                                             <td>{{ $item->product->product_name }}</td>
                                             <td>{{ $item->product->product_code ?? '—' }}</td>
-                                            <td>{{ $item->unitcost }}</td>
                                             <td>{{ $item->quantity }}</td>
+                                            <td>{{ $item->unitcost }}</td>
                                             <td>{{ $item->total }}</td>
                                         </tr>
                                         @endforeach

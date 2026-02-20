@@ -152,6 +152,7 @@ Route::get('/customers/{customer}/ledger/pdf', [CustomerController::class, 'ledg
 
 Route::middleware(['permission:customer_payment.menu'])->group(function () {
     Route::get('/customer-payments/create', [CustomerPaymentController::class, 'create'])->name('customer-payments.create');
+    Route::get('/customer-payments/{id}/content', [CustomerPaymentController::class, 'paymentDetailContent'])->name('customer-payments.content');
     Route::post('/customer-payments', [CustomerPaymentController::class, 'store'])->name('customer-payments.store');
     Route::delete('/customer-payments/{id}', [CustomerPaymentController::class, 'destroy'])->name('customer-payments.destroy');
 });
@@ -170,6 +171,7 @@ Route::middleware(['permission:orders.menu'])->group(function () {
     Route::get('/orders/pending', [OrderController::class, 'pendingOrders'])->name('order.pendingOrders');
     Route::get('/orders/complete', [OrderController::class, 'completeOrders'])->name('order.completeOrders');
     Route::get('/orders/details/{order_id}', [OrderController::class, 'orderDetails'])->name('order.orderDetails');
+    Route::get('/orders/details/{order_id}/content', [OrderController::class, 'orderDetailsContent'])->name('order.orderDetailsContent');
     Route::put('/orders/update/status', [OrderController::class, 'updateStatus'])->name('order.updateStatus');
     Route::get('/orders/invoice/download/{order_id}', [OrderController::class, 'invoiceDownload'])->name('order.invoiceDownload');
 

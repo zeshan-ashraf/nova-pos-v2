@@ -61,12 +61,15 @@ class StockService
 
     /**
      * Record sale (stock out). Blocks if insufficient stock.
+     * $price = selling price (stored in stock_logs.price); $costPerUnit = cost at time of sale (stored in stock_logs.cost_per_unit).
      */
-    public function sellStock(Product $product, int $qty, float $price, int $orderId): StockLog
+    public function sellStock(Product $product, int $qty, float $price, int $orderId, ?float $costPerUnit = null): StockLog
     {
         $this->validator->validateOutOperation($product, $qty, 'sale', (string) $orderId);
 
-        return $this->insertAndUpdate($product, $qty, 'out', 'sale', (string) $orderId, $price, null);
+        $cost = $costPerUnit !== null ? $costPerUnit : (float) ($product->buying_price ?? 0);
+
+        return $this->insertAndUpdate($product, $qty, 'out', 'sale', (string) $orderId, $price, null, null, null, $cost);
     }
 
     /**
@@ -147,15 +150,16 @@ class StockService
         float $price,
         ?int $supplierId,
         ?string $reason = null,
-        ?string $adjustmentDate = null
+        ?string $adjustmentDate = null,
+        ?float $costPerUnit = null
     ): StockLog {
         if ($qty < 1) {
             throw new InvalidArgumentException('Quantity must be positive.');
         }
 
-        return DB::transaction(function () use ($product, $qty, $direction, $sourceType, $sourceId, $price, $supplierId, $reason, $adjustmentDate) {
+        return DB::transaction(function () use ($product, $qty, $direction, $sourceType, $sourceId, $price, $supplierId, $reason, $adjustmentDate, $costPerUnit) {
             $product = Product::lockForUpdate()->findOrFail($product->id);
-            return $this->insertLogAndUpdateProduct($product, $qty, $direction, $sourceType, $sourceId, $price, $supplierId, $reason, $adjustmentDate);
+            return $this->insertLogAndUpdateProduct($product, $qty, $direction, $sourceType, $sourceId, $price, $supplierId, $reason, $adjustmentDate, $costPerUnit);
         });
     }
 
@@ -166,6 +170,7 @@ class StockService
      * Moving Weighted Average Costing: on purchase (direction=in, source_type=purchase), recalculate
      * product.buying_price (running average cost) and update product_store. On sale/out, only update
      * product_store; never modify buying_price. stock_logs always stores original purchase price (price).
+     * cost_per_unit is set for sales (cost at time of sale).
      */
     private function insertLogAndUpdateProduct(
         Product $product,
@@ -176,7 +181,8 @@ class StockService
         float $price,
         ?int $supplierId,
         ?string $reason = null,
-        ?string $adjustmentDate = null
+        ?string $adjustmentDate = null,
+        ?float $costPerUnit = null
     ): StockLog {
         $shopId = $product->shop_id;
         $currentQty = (int) ($product->{self::STOCK_COLUMN} ?? 0);
@@ -190,7 +196,7 @@ class StockService
             );
         }
 
-        $log = StockLog::create([
+        $logData = [
             'shop_id'          => $shopId,
             'product_id'       => $product->id,
             'supplier_id'      => $supplierId,
@@ -202,7 +208,11 @@ class StockService
             'reason'           => $reason,
             'adjustment_date'  => $adjustmentDate,
             'stock_qty'        => $direction === 'out' ? -$qty : $qty, // legacy column
-        ]);
+        ];
+        if ($costPerUnit !== null) {
+            $logData['cost_per_unit'] = $costPerUnit;
+        }
+        $log = StockLog::create($logData);
 
         $updateData = [self::STOCK_COLUMN => $newStock];
 

@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Redirect;
 use Gloudemans\Shoppingcart\Facades\Cart;
 use Haruncpi\LaravelIdGenerator\IdGenerator;
 use App\Models\PaymentLog;
+use App\Http\Controllers\Dashboard\Traits\ReportTrait;
 use App\Support\ActiveShop;
 use App\Services\CustomerCreditService;
 use App\Services\Ledger\LedgerBalanceService;
@@ -35,16 +36,19 @@ use InvalidArgumentException;
 
 class OrderController extends Controller
 {
+    use ReportTrait;
+
     public function __construct(
         private StockService $stockService
     ) {}
 
     /**
      * Display a listing of the resource.
+     * Filters: date (default All), invoice no (partial), total min/max, customer (Select2), search. Apply button.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $row = (int) request('row', 50);
+        $row = (int) $request->input('row', 50);
 
         if ($row < 1 || $row > 100) {
             abort(400, 'The per-page parameter must be an integer between 1 and 100.');
@@ -53,25 +57,67 @@ class OrderController extends Controller
         $authUser = auth()->user();
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
 
-        $search = request('search');
+        // Date filter: default "all" (no date filter)
+        $dateFilter = $request->input('date_filter', 'all');
+        if ($dateFilter !== 'all') {
+            $dateRange = $this->getDateRange($request);
+        } else {
+            $dateRange = [
+                'date_filter' => 'all',
+                'start_date' => '',
+                'end_date' => '',
+                'start_datetime' => null,
+                'end_datetime' => null,
+            ];
+        }
+
         $ordersQuery = Order::with(['customer', 'shop.parent'])
-            ->sortable()
-            ->when($search, function ($query, $search) {
-                return $query->where('invoice_no', 'like', '%' . $search . '%')
-                             ->orWhereHas('customer', function($query) use ($search) {
-                                 $query->where('name', 'like', '%' . $search . '%');
-                             })
-                             ->orWhere('order_date', 'like', '%' . $search . '%')
-                             ->orWhere('pay', 'like', '%' . $search . '%')
-                             ->orWhere('payment_status', 'like', '%' . $search . '%');
+            ->sortable();
+
+        // Date filter (when not "all")
+        if ($dateFilter !== 'all' && isset($dateRange['start_datetime'], $dateRange['end_datetime'])) {
+            $ordersQuery->whereBetween('order_date', [
+                $dateRange['start_datetime']->format('Y-m-d'),
+                $dateRange['end_datetime']->format('Y-m-d'),
+            ]);
+        }
+
+        // Invoice no (partial match)
+        if ($request->filled('invoice_no')) {
+            $ordersQuery->where('invoice_no', 'like', '%' . $request->input('invoice_no') . '%');
+        }
+
+        // Invoice total range (min / max)
+        if ($request->filled('total_min') && is_numeric($request->input('total_min'))) {
+            $ordersQuery->where('total', '>=', (float) $request->input('total_min'));
+        }
+        if ($request->filled('total_max') && is_numeric($request->input('total_max'))) {
+            $ordersQuery->where('total', '<=', (float) $request->input('total_max'));
+        }
+
+        // Customer (exact match when selected)
+        if ($request->filled('customer_id')) {
+            $ordersQuery->where('customer_id', $request->input('customer_id'));
+        }
+
+        // General search (existing behavior)
+        $search = $request->input('search');
+        if ($search !== null && $search !== '') {
+            $ordersQuery->where(function ($query) use ($search) {
+                $query->where('invoice_no', 'like', '%' . $search . '%')
+                    ->orWhereHas('customer', function ($q) use ($search) {
+                        $q->where('name', 'like', '%' . $search . '%');
+                    })
+                    ->orWhere('order_date', 'like', '%' . $search . '%')
+                    ->orWhere('pay', 'like', '%' . $search . '%')
+                    ->orWhere('payment_status', 'like', '%' . $search . '%');
             });
+        }
 
         // Apply shop filtering
         if ($authUser->shop_id) {
-            // Child shop or parent shop user - only see their allowed shops
             $ordersQuery->whereIn('shop_id', $visibleShopIds);
         } else {
-            // Super admin - can see all orders (including unassigned)
             $ordersQuery->where(function ($query) use ($visibleShopIds) {
                 $query->whereNull('shop_id');
                 if ($visibleShopIds->isNotEmpty()) {
@@ -80,13 +126,20 @@ class OrderController extends Controller
             });
         }
 
-        // Apply default ordering by created_at DESC, id DESC if no sort is specified
         if (!request()->has('sort')) {
             $ordersQuery->orderBy('created_at', 'desc')->orderBy('id', 'desc');
         }
 
+        // Customers for dropdown (visible shops only)
+        $customers = Customer::query()
+            ->when($visibleShopIds->isNotEmpty(), fn ($q) => $q->whereIn('shop_id', $visibleShopIds))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
         return view('orders.index', [
-            'orders' => $ordersQuery->paginate($row)->appends(request()->query())
+            'orders' => $ordersQuery->paginate($row)->withQueryString(),
+            'dateRange' => $dateRange,
+            'customers' => $customers,
         ]);
     }
 
@@ -254,10 +307,12 @@ class OrderController extends Controller
         $oDetails = array();
 
         foreach ($contents as $content) {
+            $product = Product::find($content->id);
             $oDetails['order_id'] = $order_id;
             $oDetails['product_id'] = $content->id;
             $oDetails['quantity'] = $content->qty;
             $oDetails['unitcost'] = $content->price;
+            $oDetails['cost_per_unit'] = $product ? (float) ($product->buying_price ?? 0) : 0;
             $oDetails['total'] = $content->total;
             $oDetails['created_at'] = Carbon::now();
 
@@ -305,6 +360,34 @@ class OrderController extends Controller
             'paymentBankName' => $paymentBankName,
             'salePayments' => $salePayments,
         ]);
+    }
+
+    /**
+     * Return invoice detail content as HTML for modal (e.g. customer ledger).
+     * Uses the same partial as order details page so changes are in one place.
+     */
+    public function orderDetailsContent(Int $order_id)
+    {
+        $order = Order::with(['customer', 'shop.banks'])->findOrFail($order_id);
+        $this->ensureShopAccess($order);
+
+        $paymentBankName = $this->getPaymentBankNameForOrder($order);
+        $salePayments = $this->getSalePaymentsFromAccountTransactions($order);
+
+        $orderDetails = OrderDetails::with('product')
+            ->where('order_id', $order_id)
+            ->orderBy('id', 'DESC')
+            ->get();
+
+        $html = view('orders.partials.invoice-detail-content', [
+            'order' => $order,
+            'orderDetails' => $orderDetails,
+            'paymentBankName' => $paymentBankName,
+            'salePayments' => $salePayments,
+            'in_modal' => true,
+        ])->render();
+
+        return response()->json(['html' => $html]);
     }
 
     /**
@@ -1306,6 +1389,7 @@ class OrderController extends Controller
                             'product_id' => $product['product_id'],
                             'quantity' => $product['quantity'],
                             'unitcost' => $product['unit_price'],
+                            'cost_per_unit' => (float) ($productModel->buying_price ?? 0),
                             'item_discount' => $product['item_discount'] ?? 0,
                             'total' => $product['total'],
                             'created_at' => Carbon::now(),
@@ -1317,7 +1401,8 @@ class OrderController extends Controller
                             $productModel,
                             (int) $product['quantity'],
                             (float) ($product['unit_price'] ?? $productModel->selling_price ?? 0),
-                            $order_id
+                            $order_id,
+                            (float) ($productModel->buying_price ?? 0)
                         );
                     }
                 });
@@ -1517,6 +1602,7 @@ class OrderController extends Controller
                             'product_id' => $product['product_id'],
                             'quantity' => $product['quantity'],
                             'unitcost' => $product['unit_price'],
+                            'cost_per_unit' => (float) ($motherProduct->buying_price ?? 0),
                             'item_discount' => $product['item_discount'] ?? 0,
                             'total' => $product['total'],
                             'created_at' => Carbon::now(),

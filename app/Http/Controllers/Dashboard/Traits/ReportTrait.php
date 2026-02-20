@@ -80,10 +80,10 @@ trait ReportTrait
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
         $selectedShopId = $request->input('shop_id');
 
-        // If user is not admin (has shop_id), they can only see their shop
+        // If user is not admin (has shop_id), scope is strictly their one shop only
         if ($authUser->shop_id) {
             return [
-                'shop_ids' => $visibleShopIds,
+                'shop_ids' => collect([$authUser->shop_id]),
                 'selected_shop_id' => $authUser->shop_id,
                 'shops' => collect(),
             ];

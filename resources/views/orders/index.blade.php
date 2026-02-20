@@ -1,5 +1,10 @@
 @extends('dashboard.body.main')
 
+@section('specificpagestyles')
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+@endsection
+
 @section('container')
 <div class="container-fluid">
     <div class="row">
@@ -25,31 +30,85 @@
                     <h4 class="mb-3">Orders List</h4>
                 </div>
                 <div>
-                    <a href="{{ route('order.index') }}" class="btn btn-danger add-list"><i class="las la-trash mr-3"></i>Clear Search</a>
+                    <a href="{{ route('order.index') }}" class="btn btn-danger add-list" title="Clear all filters and search"><i class="las la-trash mr-3"></i>Clear filters</a>
                 </div>
             </div>
         </div>
 
+        @php
+            $dateRange = $dateRange ?? [];
+            $dateFilter = $dateRange['date_filter'] ?? 'all';
+        @endphp
         <div class="col-lg-12">
-            <form action="{{ route('order.index') }}" method="get">
-                <div class="d-flex flex-wrap align-items-center justify-content-between">
-                    <div class="form-group row">
-                        <label for="row" class="col-sm-3 align-self-center">Row:</label>
+            <form action="{{ route('order.index') }}" method="get" id="orders-filter-form">
+                {{-- Row 1: Filters (date, invoice no, total range, customer, Apply) --}}
+                <div class="d-flex flex-wrap align-items-end mb-3">
+                    <div class="form-group mr-3 mb-2">
+                        <label for="date_filter" class="small mb-0">Date</label>
+                        <select class="form-control form-control-sm" name="date_filter" id="date_filter" onchange="toggleOrderCustomDates()">
+                            <option value="all" {{ $dateFilter == 'all' ? 'selected' : '' }}>All</option>
+                            <option value="today" {{ $dateFilter == 'today' ? 'selected' : '' }}>Today</option>
+                            <option value="yesterday" {{ $dateFilter == 'yesterday' ? 'selected' : '' }}>Yesterday</option>
+                            <option value="this_week" {{ $dateFilter == 'this_week' ? 'selected' : '' }}>This Week</option>
+                            <option value="last_week" {{ $dateFilter == 'last_week' ? 'selected' : '' }}>Last Week</option>
+                            <option value="this_month" {{ $dateFilter == 'this_month' ? 'selected' : '' }}>This Month</option>
+                            <option value="last_month" {{ $dateFilter == 'last_month' ? 'selected' : '' }}>Last Month</option>
+                            <option value="this_year" {{ $dateFilter == 'this_year' ? 'selected' : '' }}>This Year</option>
+                            <option value="last_year" {{ $dateFilter == 'last_year' ? 'selected' : '' }}>Last Year</option>
+                            <option value="custom" {{ $dateFilter == 'custom' ? 'selected' : '' }}>Custom Range</option>
+                        </select>
+                    </div>
+                    <div class="form-group mr-3 mb-2" id="order_start_date_group" style="display: {{ $dateFilter == 'custom' ? 'block' : 'none' }};">
+                        <label for="start_date" class="small mb-0">Start Date</label>
+                        <input type="date" class="form-control form-control-sm" name="start_date" id="start_date" value="{{ $dateRange['start_date'] ?? '' }}">
+                    </div>
+                    <div class="form-group mr-3 mb-2" id="order_end_date_group" style="display: {{ $dateFilter == 'custom' ? 'block' : 'none' }};">
+                        <label for="end_date" class="small mb-0">End Date</label>
+                        <input type="date" class="form-control form-control-sm" name="end_date" id="end_date" value="{{ $dateRange['end_date'] ?? '' }}">
+                    </div>
+                    <div class="form-group mr-3 mb-2">
+                        <label for="invoice_no" class="small mb-0">Invoice No</label>
+                        <input type="text" class="form-control form-control-sm" name="invoice_no" id="invoice_no" placeholder="Partial match" value="{{ request('invoice_no') }}" style="min-width: 120px;">
+                    </div>
+                    <div class="form-group mr-3 mb-2">
+                        <label for="total_min" class="small mb-0">Min Total</label>
+                        <input type="number" step="0.01" min="0" class="form-control form-control-sm" name="total_min" id="total_min" placeholder="0" value="{{ request('total_min') }}" style="min-width: 100px;">
+                    </div>
+                    <div class="form-group mr-3 mb-2">
+                        <label for="total_max" class="small mb-0">Max Total</label>
+                        <input type="number" step="0.01" min="0" class="form-control form-control-sm" name="total_max" id="total_max" placeholder="—" value="{{ request('total_max') }}" style="min-width: 100px;">
+                    </div>
+                    <div class="form-group mr-3 mb-2">
+                        <label for="customer_id" class="small mb-0">Customer</label>
+                        <select name="customer_id" id="customer_id" class="form-control customer-select" style="min-width: 320px;">
+                            <option value="">— All —</option>
+                            @foreach ($customers ?? [] as $customer)
+                                <option value="{{ $customer->id }}" {{ request('customer_id') == $customer->id ? 'selected' : '' }}>{{ $customer->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="form-group mb-2">
+                        <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+                    </div>
+                </div>
+                {{-- Row 2: Row count + Search (datatable toolbar) --}}
+                <div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
+                    <div class="form-group row mb-0">
+                        <label for="row" class="col-sm-3 align-self-center col-form-label col-form-label-sm">Row:</label>
                         <div class="col-sm-9">
-                            <select class="form-control" name="row" onchange="this.form.submit()">
-                                <option value="10" @if(request('row') == '10') selected="selected" @endif>10</option>
-                                <option value="25" @if(request('row') == '25') selected="selected" @endif>25</option>
-                                <option value="50" @if(request('row', '50') == '50') selected="selected" @endif>50</option>
-                                <option value="100" @if(request('row') == '100') selected="selected" @endif>100</option>
+                            <select class="form-control form-control-sm" name="row" onchange="this.form.submit()">
+                                <option value="10" {{ request('row') == '10' ? 'selected' : '' }}>10</option>
+                                <option value="25" {{ request('row') == '25' ? 'selected' : '' }}>25</option>
+                                <option value="50" {{ request('row', '50') == '50' ? 'selected' : '' }}>50</option>
+                                <option value="100" {{ request('row') == '100' ? 'selected' : '' }}>100</option>
                             </select>
                         </div>
                     </div>
-
-                    <div class="form-group row">
-                        <label class="control-label col-sm-3 align-self-center" for="search">Search:</label>
+                    <div class="form-group row mb-0">
+                        <label class="control-label col-sm-3 align-self-center col-form-label col-form-label-sm" for="search">Search:</label>
                         <div class="col-sm-8">
-                            <div class="input-group">
-                                <input type="text" id="search" class="form-control" name="search" placeholder="Search order" value="{{ request('search') }}">
+                            <div class="input-group input-group-sm flex-nowrap">
+                                <input type="text" id="search" class="form-control" name="search" placeholder="Search order" value="{{ request('search') }}" style="min-width: 200px;">
                                 <div class="input-group-append">
                                     <button type="submit" class="input-group-text bg-primary"><i class="las la-search"></i></button>
                                 </div>
@@ -275,6 +334,25 @@ function formatCurrency(amount) {
 @endsection
 
 @section('specificpagescripts')
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+    function toggleOrderCustomDates() {
+        var v = document.getElementById('date_filter').value;
+        var startGroup = document.getElementById('order_start_date_group');
+        var endGroup = document.getElementById('order_end_date_group');
+        if (startGroup) startGroup.style.display = v === 'custom' ? 'block' : 'none';
+        if (endGroup) endGroup.style.display = v === 'custom' ? 'block' : 'none';
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+        toggleOrderCustomDates();
+        $('.customer-select').select2({
+            theme: 'bootstrap-5',
+            placeholder: '— All —',
+            allowClear: true,
+            width: '320px'
+        });
+    });
+</script>
 @if(session('open_print_tab') && session('print_order_id'))
 <script>
     (function() {

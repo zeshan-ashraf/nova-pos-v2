@@ -418,6 +418,8 @@ class CustomerController extends Controller
                 'debit' => $debit,
                 'credit' => $credit,
                 'balance' => $runningBalance,
+                'order_id' => $r->source_type === AccountTransaction::SOURCE_SALE ? (int) $r->source_id : null,
+                'payment_transaction_id' => $r->source_type === AccountTransaction::SOURCE_CUSTOMER_PAYMENT ? (int) $r->id : null,
             ];
         }
 

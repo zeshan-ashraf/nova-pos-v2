@@ -407,9 +407,9 @@
                                     <tr>
                                         <th class="product-name-col">Product</th>
                                         <th class="product-code-col">Code</th>
-                                        <th class="unit-price-col">Unit Price</th>
-                                        <th class="stock-col">Stock</th>
                                         <th class="quantity-col">Quantity</th>
+                                        <th class="stock-col">Stock</th>
+                                        <th class="unit-price-col">Unit Price</th>
                                         <th class="discount-col">Discount</th>
                                         <th class="total-col">Total</th>
                                         <th class="action-col">Action</th>
@@ -428,15 +428,15 @@
                                             <span class="product-code-display" data-row="0">-</span>
                                         </td>
                                         <td>
-                                            <input type="number" step="0.01" class="form-control unit-price" name="products[0][unit_price]" value="0" data-row="0" min="0">
+                                            <input type="number" class="form-control quantity" name="products[0][quantity]" value="1" data-row="0" min="1">
+                                            <span class="stock-warning stock-warning-msg" data-row="0" style="display: none;"></span>
                                         </td>
                                         <td>
                                             <span class="stock-label stock-display" data-row="0">0</span>
                                             <input type="hidden" class="stock-value" name="products[0][stock]" value="0">
                                         </td>
                                         <td>
-                                            <input type="number" class="form-control quantity" name="products[0][quantity]" value="1" data-row="0" min="1">
-                                            <span class="stock-warning stock-warning-msg" data-row="0" style="display: none;"></span>
+                                            <input type="number" step="0.01" class="form-control unit-price" name="products[0][unit_price]" value="0" data-row="0" min="0">
                                         </td>
                                         <td>
                                             <span class="discount-display" data-row="0">0.00</span>
@@ -1106,8 +1106,8 @@ var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
         calculateRowTotal(rowIndex);
     });
 
-    // Handle Enter key on quantity input - add new row if on last row
-    $(document).on('keydown', '.quantity', function(e) {
+    // Handle Enter key on unit price input - add new row if on last row
+    $(document).on('keydown', '.unit-price', function(e) {
         // Check if Enter key is pressed
         if (e.key === 'Enter' || e.keyCode === 13) {
             e.preventDefault(); // Prevent form submission
@@ -1122,12 +1122,11 @@ var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
                 // Add new row after current row (same as addRowAfter button)
                 addRow();
                 
-                // Focus on the new row's product dropdown
+                // Focus on the new row's product dropdown (ready to type product)
                 setTimeout(function() {
                     const $newRow = $('#productTableBody tr.product-row').last();
                     const $newProductSelect = $newRow.find('.product-select');
                     if ($newProductSelect.length > 0) {
-                        // Open the Select2 dropdown and focus on search input
                         $newProductSelect.select2('open');
                     }
                 }, 150); // Wait a bit longer to ensure Select2 is initialized
@@ -1456,15 +1455,15 @@ var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
                     <span class="product-code-display" data-row="${rowCount}">-</span>
                 </td>
                 <td>
-                    <input type="number" step="0.01" class="form-control unit-price" name="products[${rowCount}][unit_price]" value="0" data-row="${rowCount}" min="0">
+                    <input type="number" class="form-control quantity" name="products[${rowCount}][quantity]" value="1" data-row="${rowCount}" min="1">
+                    <span class="stock-warning stock-warning-msg" data-row="${rowCount}" style="display: none;"></span>
                 </td>
                 <td>
                     <span class="stock-label stock-display" data-row="${rowCount}">0</span>
                     <input type="hidden" class="stock-value" name="products[${rowCount}][stock]" value="0">
                 </td>
                 <td>
-                    <input type="number" class="form-control quantity" name="products[${rowCount}][quantity]" value="1" data-row="${rowCount}" min="1">
-                    <span class="stock-warning stock-warning-msg" data-row="${rowCount}" style="display: none;"></span>
+                    <input type="number" step="0.01" class="form-control unit-price" name="products[${rowCount}][unit_price]" value="0" data-row="${rowCount}" min="0">
                 </td>
                 <td>
                     <span class="discount-display" data-row="${rowCount}">0.00</span>

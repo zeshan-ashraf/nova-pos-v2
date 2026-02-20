@@ -40,8 +40,8 @@
                     <div class="form-group row">
                         <label class="control-label col-sm-3 align-self-center" for="search">Search:</label>
                         <div class="col-sm-8">
-                            <div class="input-group">
-                                <input type="text" id="search" class="form-control" name="search" placeholder="Search purchase" value="{{ request('search') }}">
+                            <div class="input-group flex-nowrap">
+                                <input type="text" id="search" class="form-control" name="search" placeholder="Search purchase" value="{{ request('search') }}" style="min-width: 200px;">
                                 <div class="input-group-append">
                                     <button type="submit" class="input-group-text bg-primary"><i class="las la-search"></i></button>
                                 </div>

@@ -191,8 +191,8 @@ class FinancialReportController extends Controller
             $totalSales = (float) (clone $ordersRevenueQuery)->sum('total');
         }
 
-        // 2) COGS: from sold products only. SUM(order_details.quantity * products.buying_price)
-        //    orders → order_details → products; filter by orders.shop_id, orders.order_date; exclude soft-deleted
+        // 2) COGS: from sold products only. Use cost at time of sale (order_details.cost_per_unit);
+        //    for old records where cost_per_unit is NULL, fall back to products.buying_price.
         $cogsQuery = Order::query()
             ->join('order_details', function ($join) {
                 $join->on('orders.id', '=', 'order_details.order_id')
@@ -200,7 +200,7 @@ class FinancialReportController extends Controller
             })
             ->join('products', 'order_details.product_id', '=', 'products.id')
             ->whereBetween('orders.order_date', [$start, $end])
-            ->selectRaw('SUM(order_details.quantity * COALESCE(products.buying_price, 0)) as cost_of_goods_sold');
+            ->selectRaw('SUM(order_details.quantity * COALESCE(order_details.cost_per_unit, products.buying_price, 0)) as cost_of_goods_sold');
         $this->applyShopFilter($cogsQuery, $shopFilter['shop_ids'], 'orders.shop_id');
         $cogs = (float) $cogsQuery->value('cost_of_goods_sold');
 

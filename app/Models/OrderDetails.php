@@ -15,6 +15,7 @@ class OrderDetails extends Model
         'product_id',
         'quantity',
         'unitcost',
+        'cost_per_unit',
         'item_discount',
         'total',
     ];

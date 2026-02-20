@@ -43,6 +43,7 @@
         <thead>
             <tr>
                 <th>Date</th>
+                <th>Type</th>
                 <th>Reference</th>
                 <th>Description</th>
                 <th class="text-right">Debit</th>
@@ -54,6 +55,7 @@
             @forelse ($transactions ?? [] as $txn)
                 <tr>
                     <td>{{ $txn['date'] }}</td>
+                    <td>@if(!empty($txn['order_id']))Sale@elseif(!empty($txn['payment_transaction_id']))Payment@else—@endif</td>
                     <td>{{ $txn['reference'] }}</td>
                     <td>{{ $txn['description'] }}</td>
                     <td class="text-right">{{ $txn['debit'] > 0 ? number_format($txn['debit'], 2) : '—' }}</td>
@@ -61,13 +63,13 @@
                     <td class="text-right">{{ $txn['balance'] < 0 ? '(' . number_format(abs($txn['balance']), 2) . ')' : number_format($txn['balance'], 2) }}</td>
                 </tr>
             @empty
-                <tr><td colspan="6" class="text-center">No transactions for the selected period.</td></tr>
+                <tr><td colspan="7" class="text-center">No transactions for the selected period.</td></tr>
             @endforelse
         </tbody>
         @if(!empty($transactions) && count($transactions) > 0)
         <tfoot>
             <tr style="background-color: #f2f2f2; font-weight: bold;">
-                <td colspan="5" class="text-right">Closing Balance</td>
+                <td colspan="6" class="text-right">Closing Balance</td>
                 <td class="text-right">{{ (float)($closing_balance ?? 0) < 0 ? '(' . number_format(abs($closing_balance ?? 0), 2) . ') Advance' : number_format($closing_balance ?? 0, 2) }}</td>
             </tr>
         </tfoot>

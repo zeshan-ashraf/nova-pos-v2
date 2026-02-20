@@ -80,8 +80,8 @@
                     </div>
                     <div class="form-group mr-3 mb-2">
                         <label class="small mb-0" for="search">Search</label>
-                        <div class="input-group input-group-sm">
-                            <input type="text" id="search" class="form-control" name="search" placeholder="Search expense" value="{{ request('search') }}">
+                        <div class="input-group input-group-sm flex-nowrap">
+                            <input type="text" id="search" class="form-control" name="search" placeholder="Search expense" value="{{ request('search') }}" style="min-width: 200px;">
                             <div class="input-group-append">
                                 <button type="submit" class="input-group-text bg-primary"><i class="las la-search"></i></button>
                             </div>
