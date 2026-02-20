@@ -235,4 +235,49 @@ class FinancialReportController extends Controller
             'profitMargin' => $profitMargin,
         ]);
     }
+
+    /**
+     * P&L line-level detail (debug): one row per order line with sales and COGS.
+     * Same scope as P&L (date range + shop). No extra permission.
+     */
+    public function profitLossLineDetail(Request $request)
+    {
+        $authUser = auth()->user();
+        $dateRange = $this->getDateRange($request);
+        $shopFilter = $this->getShopFilter($request, $authUser);
+
+        $start = $dateRange['start_datetime'];
+        $end = $dateRange['end_datetime'];
+
+        $query = Order::query()
+            ->join('order_details', function ($join) {
+                $join->on('orders.id', '=', 'order_details.order_id')
+                    ->whereNull('order_details.deleted_at');
+            })
+            ->join('products', 'order_details.product_id', '=', 'products.id')
+            ->whereBetween('orders.order_date', [$start, $end])
+            ->select(
+                'orders.id as order_id',
+                'orders.order_date',
+                'products.product_name',
+                'products.product_code',
+                'order_details.quantity',
+                'order_details.unitcost as unit_sell_price',
+                'order_details.total as line_revenue',
+                DB::raw('COALESCE(order_details.cost_per_unit, products.buying_price, 0) as cost_per_unit_used'),
+                DB::raw('order_details.quantity * COALESCE(order_details.cost_per_unit, products.buying_price, 0) as line_cogs')
+            )
+            ->orderBy('orders.order_date')
+            ->orderBy('orders.id')
+            ->orderBy('order_details.id');
+
+        $this->applyShopFilter($query, $shopFilter['shop_ids'], 'orders.shop_id');
+        $rows = $query->get();
+
+        return view('reports.financial.profit-loss-line-detail', [
+            'dateRange'  => $dateRange,
+            'shopFilter' => $shopFilter,
+            'rows'       => $rows,
+        ]);
+    }
 }

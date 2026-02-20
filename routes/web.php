@@ -303,6 +303,7 @@ Route::middleware(['permission:reports.menu'])->group(function () {
     // Financial Reports
     Route::middleware(['permission:reports.financial'])->group(function () {
         Route::get('/reports/financial/profit-loss', [FinancialReportController::class, 'profitLoss'])->name('reports.financial.profit-loss');
+        Route::get('/reports/financial/profit-loss/line-detail', [FinancialReportController::class, 'profitLossLineDetail'])->name('reports.financial.profit-loss-line-detail');
         Route::get('/reports/financial/revenue', [FinancialReportController::class, 'revenue'])->name('reports.financial.revenue');
         Route::get('/reports/financial/expense', [FinancialReportController::class, 'expense'])->name('reports.financial.expense');
         Route::get('/reports/financial/cash-flow', [FinancialReportController::class, 'cashFlow'])->name('reports.financial.cash-flow');

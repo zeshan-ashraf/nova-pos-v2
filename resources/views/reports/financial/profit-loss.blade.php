@@ -26,6 +26,7 @@
                     <p class="mb-0 text-muted small pl-report-period">{{ $dateRange['start_date'] ?? '' }} to {{ $dateRange['end_date'] ?? '' }}</p>
                 </div>
                 <div>
+                    <a href="{{ route('reports.financial.profit-loss-line-detail', request()->only(['date_filter', 'start_date', 'end_date', 'shop_id'])) }}" class="btn btn-outline-primary btn-sm mr-2">View line-level detail</a>
                     <a href="{{ route('reports.index') }}" class="btn btn-secondary btn-sm">Back to Reports</a>
                 </div>
             </div>
