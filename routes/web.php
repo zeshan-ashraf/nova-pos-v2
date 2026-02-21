@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 use App\Http\Controllers\Dashboard\ProductController;
 use App\Http\Controllers\Dashboard\StockAdjustController;
 use App\Http\Controllers\Dashboard\ProfileController;
@@ -68,6 +69,20 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/switch-shop/reset', [ShopSwitchController::class, 'reset'])->name('shop-switch.reset');
     Route::post('/switch-shop/{shop}', [ShopSwitchController::class, 'switch'])->name('shop-switch.switch')->whereNumber('shop');
+
+    // Shop logo: served from storage so it works on live without symlink (public/storage)
+    Route::get('/shop-logo/{filename}', function (string $filename) {
+        if (!preg_match('/^[a-zA-Z0-9._-]+$/', $filename)) {
+            abort(404);
+        }
+        $path = 'shops/' . $filename;
+        if (!Storage::disk('public')->exists($path)) {
+            abort(404);
+        }
+        $fullPath = Storage::disk('public')->path($path);
+        $mime = mime_content_type($fullPath) ?: 'image/jpeg';
+        return response()->file($fullPath, ['Content-Type' => $mime]);
+    })->name('shop.logo')->where('filename', '[a-zA-Z0-9._-]+');
 });
 
 // ====== USERS ======

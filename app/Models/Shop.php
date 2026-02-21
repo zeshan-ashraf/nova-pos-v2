@@ -39,12 +39,12 @@ class Shop extends Model
     ];
 
     /**
-     * URL for the shop logo. Returns default placeholder if no logo.
+     * URL for the shop logo. Served via route so it works on live without storage symlink.
      */
     public function getLogoUrlAttribute(): string
     {
         return $this->logo
-            ? asset('storage/shops/' . $this->logo)
+            ? route('shop.logo', ['filename' => $this->logo])
             : asset('assets/images/user/1.png');
     }
 

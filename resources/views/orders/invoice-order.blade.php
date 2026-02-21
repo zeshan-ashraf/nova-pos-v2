@@ -23,7 +23,7 @@
                     <div class="invoice-inner-9" id="invoice_wrapper">
                         @php
                             $userShop = auth()->user()->shop ?? null;
-                            $logoUrl = ($userShop && $userShop->logo) ? asset('storage/shops/' . $userShop->logo) : asset('assets/images/login/company-logo.png');
+                            $logoUrl = $userShop?->logo_url ?? asset('assets/images/login/company-logo.png');
                             $shop = $order->shop ?? $userShop;
                         @endphp
                         <div class="invoice-top">
