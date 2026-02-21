@@ -27,8 +27,7 @@ use App\Http\Controllers\Dashboard\Traits\ReportTrait;
 use App\Support\ActiveShop;
 use App\Services\CustomerCreditService;
 use App\Services\Ledger\LedgerBalanceService;
-use App\Services\Ledger\SaleLedgerService;
-use App\Services\SalePaymentLedgerService;
+use App\Services\SalePostingService;
 use App\Services\Stock\StockService;
 use App\Services\SupplierCreditService;
 use Illuminate\Support\Str;
@@ -289,14 +288,26 @@ class OrderController extends Controller
         $validatedData['shop_id'] = $authUser->shop_id ?: $customer->shop_id;
         $validatedData['created_at'] = Carbon::now();
 
+        $total = (float) Cart::total();
+        if ($customer->is_walkin && abs($payAmount - $total) > 0.01) {
+            return back()->withErrors(['pay' => 'Walk-in sale must be fully paid.'])
+                ->withInput();
+        }
+
+        $paymentMethod = match ($validatedData['payment_status'] ?? 'Due') {
+            'HandCash' => 'cash',
+            'Bank' => 'bank',
+            'Cheque' => 'cheque',
+            default => 'credit',
+        };
+
         $order_id = null;
         // Wrap creation + credit update in a transaction to keep balances consistent
-        DB::transaction(function () use (&$order_id, $validatedData, $creditService, $customer) {
-            // Use create() instead of insertGetId() to properly handle SoftDeletes
+        DB::transaction(function () use (&$order_id, $validatedData, $creditService, $customer, $payAmount, $paymentMethod) {
             $order = Order::create($validatedData);
             $order_id = $order->id;
 
-            app(SaleLedgerService::class)->recordInvoiceCustomerDebit($order);
+            app(SalePostingService::class)->postSale($order, (float) $payAmount, $paymentMethod, null);
 
             // Increase customer credit by pending amount (if any)
             $creditService->addPending($customer, $validatedData['due']);
@@ -461,18 +472,14 @@ class OrderController extends Controller
 
     /**
      * Get sale payment entries from account_transactions (bank/cash debits for this order).
+     * Ledger uses source_id = order.id for all sale entries.
      * Returns collection of { account_type, amount, bank_name }.
      */
     private function getSalePaymentsFromAccountTransactions(Order $order): \Illuminate\Support\Collection
     {
-        $paymentLogIds = PaymentLog::where('order_id', $order->id)->pluck('id');
-        if ($paymentLogIds->isEmpty()) {
-            return collect();
-        }
-
         $transactions = AccountTransaction::query()
             ->where('source_type', AccountTransaction::SOURCE_SALE)
-            ->whereIn('source_id', $paymentLogIds->all())
+            ->where('source_id', $order->id)
             ->whereIn('account_type', [AccountTransaction::ACCOUNT_TYPE_BANK, AccountTransaction::ACCOUNT_TYPE_CASH])
             ->where('direction', AccountTransaction::DIRECTION_DEBIT)
             ->orderBy('id')
@@ -634,6 +641,15 @@ class OrderController extends Controller
                 'pay' => $paid_pay,
             ]);
 
+            // Ledger: all entries use source_id = order.id
+            app(SalePostingService::class)->postSale(
+                $order,
+                (float) $validatedData['due'],
+                $validatedData['payment_method'],
+                $shopBankId
+            );
+
+            // Payment log for history only
             $paymentLogData = [
                 'order_id' => $order->id,
                 'amount_paid' => $validatedData['due'],
@@ -643,8 +659,7 @@ class OrderController extends Controller
             if ($shopBankId !== null) {
                 $paymentLogData['shop_bank_id'] = $shopBankId;
             }
-            $paymentLog = PaymentLog::create($paymentLogData);
-            app(SalePaymentLedgerService::class)->createFromPaymentLog($paymentLog->id);
+            PaymentLog::create($paymentLogData);
 
             // Decrease customer credit by the paid amount
             if ($customer) {
@@ -888,16 +903,10 @@ class OrderController extends Controller
                 // 3. Soft delete related: order_details
                 OrderDetails::where('order_id', $order->id)->delete();
 
-                // 4. Soft delete account_transactions related to this invoice (sale + payment entries)
-                $paymentLogIds = $order->paymentLogs()->pluck('id')->toArray();
+                // 4. Soft delete account_transactions related to this invoice (all use source_id = order.id)
                 AccountTransaction::query()
                     ->where('source_type', AccountTransaction::SOURCE_SALE)
-                    ->where(function ($q) use ($order, $paymentLogIds) {
-                        $q->where('source_id', $order->id);
-                        if (count($paymentLogIds) > 0) {
-                            $q->orWhereIn('source_id', $paymentLogIds);
-                        }
-                    })
+                    ->where('source_id', $order->id)
                     ->delete();
 
                 // 5. Soft delete payment_logs
@@ -1154,8 +1163,8 @@ class OrderController extends Controller
     }
 
     /**
-     * Create payment_log row and corresponding ledger entry (one-to-one).
-     * Must be called inside a DB transaction. If ledger creation fails, transaction rolls back.
+     * Create payment_log row for history tracking only. Ledger entries use SalePostingService with source_id = order.id.
+     * Must be called inside a DB transaction.
      *
      * @param int $orderId
      * @param float $amountPaid
@@ -1179,8 +1188,7 @@ class OrderController extends Controller
             $data['shop_bank_id'] = $shopBankId;
         }
 
-        $paymentLog = PaymentLog::create($data);
-        app(SalePaymentLedgerService::class)->createFromPaymentLog($paymentLog->id);
+        PaymentLog::create($data);
     }
 
     /**
@@ -1328,6 +1336,12 @@ class OrderController extends Controller
                     ->withInput();
             }
 
+            // Walk-in customer: must be fully paid (no partial)
+            if ($customer->is_walkin && abs($pay - $total) > 0.01) {
+                return back()->withErrors(['pay_1' => 'Walk-in sale must be fully paid.'])
+                    ->withInput();
+            }
+
             // Sales invoices are always complete (no pending)
             $orderStatus = 'complete';
 
@@ -1354,17 +1368,26 @@ class OrderController extends Controller
                     $order = Order::create($orderData);
                     $order_id = $order->id;
 
-                    app(SaleLedgerService::class)->recordInvoiceCustomerDebit($order);
-
-                    if ($due > 0) {
-                        $creditService->addPending($customer, $due);
+                    // Ledger: all entries use source_id = order.id (SalePostingService)
+                    if ($pay1 > 0) {
+                        app(SalePostingService::class)->postSale($order, $pay1, $paymentMethod1, $shopBankId1);
+                    } else {
+                        app(SalePostingService::class)->postSale($order, 0, 'credit');
+                    }
+                    if ($pay2 > 0 && $paymentMethod2) {
+                        app(SalePostingService::class)->postSale($order, $pay2, $paymentMethod2, $shopBankId2);
                     }
 
+                    // Payment logs for history only (do not drive ledger source_id)
                     if ($pay1 > 0) {
                         $this->createPaymentLog($order_id, $pay1, $paymentMethod1, $shopBankId1);
                     }
                     if ($pay2 > 0 && $paymentMethod2) {
                         $this->createPaymentLog($order_id, $pay2, $paymentMethod2, $shopBankId2);
+                    }
+
+                    if ($due > 0) {
+                        $creditService->addPending($customer, $due);
                     }
 
                     // Order details and stock (ledger-safe: StockService only)
@@ -1564,8 +1587,15 @@ class OrderController extends Controller
                     $order = Order::create($orderData);
                     $order_id = $order->id;
 
-                    app(SaleLedgerService::class)->recordInvoiceCustomerDebit($order);
-
+                    // Ledger: all entries use source_id = order.id (SalePostingService)
+                    if ($pay1 > 0) {
+                        app(SalePostingService::class)->postSale($order, $pay1, $paymentMethod1, $shopBankId1);
+                    } else {
+                        app(SalePostingService::class)->postSale($order, 0, 'credit');
+                    }
+                    if ($pay2 > 0 && $paymentMethod2) {
+                        app(SalePostingService::class)->postSale($order, $pay2, $paymentMethod2, $shopBankId2);
+                    }
                     if ($pay1 > 0) {
                         $this->createPaymentLog($order_id, $pay1, $paymentMethod1, $shopBankId1);
                     }
