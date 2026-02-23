@@ -109,13 +109,13 @@
                             <thead>
                                 <tr>
                                     <th>Date</th>
+                                    <th>Product</th>
+                                    <th>Code</th>
                                     <th>Reference</th>
                                     <th>Type</th>
                                     <th class="text-right">Qty IN</th>
                                     <th class="text-right">Qty OUT</th>
                                     <th class="text-right">Balance</th>
-                                    <th>Notes</th>
-                                    <th>User</th>
                                 </tr>
                             </thead>
                             <tbody id="reportBody"></tbody>
@@ -162,13 +162,13 @@
             const tr = document.createElement('tr');
             tr.innerHTML =
                 '<td>' + formatDate(row.date) + '</td>' +
+                '<td>' + (row.product_name || '–') + '</td>' +
+                '<td>' + (row.product_code || '–') + '</td>' +
                 '<td>' + (row.reference || '–') + '</td>' +
                 '<td>' + (row.movement_type || '–') + '</td>' +
                 '<td class="text-right">' + (row.qty_in > 0 ? row.qty_in : '–') + '</td>' +
                 '<td class="text-right">' + (row.qty_out > 0 ? row.qty_out : '–') + '</td>' +
-                '<td class="text-right">' + (row.balance ?? '–') + '</td>' +
-                '<td>' + (row.notes || '–') + '</td>' +
-                '<td>' + (row.user || '–') + '</td>';
+                '<td class="text-right">' + (row.balance ?? '–') + '</td>';
             reportBody.appendChild(tr);
         });
     }

@@ -129,6 +129,12 @@ class OrderController extends Controller
             $ordersQuery->orderBy('created_at', 'desc')->orderBy('id', 'desc');
         }
 
+        // Stats for filtered orders (same filters as list)
+        $orderStats = [
+            'total_orders' => (clone $ordersQuery)->count(),
+            'total_amount' => (float) (clone $ordersQuery)->sum('total'),
+        ];
+
         // Customers for dropdown (visible shops only)
         $customers = Customer::query()
             ->when($visibleShopIds->isNotEmpty(), fn ($q) => $q->whereIn('shop_id', $visibleShopIds))
@@ -139,6 +145,7 @@ class OrderController extends Controller
             'orders' => $ordersQuery->paginate($row)->withQueryString(),
             'dateRange' => $dateRange,
             'customers' => $customers,
+            'orderStats' => $orderStats,
         ]);
     }
 

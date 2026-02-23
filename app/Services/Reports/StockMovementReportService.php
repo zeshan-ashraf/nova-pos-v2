@@ -49,16 +49,16 @@ class StockMovementReportService
         $dataSql = "
             WITH filtered AS (
                 SELECT
-                    id,
-                    product_id,
-                    shop_id,
-                    COALESCE(qty, 0) AS qty,
-                    direction,
-                    source_type,
-                    source_id,
-                    reason,
-                    created_at
-                FROM stock_logs
+                    sl.id,
+                    sl.product_id,
+                    sl.shop_id,
+                    COALESCE(sl.qty, 0) AS qty,
+                    sl.direction,
+                    sl.source_type,
+                    sl.source_id,
+                    sl.reason,
+                    sl.created_at
+                FROM stock_logs sl
                 WHERE {$where}
             ),
             with_delta AS (
@@ -68,22 +68,24 @@ class StockMovementReportService
                 FROM filtered
             )
             SELECT
-                id,
-                product_id,
-                shop_id,
-                created_at AS date,
-                direction,
-                source_type AS movement_type,
-                source_id,
-                reason AS notes,
-                qty,
-                SUM(delta) OVER (
-                    PARTITION BY product_id, COALESCE(shop_id, 0)
-                    ORDER BY created_at ASC, id ASC
+                w.id,
+                w.product_id,
+                w.shop_id,
+                p.product_name,
+                p.product_code,
+                w.created_at AS date,
+                w.direction,
+                w.source_type AS movement_type,
+                w.source_id,
+                w.qty,
+                SUM(w.delta) OVER (
+                    PARTITION BY w.product_id, COALESCE(w.shop_id, 0)
+                    ORDER BY w.created_at ASC, w.id ASC
                     ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
                 ) AS balance
-            FROM with_delta
-            ORDER BY created_at ASC, id ASC
+            FROM with_delta w
+            JOIN products p ON p.id = w.product_id
+            ORDER BY w.created_at ASC, w.id ASC
             LIMIT ? OFFSET ?
         ";
 
@@ -94,22 +96,99 @@ class StockMovementReportService
             $qty = (int) $row->qty;
             $isIn = strtolower((string) $row->direction) === 'in';
             $data[] = [
+                'id'           => (int) $row->id,
+                'product_id'   => $productId,
+                'product_name' => $row->product_name ?? null,
+                'date'         => Carbon::parse($row->date)->toIso8601String(),
+                'source_type'  => $row->source_type ?? null,
+                'source_id'    => $row->source_id ?? null,
+                'qty_in'       => (int) $row->qty_in,
+                'qty_out'      => (int) $row->qty_out,
+                'balance'      => $balance,
+            ];
+        }
+
+        return ['rows' => $data, 'opening_balances' => $openingBalances];
+    }
+
+    /**
+     * MySQL < 8: no window; fetch rows ordered by product_id, created_at, id and compute running balance in PHP.
+     */
+    private function getReportWithoutWindow(
+        string $where,
+        array $bindings,
+        array $filters,
+        ?string $fromDate,
+        ?string $toDate,
+        int $perPage,
+        int $offset,
+        int $total
+    ): array {
+        $dataBindings = array_merge($bindings, [$perPage, $offset]);
+
+        $dataSql = "
+            SELECT
+                sl.id,
+                sl.product_id,
+                sl.shop_id,
+                COALESCE(sl.qty, 0) AS qty,
+                sl.direction,
+                sl.source_type,
+                sl.source_id,
+                sl.created_at AS date,
+                p.product_name,
+                CASE WHEN sl.direction = 'in' THEN sl.qty ELSE 0 END AS qty_in,
+                CASE WHEN sl.direction = 'out' THEN sl.qty ELSE 0 END AS qty_out
+            FROM stock_logs sl
+            JOIN products p ON p.id = sl.product_id
+            WHERE {$where}
+            ORDER BY sl.product_id ASC, sl.created_at ASC, sl.id ASC
+            LIMIT ? OFFSET ?
+        ";
+
+        $rows = DB::select($dataSql, $dataBindings);
+        $productIdsOnPage = array_values(array_unique(array_map(function ($r) {
+            return (int) $r->product_id;
+        }, $rows)));
+        $openingBalances = $this->getOpeningBalances($filters, $fromDate, $productIdsOnPage);
+
+        $runningByProduct = [];
+        $data = [];
+        $seenProductIds = [];
+        foreach ($rows as $row) {
+            $productId = (int) $row->product_id;
+            $delta = strtolower((string) $row->direction) === 'in' ? (int) $row->qty : -(int) $row->qty;
+            $runningByProduct[$productId] = ($runningByProduct[$productId] ?? 0) + $delta;
+            $balance = ($openingBalances[$productId] ?? 0) + $runningByProduct[$productId];
+
+            if (!in_array($productId, $seenProductIds, true)) {
+                $seenProductIds[] = $productId;
+                $data[] = $this->openingBalanceRow(
+                    $fromDate,
+                    $row->product_name,
+                    $openingBalances[$productId] ?? 0
+                );
+            }
+
+            $data[] = [
                 'id'            => (int) $row->id,
                 'product_id'    => (int) $row->product_id,
                 'shop_id'       => $row->shop_id !== null ? (int) $row->shop_id : null,
+                'product_name'  => $row->product_name ?? null,
+                'product_code'  => $row->product_code ?? null,
                 'date'          => Carbon::parse($row->date)->toIso8601String(),
                 'reference'     => $this->buildReference($row->movement_type, $row->source_id),
                 'movement_type' => $row->movement_type,
                 'qty_in'        => $isIn ? $qty : 0,
                 'qty_out'       => $isIn ? 0 : $qty,
                 'balance'       => (int) $row->balance,
-                'notes'         => $row->notes,
-                'user'          => null, // stock_logs has no user_id; leave for future schema
             ];
         }
 
         $lastPage = $total > 0 ? (int) ceil($total / $perPage) : 1;
 
+    private function openingBalanceRow(?string $fromDate, ?string $productName, int $opening): array
+    {
         return [
             'data' => $data,
             'meta' => [

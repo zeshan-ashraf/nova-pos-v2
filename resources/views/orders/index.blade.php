@@ -119,6 +119,31 @@
             </form>
         </div>
 
+        {{-- Stats (after filters, same filter applies) --}}
+        @php
+            $stats = $orderStats ?? ['total_orders' => 0, 'total_amount' => 0];
+        @endphp
+        <div class="col-lg-12">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="card border shadow-none">
+                        <div class="card-body py-3">
+                            <div class="text-muted small">Total Orders</div>
+                            <div class="text-right font-weight-bold">{{ number_format($stats['total_orders']) }}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card border shadow-none">
+                        <div class="card-body py-3">
+                            <div class="text-muted small">Total Amount</div>
+                            <div class="text-right font-weight-bold">{{ number_format($stats['total_amount'], 2) }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="col-lg-12">
             <div class="table-responsive rounded mb-3">
                 <table class="table mb-0">
