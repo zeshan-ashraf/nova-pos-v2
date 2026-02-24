@@ -244,6 +244,7 @@ Route::middleware(['permission:purchases.menu'])->group(function () {
 Route::middleware(['permission:expense.menu'])->group(function () {
     Route::get('/expenses/bulk-create', [ExpenseController::class, 'bulkCreate'])->name('expenses.bulk-create');
     Route::post('/expenses/bulk-create', [ExpenseController::class, 'storeBulk'])->name('expenses.bulk-store');
+    Route::post('/expenses/bulk-delete', [ExpenseController::class, 'destroyBulk'])->name('expenses.bulk-delete');
     Route::resource('/expenses', ExpenseController::class);
     Route::get('/expense-search', [ExpenseController::class, 'expenseSearch'])->name('expenses.search');
 });

@@ -415,6 +415,59 @@ class ExpenseController extends Controller
 
         return Redirect::route('expenses.index')->with('success', 'Expense has been deleted!');
     }
+
+    /**
+     * Soft delete selected expenses (bulk). Skips system expenses.
+     * Same logic as single delete: soft delete related account_transactions then activity.
+     * Redirects back with applied filters preserved.
+     */
+    public function destroyBulk(Request $request)
+    {
+        $request->validate([
+            'expense_ids' => 'required|array',
+            'expense_ids.*' => 'integer|exists:activities,id',
+        ]);
+
+        $ids = array_values(array_unique(array_filter($request->input('expense_ids', []))));
+        if (empty($ids)) {
+            return redirect()->to(route('expenses.index', $request->query()))
+                ->withErrors(['expense_ids' => 'Please select at least one expense.']);
+        }
+
+        $authUser = auth()->user();
+        $shopId = $authUser?->shop_id;
+
+        $query = Activity::query()
+            ->whereIn('id', $ids)
+            ->where(function ($q) {
+                $q->where('is_system', false)->orWhereNull('is_system');
+            });
+
+        if ($shopId) {
+            $query->where('shop_id', $shopId);
+        }
+
+        $activities = $query->get();
+        $deleted = 0;
+
+        DB::transaction(function () use ($activities, &$deleted) {
+            foreach ($activities as $activity) {
+                AccountTransaction::query()
+                    ->where('source_type', AccountTransaction::SOURCE_EXPENSE)
+                    ->where('source_id', $activity->id)
+                    ->delete();
+                $activity->delete();
+                $deleted++;
+            }
+        });
+
+        $message = $deleted === 1
+            ? '1 expense deleted successfully.'
+            : $deleted . ' expenses deleted successfully.';
+
+        return redirect()->to(route('expenses.index', $request->query()))
+            ->with('success', $message);
+    }
     
     public function expenseSearch(Request $request)
     {

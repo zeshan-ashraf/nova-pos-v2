@@ -12,9 +12,9 @@
                     </button>
                 </div>
             @endif
-            @if (session()->has('error'))
+            @if (session()->has('error') || $errors->has('expense_ids'))
                 <div class="alert text-white bg-danger" role="alert">
-                    <div class="iq-alert-text">{{ session('success') }}</div>
+                    <div class="iq-alert-text">{{ $errors->first('expense_ids') ?? session('error') }}</div>
                     <button type="button" class="close" data-dismiss="alert" aria-label="Close">
                     <i class="ri-close-line"></i>
                     </button>
@@ -119,10 +119,22 @@
         </div>
 
         <div class="col-lg-12">
+            <form id="expenses-bulk-delete-form" method="post" action="{{ route('expenses.bulk-delete', request()->query()) }}">
+                @csrf
+                <div id="bulk-delete-expense-ids-container"></div>
+            </form>
+            <div class="mb-2">
+                <button type="button" class="btn btn-warning btn-sm" id="btn-delete-selected-expenses" title="Delete selected expenses">
+                    <i class="ri-delete-bin-line mr-1"></i>Delete selected
+                </button>
+            </div>
             <div class="table-responsive rounded mb-3">
                 <table class="table mb-0">
                     <thead class="bg-white text-uppercase">
                         <tr class="ligth ligth-data">
+                            <th style="width: 40px;">
+                                <input type="checkbox" id="expense-select-all" title="Select all on this page">
+                            </th>
                             <th>No.</th>
                             <th>@sortablelink('expense.expense_title', 'Category')</th>
                             <th>@sortablelink('description', 'Description')</th>
@@ -136,6 +148,11 @@
                         @if($groupBy === 'none')
                             @forelse ($expenses as $expense)
                                 <tr>
+                                    <td>
+                                        @unless($expense->is_system ?? false)
+                                            <input type="checkbox" class="expense-row-cb" value="{{ $expense->id }}" data-cost="{{ $expense->activity_cost }}">
+                                        @endunless
+                                    </td>
                                     <td>{{ (($expenses->currentPage() - 1) * $expenses->perPage()) + $loop->iteration }}</td>
                                     <td>{{ $expense->expense?->expense_title ?? '—' }}</td>
                                     <td>{{ Str::limit($expense->description, 20) }}</td>
@@ -164,7 +181,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="7" class="text-center">
+                                    <td colspan="8" class="text-center">
                                         <div class="alert text-white bg-danger" role="alert">
                                             <div class="iq-alert-text">No Expenses Found.</div>
                                             <button type="button" class="close" data-dismiss="alert" aria-label="Close">
@@ -189,11 +206,16 @@
                             @php $cumulative = 0; @endphp
                             @forelse ($grouped as $groupKey => $groupItems)
                                 <tr class="table-secondary font-weight-bold">
-                                    <td colspan="7">{{ $groupBy === 'date' ? $groupKey : $groupKey }}</td>
+                                    <td colspan="8">{{ $groupBy === 'date' ? $groupKey : $groupKey }}</td>
                                 </tr>
                                 @foreach ($groupItems as $expense)
                                 @php $cumulative++; @endphp
                                 <tr>
+                                    <td>
+                                        @unless($expense->is_system ?? false)
+                                            <input type="checkbox" class="expense-row-cb" value="{{ $expense->id }}" data-cost="{{ $expense->activity_cost }}">
+                                        @endunless
+                                    </td>
                                     <td>{{ $baseSerial + $cumulative }}</td>
                                     <td>{{ $expense->expense?->expense_title ?? '—' }}</td>
                                     <td>{{ Str::limit($expense->description, 20) }}</td>
@@ -222,13 +244,13 @@
                                 </tr>
                                 @endforeach
                                 <tr class="table-light font-weight-bold">
-                                    <td colspan="4" class="text-right">Total</td>
+                                    <td colspan="5" class="text-right">Total</td>
                                     <td class="text-right">{{ number_format($groupItems->sum('activity_cost'), 2) }}</td>
                                     <td colspan="2"></td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="7" class="text-center">
+                                    <td colspan="8" class="text-center">
                                         <div class="alert text-white bg-danger" role="alert">
                                             <div class="iq-alert-text">No Expenses Found.</div>
                                             <button type="button" class="close" data-dismiss="alert" aria-label="Close">
@@ -248,10 +270,32 @@
                 {{ $expenses->appends(request()->query())->links() }}
             </div>
         </div>
-
-
     </div>
     <!-- Page end  -->
+</div>
+
+{{-- Bulk delete confirmation modal --}}
+<div class="modal fade" id="bulkDeleteExpenseModal" tabindex="-1" role="dialog" aria-labelledby="bulkDeleteExpenseModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bulkDeleteExpenseModalLabel">Confirm delete</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">Are you sure you want to delete the selected expense(s)?</p>
+                <div id="bulk-delete-summary" class="alert alert-light border mb-0">
+                    <strong id="bulk-delete-count">0</strong> expense(s) selected &mdash; Total: <strong id="bulk-delete-total">0.00</strong>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="bulk-delete-confirm-btn"><i class="ri-delete-bin-line mr-1"></i>Delete</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 @endsection
@@ -266,12 +310,72 @@
     }
     document.addEventListener('DOMContentLoaded', function() {
         toggleExpenseCustomDates();
+
+        // Select all (current page only)
+        var selectAll = document.getElementById('expense-select-all');
+        var rowCbs = document.querySelectorAll('.expense-row-cb');
+        if (selectAll) {
+            selectAll.addEventListener('change', function() {
+                rowCbs.forEach(function(cb) { cb.checked = selectAll.checked; });
+            });
+        }
+        rowCbs.forEach(function(cb) {
+            cb.addEventListener('change', function() {
+                var checked = document.querySelectorAll('.expense-row-cb:checked');
+                if (selectAll) selectAll.checked = checked.length === rowCbs.length;
+            });
+        });
+
+        // Delete selected: validate then show modal
+        var btnDeleteSelected = document.getElementById('btn-delete-selected-expenses');
+        var modal = document.getElementById('bulkDeleteExpenseModal');
+        var bulkCountEl = document.getElementById('bulk-delete-count');
+        var bulkTotalEl = document.getElementById('bulk-delete-total');
+        var bulkConfirmBtn = document.getElementById('bulk-delete-confirm-btn');
+        var bulkForm = document.getElementById('expenses-bulk-delete-form');
+        var idsContainer = document.getElementById('bulk-delete-expense-ids-container');
+
+        if (btnDeleteSelected && modal) {
+            btnDeleteSelected.addEventListener('click', function() {
+                var checked = document.querySelectorAll('.expense-row-cb:checked');
+                if (checked.length === 0) {
+                    alert('Please select at least one expense.');
+                    return;
+                }
+                var total = 0;
+                var ids = [];
+                checked.forEach(function(cb) {
+                    ids.push(cb.value);
+                    total += parseFloat(cb.getAttribute('data-cost')) || 0;
+                });
+                bulkCountEl.textContent = ids.length;
+                bulkTotalEl.textContent = total.toFixed(2);
+                bulkConfirmBtn.dataset.ids = ids.join(',');
+                $(modal).modal('show');
+            });
+        }
+
+        if (bulkConfirmBtn && bulkForm && idsContainer) {
+            bulkConfirmBtn.addEventListener('click', function() {
+                var ids = (bulkConfirmBtn.dataset.ids || '').split(',').filter(Boolean);
+                idsContainer.innerHTML = '';
+                ids.forEach(function(id) {
+                    var input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'expense_ids[]';
+                    input.value = id;
+                    idsContainer.appendChild(input);
+                });
+                $(modal).modal('hide');
+                bulkForm.submit();
+            });
+        }
     });
     function deleteExpense(expenseId) {
         if (confirm('Are you sure you want to delete this record?')) {
             var form = document.createElement('form');
             form.method = 'POST';
-            form.action = `/expenses/${expenseId}`;
+            form.action = '/expenses/' + expenseId;
             var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             var csrfField = document.createElement('input');
             csrfField.type = 'hidden';
@@ -289,5 +393,4 @@
             form.submit();
         }
     }
-
 </script>
