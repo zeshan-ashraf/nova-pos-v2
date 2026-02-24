@@ -92,9 +92,31 @@
                     </div>
                 </div>
             </form>
+
+            {{-- Filtered expense total --}}
+            @php
+                $expenseTotal = $expenseTotal ?? 0;
+                $expenseCount = $expenseCount ?? 0;
+            @endphp
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="card border-0 shadow-sm overflow-hidden" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px;">
+                        <div class="card-body py-3 px-4 d-flex flex-wrap align-items-center justify-content-between">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-money-bill-wave text-white mr-3" style="font-size: 1.75rem;"></i>
+                                <div>
+                                    <span class="text-white-50 small text-uppercase d-block">Total expenses in range</span>
+                                    <span class="text-white h4 mb-0 font-weight-bold">{{ number_format($expenseTotal, 2) }}</span>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <span class="badge badge-light text-dark px-3 py-2">{{ $expenseCount }} {{ Str::plural('expense', $expenseCount) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-
-
 
         <div class="col-lg-12">
             <div class="table-responsive rounded mb-3">

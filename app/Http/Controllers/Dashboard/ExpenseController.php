@@ -62,6 +62,10 @@ class ExpenseController extends Controller
 
         $expensesQuery->with('expense');
 
+        // Total and count for filtered range (same filters, no pagination)
+        $expenseTotal = (clone $expensesQuery)->sum('activity_cost');
+        $expenseCount = (clone $expensesQuery)->count();
+
         if (!$request->has('sort')) {
             $expensesQuery->orderBy('id', 'desc');
         }
@@ -73,6 +77,8 @@ class ExpenseController extends Controller
             'expenses' => $expenses,
             'dateRange' => $dateRange,
             'groupBy' => $groupBy,
+            'expenseTotal' => $expenseTotal,
+            'expenseCount' => $expenseCount,
         ]);
     }
 

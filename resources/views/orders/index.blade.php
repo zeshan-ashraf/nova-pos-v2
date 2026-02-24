@@ -127,17 +127,23 @@
             <div class="row mb-3">
                 <div class="col-md-6">
                     <div class="card border shadow-none">
-                        <div class="card-body py-3">
-                            <div class="text-muted small">Total Orders</div>
-                            <div class="text-right font-weight-bold">{{ number_format($stats['total_orders']) }}</div>
+                        <div class="card-body py-3 d-flex align-items-center">
+                            <i class="fas fa-shopping-cart text-primary mr-3" style="font-size: 1.75rem;"></i>
+                            <div class="flex-grow-1">
+                                <div class="text-muted" style="font-size: 1rem; padding-bottom: 10px;">Total Orders</div>
+                                <div class="font-weight-bold" style="font-size: 1.5rem;">{{ number_format($stats['total_orders']) }}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-6">
                     <div class="card border shadow-none">
-                        <div class="card-body py-3">
-                            <div class="text-muted small">Total Amount</div>
-                            <div class="text-right font-weight-bold">{{ number_format($stats['total_amount'], 2) }}</div>
+                        <div class="card-body py-3 d-flex align-items-center">
+                            <i class="fas fa-money-bill-wave text-success mr-3" style="font-size: 1.75rem;"></i>
+                            <div class="flex-grow-1">
+                                <div class="text-muted" style="font-size: 1rem; padding-bottom: 10px;">Total Amount</div>
+                                <div class="font-weight-bold" style="font-size: 1.5rem;">{{ number_format($stats['total_amount'], 2) }}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
