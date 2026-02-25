@@ -399,7 +399,7 @@ class ExpenseController extends Controller
     /**
      * Soft delete the expense (activity) and its related account_transactions.
      */
-    public function destroy(Activity $expense)
+    public function destroy(Request $request, Activity $expense)
     {
         $this->ensureShopAccess($expense);
         $this->rejectSystemExpenseModification($expense, 'delete');
@@ -413,7 +413,15 @@ class ExpenseController extends Controller
             $expense->delete();
         });
 
-        return Redirect::route('expenses.index')->with('success', 'Expense has been deleted!');
+        $query = [];
+        foreach (['date_filter', 'start_date', 'end_date', 'group_by', 'row', 'search'] as $key) {
+            $val = $request->input('redirect_query_' . $key);
+            if ($val !== null && $val !== '') {
+                $query[$key] = $val;
+            }
+        }
+
+        return redirect()->to(route('expenses.index', $query))->with('success', 'Expense has been deleted!');
     }
 
     /**

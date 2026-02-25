@@ -173,6 +173,11 @@
                                             <form action="{{ route('expenses.destroy', $expense->id) }}" method="POST" class="d-inline">
                                                 @method('delete')
                                                 @csrf
+                                                @foreach(request()->only(['date_filter', 'start_date', 'end_date', 'group_by', 'row', 'search']) as $key => $val)
+                                                    @if($val !== null && $val !== '')
+                                                        <input type="hidden" name="redirect_query_{{ $key }}" value="{{ $val }}">
+                                                    @endif
+                                                @endforeach
                                                 <button type="submit" class="btn btn-warning mr-2 border-none" onclick="return confirm('Are you sure you want to delete this record?')" data-toggle="tooltip" data-placement="top" title="Delete"><i class="ri-delete-bin-line mr-0"></i></button>
                                             </form>
                                             @endunless
@@ -236,6 +241,11 @@
                                             <form action="{{ route('expenses.destroy', $expense->id) }}" method="POST" class="d-inline">
                                                 @method('delete')
                                                 @csrf
+                                                @foreach(request()->only(['date_filter', 'start_date', 'end_date', 'group_by', 'row', 'search']) as $key => $val)
+                                                    @if($val !== null && $val !== '')
+                                                        <input type="hidden" name="redirect_query_{{ $key }}" value="{{ $val }}">
+                                                    @endif
+                                                @endforeach
                                                 <button type="submit" class="btn btn-warning mr-2 border-none" onclick="return confirm('Are you sure you want to delete this record?')" data-toggle="tooltip" data-placement="top" title="Delete"><i class="ri-delete-bin-line mr-0"></i></button>
                                             </form>
                                             @endunless

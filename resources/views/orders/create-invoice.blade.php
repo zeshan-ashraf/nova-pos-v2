@@ -463,7 +463,7 @@
                     <div class="invoice-summary">
                         <div class="row">
                             <!-- Comment Section - Left Side -->
-                            <div class="col-md-6">
+                            <div class="col-4">
                                 <div class="comment-section">
                                     <div class="form-group">
                                         <label for="comment">Note (Optional)</label>
@@ -473,7 +473,7 @@
                             </div>
                             
                             <!-- Invoice Summary - Right Side -->
-                            <div class="col-md-6">
+                            <div class="col-8">
                                 <div class="summary-row">
                                     <span class="summary-label">Subtotal:</span>
                                     <span class="summary-value" id="subtotal">0.00</span>
@@ -510,6 +510,7 @@
                                     </span>
                                     <span class="summary-label ml-2">Amount:</span>
                                     <input type="number" step="0.01" class="form-control d-inline-block" id="pay_1" name="pay_1" value="0" min="0" style="width: 120px;">
+                                    <input type="hidden" id="pay_1_credit_submit" name="pay_1_credit_submit" value="0" style="display: none;" aria-hidden="true">
                                 </div>
                                 <div class="summary-row payment-row-2 payment-row-inline mt-2" id="payment_row_2_block" style="display: none;">
                                     <span class="summary-label">Payment 2</span>
@@ -1228,7 +1229,10 @@ var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
         const method = $(this).val();
         const invoiceTotal = parseFloat($('#invoice_total_hidden').val()) || 0;
         if (method === 'credit') {
-            $('#payment_row_2_block').hide();
+            var row2 = document.getElementById('payment_row_2_block');
+            if (row2) row2.style.setProperty('display', 'none', 'important');
+            $('#pay_1').val('0').prop('disabled', true).attr('name', 'pay_1_dummy');
+            $('#pay_1_credit_submit').attr('name', 'pay_1').val('0');
             $('#pay_2').val('0');
             $('#payment_method_2').val('');
             $('#shop_bank_id_2').val('');
@@ -1236,15 +1240,21 @@ var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
             $('#bank_select_row_1').hide();
             $('#shop_bank_id_1').val('').prop('required', false);
         } else if (method === 'bank' || method === 'cheque') {
+            var row2 = document.getElementById('payment_row_2_block');
+            if (row2) row2.style.removeProperty('display');
+            $('#pay_1').prop('disabled', false).attr('name', 'pay_1');
+            $('#pay_1_credit_submit').attr('name', 'pay_1_credit_submit');
             $('#bank_select_row_1').show();
             $('#shop_bank_id_1').prop('required', true);
             $('#pay_1').val(invoiceTotal.toFixed(2));
-            $('#payment_row_2_block').show();
         } else if (method === 'cash') {
+            var row2 = document.getElementById('payment_row_2_block');
+            if (row2) row2.style.removeProperty('display');
+            $('#pay_1').prop('disabled', false).attr('name', 'pay_1');
+            $('#pay_1_credit_submit').attr('name', 'pay_1_credit_submit');
             $('#bank_select_row_1').hide();
             $('#shop_bank_id_1').val('').prop('required', false);
             $('#pay_1').val(invoiceTotal.toFixed(2));
-            $('#payment_row_2_block').show();
         }
         calculateDue();
     });
