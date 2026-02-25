@@ -25,6 +25,12 @@
                     </button>
                 </div>
             @endif
+            @if (!empty($debugSql))
+                <div class="alert alert-secondary mb-3" role="alert">
+                    <strong>Debug SQL (add ?debug_sql=1 to URL):</strong>
+                    <pre class="mb-0 mt-2 small text-dark" style="white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow: auto;">{{ $debugSql }}</pre>
+                </div>
+            @endif
             <div class="d-flex flex-wrap align-items-center justify-content-between mb-4">
                 <div>
                     <h4 class="mb-3">Orders List</h4>

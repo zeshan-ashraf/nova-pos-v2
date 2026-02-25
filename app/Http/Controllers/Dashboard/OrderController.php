@@ -73,11 +73,11 @@ class OrderController extends Controller
         $ordersQuery = Order::with(['customer', 'shop.parent'])
             ->sortable();
 
-        // Date filter (when not "all")
+        // Date filter (when not "all") — use full datetime so end date is inclusive (order_date can be DATETIME)
         if ($dateFilter !== 'all' && isset($dateRange['start_datetime'], $dateRange['end_datetime'])) {
             $ordersQuery->whereBetween('order_date', [
-                $dateRange['start_datetime']->format('Y-m-d'),
-                $dateRange['end_datetime']->format('Y-m-d'),
+                $dateRange['start_datetime']->format('Y-m-d H:i:s'),
+                $dateRange['end_datetime']->format('Y-m-d H:i:s'),
             ]);
         }
 
@@ -141,12 +141,38 @@ class OrderController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        return view('orders.index', [
+        $debugSql = null;
+        if ($request->boolean('debug_sql')) {
+            $clone = clone $ordersQuery;
+            $sql = $clone->toSql();
+            $bindings = $clone->getBindings();
+            foreach ($bindings as $b) {
+                if ($b === null) {
+                    $replace = 'NULL';
+                } elseif (is_string($b)) {
+                    $replace = "'" . addslashes($b) . "'";
+                } elseif ($b instanceof \DateTimeInterface) {
+                    $replace = "'" . $b->format('Y-m-d H:i:s') . "'";
+                } else {
+                    $replace = (string) $b;
+                }
+                $sql = preg_replace('/\?/', $replace, $sql, 1);
+            }
+            $debugSql = $sql;
+            \Log::info('Orders index SQL (debug_sql=1)', ['sql' => $sql]);
+        }
+
+        $viewData = [
             'orders' => $ordersQuery->paginate($row)->withQueryString(),
             'dateRange' => $dateRange,
             'customers' => $customers,
             'orderStats' => $orderStats,
-        ]);
+        ];
+        if ($debugSql !== null) {
+            $viewData['debugSql'] = $debugSql;
+        }
+
+        return view('orders.index', $viewData);
     }
 
     public function pendingOrders()
