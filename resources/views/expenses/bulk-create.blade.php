@@ -45,7 +45,9 @@
             min-height: 38px;
             resize: vertical;
         }
-        .expense-table .category-col { width: 18%; }
+        .expense-table .category-col { width: 18%; min-width: 180px; }
+        .expense-table .category-col .select2-container { width: 100% !important; }
+        .expense-table .category-col select.expense-category { width: 100% !important; }
         .expense-table .amount-col { width: 10%; }
         .expense-table .description-col { width: 28%; }
         .expense-table .payment-col { width: 10%; }
@@ -145,7 +147,7 @@
                     <tbody id="bulk-expense-tbody">
                         @foreach([0, 1, 2] as $index)
                         <tr class="expense-row" data-row-index="{{ $index }}">
-                            <td>
+                            <td class="category-col">
                                 <select class="form-control expense-category" name="expenses[{{ $index }}][expense_id]">
                                     <option value="">Select category</option>
                                     @foreach($expenseCategories ?? [] as $cat)
@@ -201,7 +203,7 @@
 {{-- Template for new table row --}}
 <template id="expense-row-template">
     <tr class="expense-row" data-row-index="">
-        <td>
+        <td class="category-col">
             <select class="form-control expense-category" name="expenses[__INDEX__][expense_id]">
                 <option value="">Select category</option>
                 @foreach($expenseCategories ?? [] as $cat)
