@@ -370,6 +370,28 @@ class PurchaseController extends Controller
     }
 
     /**
+     * Return purchase detail HTML for modal (e.g. supplier ledger). Uses same partial as show() so both stay in sync.
+     */
+    public function showContent(int $purchase_id)
+    {
+        $purchase = Purchase::with(['supplier', 'shop.banks'])->findOrFail($purchase_id);
+        $this->ensureShopAccess($purchase);
+
+        $purchaseDetails = PurchaseDetail::with('product')
+            ->where('purchase_id', $purchase_id)
+            ->orderBy('id', 'DESC')
+            ->get();
+
+        $html = view('purchases.partials.show-content', [
+            'purchase' => $purchase,
+            'purchaseDetails' => $purchaseDetails,
+            'in_modal' => true,
+        ])->render();
+
+        return response()->json(['html' => $html]);
+    }
+
+    /**
      * Update purchase status to complete.
      */
     public function updateStatus(Request $request)

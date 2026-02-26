@@ -8,7 +8,6 @@ use App\Models\AccountTransaction;
 use App\Models\Activity;
 use App\Models\Order;
 use App\Models\OrderDetails;
-use App\Models\StockLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -163,8 +162,13 @@ class FinancialReportController extends Controller
     /**
      * REPORT 4: Profit & Loss Report
      * URL: /reports/financial/profit-loss
-     * Definition: Revenue = Sales (ledger). COGS = cost of sold products (order_details × buying_price).
-     * Gross Profit = Sales Revenue - Cost of Goods Sold. Direct inventory costing; no purchases/opening/closing stock in P&L.
+     *
+     * Rules (no stock_logs; order_details only for COGS and Sales):
+     * - Sales = SUM(order_details.unitcost * order_details.quantity). Date filter: orders.created_at.
+     * - COGS = SUM(order_details.quantity * order_details.cost_per_unit). No fallback, no ABS.
+     * - Gross Profit = Total Sales - COGS.
+     * - Net Profit = Gross Profit - Operating Expenses. (Discounts not shown on P&L.)
+     * - Soft-deleted orders/order_details excluded.
      */
     public function profitLoss(Request $request)
     {
@@ -175,39 +179,27 @@ class FinancialReportController extends Controller
         $start = $dateRange['start_datetime'];
         $end = $dateRange['end_datetime'];
 
-        // 1) Sales Revenue: sum of sale-account credits (all sales: cash + credit). Ledger is source of truth.
-        //    Fallback to orders.total when ledger has no sale entries (e.g. legacy data or backfill not run).
-        $salesQuery = AccountTransaction::query()
-            ->where('account_type', AccountTransaction::ACCOUNT_TYPE_SALE)
-            ->where('direction', AccountTransaction::DIRECTION_CREDIT)
-            ->whereBetween('transaction_date', [$start, $end]);
-        $this->applyShopFilter($salesQuery, $shopFilter['shop_ids']);
-        $totalSales = (float) (clone $salesQuery)->sum('amount');
-
-        if ($totalSales == 0) {
-            $ordersRevenueQuery = Order::query()
-                ->whereBetween('order_date', [$start, $end]);
-            $this->applyShopFilter($ordersRevenueQuery, $shopFilter['shop_ids']);
-            $totalSales = (float) (clone $ordersRevenueQuery)->sum('total');
-        }
-
-        // 2) COGS: from sold products only. Use cost at time of sale (order_details.cost_per_unit);
-        //    for old records where cost_per_unit is NULL, fall back to products.buying_price.
-        $cogsQuery = Order::query()
+        // 1) Sales, COGS — single query (orders + order_details), one row per line, no duplicate inflation
+        $salesCogsQuery = Order::query()
             ->join('order_details', function ($join) {
                 $join->on('orders.id', '=', 'order_details.order_id')
                     ->whereNull('order_details.deleted_at');
             })
-            ->join('products', 'order_details.product_id', '=', 'products.id')
-            ->whereBetween('orders.order_date', [$start, $end])
-            ->selectRaw('SUM(order_details.quantity * COALESCE(order_details.cost_per_unit, products.buying_price, 0)) as cost_of_goods_sold');
-        $this->applyShopFilter($cogsQuery, $shopFilter['shop_ids'], 'orders.shop_id');
-        $cogs = (float) $cogsQuery->value('cost_of_goods_sold');
+            ->whereBetween('orders.created_at', [$start, $end])
+            ->selectRaw("
+                SUM(order_details.unitcost * order_details.quantity) AS total_sales,
+                SUM(order_details.quantity * COALESCE(order_details.cost_per_unit, 0)) AS cogs
+            ");
+        $this->applyShopFilter($salesCogsQuery, $shopFilter['shop_ids'], 'orders.shop_id');
+        $row = $salesCogsQuery->first();
 
-        // 3) Gross Profit = Sales Revenue - COGS
+        $totalSales = (float) ($row->total_sales ?? 0);
+        $cogs = (float) ($row->cogs ?? 0);
+
+        // 2) Gross Profit = Total Sales - COGS
         $grossProfit = $totalSales - $cogs;
 
-        // 4) Total Operating Expenses: account_transactions where source_type = 'expense', direction = 'debit'
+        // 3) Total Operating Expenses (account_transactions)
         $expensesQuery = AccountTransaction::query()
             ->where('source_type', AccountTransaction::SOURCE_EXPENSE)
             ->where('direction', AccountTransaction::DIRECTION_DEBIT);
@@ -217,10 +209,8 @@ class FinancialReportController extends Controller
         }
         $expenses = (float) $expensesQuery->sum('amount');
 
-        // Operating Profit = Gross Profit - Total Operating Expenses
-        $operatingProfit = $grossProfit - $expenses;
-        // Net Profit (other income/expenses = 0 for now)
-        $netProfit = $operatingProfit;
+        // 4) Net Profit = Gross Profit - Operating Expenses (discounts not shown on P&L)
+        $netProfit = $grossProfit - $expenses;
         $revenue = $totalSales;
         $profitMargin = $revenue > 0 ? (($netProfit / $revenue) * 100) : 0;
 
@@ -238,7 +228,7 @@ class FinancialReportController extends Controller
 
     /**
      * P&L line-level detail (debug): one row per order line with sales and COGS.
-     * Same scope as P&L (date range + shop). No extra permission.
+     * Same scope as P&L (date range + shop). COGS from order_details.cost_per_unit only (no fallback).
      */
     public function profitLossLineDetail(Request $request)
     {
@@ -255,17 +245,18 @@ class FinancialReportController extends Controller
                     ->whereNull('order_details.deleted_at');
             })
             ->join('products', 'order_details.product_id', '=', 'products.id')
-            ->whereBetween('orders.order_date', [$start, $end])
+            ->whereBetween('orders.created_at', [$start, $end])
             ->select(
                 'orders.id as order_id',
+                'orders.invoice_no',
                 'orders.order_date',
                 'products.product_name',
                 'products.product_code',
                 'order_details.quantity',
                 'order_details.unitcost as unit_sell_price',
                 'order_details.total as line_revenue',
-                DB::raw('COALESCE(order_details.cost_per_unit, products.buying_price, 0) as cost_per_unit_used'),
-                DB::raw('order_details.quantity * COALESCE(order_details.cost_per_unit, products.buying_price, 0) as line_cogs')
+                DB::raw('COALESCE(order_details.cost_per_unit, 0) as cost_per_unit_used'),
+                DB::raw('order_details.quantity * COALESCE(order_details.cost_per_unit, 0) as line_cogs')
             )
             ->orderBy('orders.order_date')
             ->orderBy('orders.id')

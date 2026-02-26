@@ -15,7 +15,6 @@
     $grossProfit = (float) ($grossProfit ?? 0);
     $netProfit = (float) ($netProfit ?? 0);
     $netRevenue = $revenue;
-    $operatingProfit = $grossProfit - $expenses;
 @endphp
 <div class="container-fluid reports-profit-loss">
     <div class="row">
@@ -89,11 +88,9 @@
                         <tr><td colspan="2" class="pl-rule border-top pt-2 pb-1"></td></tr>
                         <tr><td class="pl-indent"><strong>Net Revenue</strong></td><td class="pl-amount text-right"><strong>{{ $fmt($netRevenue) }}</strong></td></tr>
 
-                        {{-- Cost of Goods Sold --}}
+                        {{-- Cost of Goods Sold (from order_details.cost_per_unit only) --}}
                         <tr><td colspan="2" class="pt-4"><strong>Cost of Goods Sold</strong></td></tr>
-                        <tr><td class="pl-indent">Purchases</td><td class="pl-amount text-right">{{ $fmt($cogs) }}</td></tr>
-                        <tr><td colspan="2" class="pl-rule border-top pt-2 pb-1"></td></tr>
-                        <tr><td class="pl-indent"><strong>Cost of Goods Sold</strong></td><td class="pl-amount text-right"><strong>{{ $fmt($cogs) }}</strong></td></tr>
+                        <tr><td class="pl-indent">Cost of Goods Sold</td><td class="pl-amount text-right"><strong>{{ $fmt($cogs) }}</strong></td></tr>
 
                         {{-- Gross Profit --}}
                         <tr><td colspan="2" class="pl-rule border-top pt-3 pb-2"></td></tr>

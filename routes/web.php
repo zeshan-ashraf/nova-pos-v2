@@ -178,6 +178,7 @@ Route::get('/suppliers/{supplier}/ledger/pdf', [SupplierController::class, 'ledg
 Route::middleware(['permission:supplier_payment.menu'])->group(function () {
     Route::get('/supplier-payments/create', [SupplierPaymentController::class, 'create'])->name('supplier-payments.create');
     Route::post('/supplier-payments', [SupplierPaymentController::class, 'store'])->name('supplier-payments.store');
+    Route::get('/supplier-payments/{id}/content', [SupplierPaymentController::class, 'paymentDetailContent'])->name('supplier-payments.content');
 });
 
 // ====== ORDERS ======
@@ -234,6 +235,7 @@ Route::middleware(['permission:purchases.menu'])->group(function () {
     Route::post('/purchases', [PurchaseController::class, 'store'])->name('purchases.store');
     Route::get('/purchases/pending', [PurchaseController::class, 'pending'])->name('purchases.pending');
     Route::get('/purchases/complete', [PurchaseController::class, 'complete'])->name('purchases.complete');
+    Route::get('/purchases/{purchase_id}/content', [PurchaseController::class, 'showContent'])->name('purchases.showContent');
     Route::get('/purchases/{purchase_id}', [PurchaseController::class, 'show'])->name('purchases.show');
     Route::put('/purchases/update/status', [PurchaseController::class, 'updateStatus'])->name('purchases.updateStatus');
     Route::delete('/purchases/{purchase_id}', [PurchaseController::class, 'destroy'])->name('purchases.destroy');

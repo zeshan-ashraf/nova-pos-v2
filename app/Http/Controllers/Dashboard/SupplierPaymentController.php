@@ -149,4 +149,62 @@ class SupplierPaymentController extends Controller
 
         return Redirect::route('supplier-payments.create')->with('success', 'Supplier payment recorded successfully.');
     }
+
+    /**
+     * Return payment detail HTML for supplier ledger modal (AJAX).
+     * Id is the account_transaction id (supplier-side row).
+     */
+    public function paymentDetailContent($id)
+    {
+        $authUser = auth()->user();
+        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+
+        $supplierRow = AccountTransaction::query()
+            ->where('source_type', AccountTransaction::SOURCE_SUPPLIER_PAYMENT)
+            ->where('account_type', AccountTransaction::ACCOUNT_TYPE_SUPPLIER)
+            ->findOrFail($id);
+
+        if ($visibleShopIds->isNotEmpty() && !$visibleShopIds->contains($supplierRow->shop_id)) {
+            abort(404);
+        }
+
+        $supplier = Supplier::find($supplierRow->account_ref_id);
+        $desc = $supplierRow->description ?? '';
+        $siblingQuery = AccountTransaction::query()
+            ->where('source_type', AccountTransaction::SOURCE_SUPPLIER_PAYMENT)
+            ->whereIn('account_type', [AccountTransaction::ACCOUNT_TYPE_CASH, AccountTransaction::ACCOUNT_TYPE_BANK])
+            ->where('shop_id', $supplierRow->shop_id)
+            ->where('transaction_date', $supplierRow->transaction_date)
+            ->where('amount', $supplierRow->amount);
+        if ($desc === '') {
+            $siblingQuery->where(function ($q) {
+                $q->whereNull('description')->orWhere('description', '');
+            });
+        } else {
+            $siblingQuery->where('description', $desc);
+        }
+        $sibling = $siblingQuery->first();
+
+        $paymentMethod = '—';
+        $bankName = null;
+        if ($sibling) {
+            $paymentMethod = $sibling->account_type === AccountTransaction::ACCOUNT_TYPE_BANK ? 'Bank' : 'Cash';
+            if ($sibling->account_type === AccountTransaction::ACCOUNT_TYPE_BANK && $sibling->account_ref_id) {
+                $bankName = DB::table('bank_shop')
+                    ->where('bank_shop.id', $sibling->account_ref_id)
+                    ->join('banks', 'banks.id', '=', 'bank_shop.bank_id')
+                    ->value('banks.name');
+            }
+        }
+
+        $html = view('supplier-payments.partials.payment-detail-content', [
+            'transaction' => $supplierRow,
+            'supplier' => $supplier,
+            'payment_method' => $paymentMethod,
+            'bank_name' => $bankName,
+            'in_modal' => true,
+        ])->render();
+
+        return response()->json(['html' => $html]);
+    }
 }

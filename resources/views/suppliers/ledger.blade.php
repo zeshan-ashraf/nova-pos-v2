@@ -1,7 +1,77 @@
 @extends('dashboard.body.main')
 
+@section('specificpagestyles')
+<style>
+    #paymentDetailModalBody .readonly-field { background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 8px 12px; border-radius: 4px; color: #495057; }
+    /* Page and table full width (like customer ledger) */
+    .supplier-ledger-page.container-fluid { width: 100%; max-width: 100%; padding-left: 15px; padding-right: 15px; box-sizing: border-box; }
+    .supplier-ledger-page .row { width: 100%; max-width: 100%; }
+    /* Top 4 boxes + summary in one row; table full width */
+    .supplier-ledger-page .ledger-summary-boxes { display: flex; flex-wrap: nowrap; }
+    .supplier-ledger-page .ledger-summary-boxes .col-md-3 { flex: 0 0 25%; max-width: 25%; }
+    .supplier-ledger-page .ledger-summary-row { display: flex; flex-wrap: nowrap; }
+    .supplier-ledger-page .ledger-summary-row .col-md-3 { flex: 0 0 25%; max-width: 25%; }
+    /* Full-width ledger table (same approach as customer ledger) */
+    .supplier-ledger-page .ledger-table-wrapper { width: 100%; max-width: 100%; box-sizing: border-box; }
+    .supplier-ledger-page .ledger-table-wrapper .table-responsive { width: 100%; max-width: 100%; overflow-x: auto; }
+    .supplier-ledger-page #ledgerTable { width: 100%; min-width: 100%; table-layout: fixed; box-sizing: border-box; }
+    .supplier-ledger-page #ledgerTable th,
+    .supplier-ledger-page #ledgerTable td { word-wrap: break-word; }
+    .supplier-ledger-page #ledgerTable .ledger-col-date { width: 9%; }
+    .supplier-ledger-page #ledgerTable .ledger-col-type { width: 10%; }
+    .supplier-ledger-page #ledgerTable .ledger-col-purchase { width: 12%; }
+    .supplier-ledger-page #ledgerTable .ledger-col-desc { width: 22%; }
+    .supplier-ledger-page #ledgerTable .ledger-col-total { width: 9%; }
+    .supplier-ledger-page #ledgerTable .ledger-col-paid { width: 9%; }
+    .supplier-ledger-page #ledgerTable .ledger-col-due { width: 9%; }
+    .supplier-ledger-page #ledgerTable .ledger-col-debit { width: 8%; }
+    .supplier-ledger-page #ledgerTable .ledger-col-credit { width: 8%; }
+    .supplier-ledger-page #ledgerTable .ledger-col-balance { width: 8%; }
+    /* Print: same as HTML view – hide layout chrome, keep ledger content and styling */
+    @media print {
+        body, .wrapper { padding: 0 !important; margin: 0 !important; }
+        .iq-sidebar, .iq-top-navbar, .content-page > .navbar, .content-page > .iq-sidebar,
+        .iq-footer, .modal, .modal-backdrop, [data-dismiss="modal"], .close,
+        #dateFilterCard, .supplier-ledger-page .btn,
+        .supplier-ledger-page .row.mb-3 .col-lg-4 { display: none !important; }
+        .wrapper { display: block !important; }
+        .content-page { padding: 0 !important; margin: 0 !important; width: 100% !important; max-width: none !important; }
+        .supplier-ledger-page { padding-top: 0 !important; width: 100% !important; max-width: none !important; }
+        .supplier-ledger-page .row.mb-3 .col-lg-8 { flex: 0 0 100%; max-width: 100%; }
+        .supplier-ledger-page .card { border: 1px solid #dee2e6 !important; box-shadow: none !important; break-inside: avoid; }
+        .supplier-ledger-page .card-header { background: #f8f9fa !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .supplier-ledger-page .ledger-table-wrapper { width: 100vw !important; max-width: 100vw !important; position: relative !important; left: 50% !important; margin-left: -50vw !important; padding-left: 10px !important; padding-right: 10px !important; box-sizing: border-box !important; }
+        .supplier-ledger-page .ledger-table-wrapper .table-responsive { width: 100% !important; max-width: none !important; overflow: visible !important; }
+        .supplier-ledger-page #ledgerTable { width: 100% !important; min-width: 100% !important; table-layout: fixed !important; box-sizing: border-box !important; }
+        .supplier-ledger-page #ledgerTable .ledger-col-date { width: 9% !important; }
+        .supplier-ledger-page #ledgerTable .ledger-col-type { width: 10% !important; }
+        .supplier-ledger-page #ledgerTable .ledger-col-purchase { width: 12% !important; }
+        .supplier-ledger-page #ledgerTable .ledger-col-desc { width: 22% !important; }
+        .supplier-ledger-page #ledgerTable .ledger-col-total { width: 9% !important; }
+        .supplier-ledger-page #ledgerTable .ledger-col-paid { width: 9% !important; }
+        .supplier-ledger-page #ledgerTable .ledger-col-due { width: 9% !important; }
+        .supplier-ledger-page #ledgerTable .ledger-col-debit { width: 8% !important; }
+        .supplier-ledger-page #ledgerTable .ledger-col-credit { width: 8% !important; }
+        .supplier-ledger-page #ledgerTable .ledger-col-balance { width: 8% !important; }
+        .supplier-ledger-page .table th, .supplier-ledger-page .table td { border: 1px solid #dee2e6 !important; }
+        .supplier-ledger-page .thead-light th { background: #f8f9fa !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .supplier-ledger-page .bg-light { background: #f8f9fa !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .supplier-ledger-page .text-danger { color: #dc3545 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .supplier-ledger-page .text-success { color: #28a745 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .supplier-ledger-page .badge { border: 1px solid transparent; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .supplier-ledger-page a.ledger-purchase-link, .supplier-ledger-page a.ledger-payment-link { color: inherit !important; text-decoration: none !important; }
+        .supplier-ledger-page .ledger-summary-boxes { display: flex !important; flex-wrap: nowrap !important; }
+        .supplier-ledger-page .ledger-summary-boxes .col-md-3 { flex: 0 0 25% !important; max-width: 25% !important; }
+        .supplier-ledger-page .ledger-summary-row { display: flex !important; flex-wrap: nowrap !important; }
+        .supplier-ledger-page .ledger-summary-row .col-md-3 { flex: 0 0 25% !important; max-width: 25% !important; }
+        /* Supplier name and phone visible in print (avoid light gray not showing) */
+        .supplier-ledger-page .row.mb-3:first-of-type .col-lg-8 .text-muted { color: #212529 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+</style>
+@endsection
+
 @section('container')
-<div class="container-fluid mb-3" style="padding-top: 90px;">
+<div class="container-fluid mb-3 supplier-ledger-page" style="padding-top: 90px;">
     <div class="row mb-3">
         <div class="col-lg-8">
             <h4 class="mb-1">Supplier Ledger</h4>
@@ -13,8 +83,8 @@
         </div>
     </div>
 
-    <!-- Date Filter Section -->
-    <div class="card mb-3">
+    <!-- Date Filter Section (hidden when printing to avoid empty box) -->
+    <div class="card mb-3 d-print-none" id="dateFilterCard">
         <div class="card-body">
             <form action="{{ route('suppliers.ledger', $supplier->id) }}" method="GET" id="dateFilterForm">
                 <div class="row align-items-end">
@@ -48,8 +118,8 @@
         </div>
     </div>
 
-    <!-- Summary Section -->
-    <div class="row mb-3">
+    <!-- Summary Section: 4 boxes in one row -->
+    <div class="row mb-3 ledger-summary-boxes">
         <div class="col-md-3">
             <div class="card">
                 <div class="card-body">
@@ -84,37 +154,31 @@
         </div>
     </div>
 
-    <!-- Detailed Summary -->
+    <!-- Detailed Summary: labels in one row, values in second row -->
     <div class="row mb-3">
-        <div class="col-md-12">
+        <div class="col-12">
             <div class="card">
                 <div class="card-body">
                     <h6 class="card-title mb-3">Summary</h6>
-                    <div class="row">
-                        <div class="col-md-3">
-                            <p class="mb-1"><strong>Total Purchase Amount:</strong></p>
-                            <p class="mb-0">{{ number_format($summary['total_purchase_amount'], 2) }}</p>
-                        </div>
-                        <div class="col-md-3">
-                            <p class="mb-1"><strong>Total Paid:</strong></p>
-                            <p class="mb-0">{{ number_format($summary['total_paid'], 2) }}</p>
-                        </div>
-                        <div class="col-md-3">
-                            <p class="mb-1"><strong>Total Due:</strong></p>
-                            <p class="mb-0">{{ number_format($summary['total_due'], 2) }}</p>
-                        </div>
-                        <div class="col-md-3">
-                            <p class="mb-1"><strong>Total Payment Amount:</strong></p>
-                            <p class="mb-0">{{ number_format($summary['total_payment_amount'], 2) }}</p>
-                        </div>
+                    <div class="row ledger-summary-row mb-2">
+                        <div class="col-md-3"><strong>Total Purchase Amount</strong></div>
+                        <div class="col-md-3"><strong>Total Paid</strong></div>
+                        <div class="col-md-3"><strong>Total Due</strong></div>
+                        <div class="col-md-3"><strong>Total Payment Amount</strong></div>
+                    </div>
+                    <div class="row ledger-summary-row">
+                        <div class="col-md-3">{{ number_format($summary['total_purchase_amount'], 2) }}</div>
+                        <div class="col-md-3">{{ number_format($summary['total_paid'], 2) }}</div>
+                        <div class="col-md-3">{{ number_format($summary['total_due'], 2) }}</div>
+                        <div class="col-md-3">{{ number_format($summary['total_payment_amount'], 2) }}</div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Ledger Table -->
-    <div class="card">
+    <!-- Ledger Table (full width like customer ledger) -->
+    <div class="card ledger-table-wrapper">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0">Transaction Ledger</h5>
             <div>
@@ -124,14 +188,24 @@
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table mb-0" id="ledgerTable">
+                    <colgroup>
+                        <col class="ledger-col-date">
+                        <col class="ledger-col-type">
+                        <col class="ledger-col-purchase">
+                        <col class="ledger-col-desc">
+                        <col class="ledger-col-total">
+                        <col class="ledger-col-paid">
+                        <col class="ledger-col-due">
+                        <col class="ledger-col-debit">
+                        <col class="ledger-col-credit">
+                        <col class="ledger-col-balance">
+                    </colgroup>
                     <thead class="bg-white text-uppercase">
                         <tr class="ligth ligth-data">
                             <th>Date</th>
                             <th>Type</th>
                             <th>Purchase No</th>
                             <th>Description</th>
-                            <th>Purchase Status</th>
-                            <th>Payment Status</th>
                             <th class="text-right">Total</th>
                             <th class="text-right">Paid</th>
                             <th class="text-right">Due</th>
@@ -148,31 +222,15 @@
                                     <span class="badge {{ $transaction['type_badge'] }}">{{ $transaction['type'] }}</span>
                                 </td>
                                 <td>
-                                    @if($transaction['purchase_id'])
-                                        <a href="{{ route('purchases.show', $transaction['purchase_id']) }}" class="text-primary">
-                                            {{ $transaction['purchase_no'] ?? ('Purchase #' . $transaction['purchase_id']) }}
-                                        </a>
+                                    @if(!empty($transaction['is_supplier_payment']) && !empty($transaction['payment_transaction_id']))
+                                        <a href="javascript:void(0)" class="ledger-payment-link text-primary" data-transaction-id="{{ $transaction['payment_transaction_id'] }}" title="View payment details">View payment</a>
+                                    @elseif($transaction['purchase_id'])
+                                        <a href="javascript:void(0)" class="ledger-purchase-link text-primary" data-purchase-id="{{ $transaction['purchase_id'] }}" title="View purchase invoice">{{ $transaction['purchase_no'] ?? ('Purchase #' . $transaction['purchase_id']) }}</a>
                                     @else
                                         —
                                     @endif
                                 </td>
                                 <td>{{ $transaction['description'] }}</td>
-                                <td>
-                                    @if($transaction['is_purchase'])
-                                        <span class="badge {{ $transaction['purchase_status'] == 'complete' ? 'badge-success' : 'badge-warning' }}">
-                                            {{ $transaction['purchase_status'] }}
-                                        </span>
-                                    @else
-                                        —
-                                    @endif
-                                </td>
-                                <td>
-                                    @if($transaction['is_purchase'])
-                                        <span class="badge badge-info">{{ $transaction['payment_status'] }}</span>
-                                    @else
-                                        —
-                                    @endif
-                                </td>
                                 <td class="text-right">
                                     @if($transaction['is_purchase'])
                                         {{ number_format($transaction['total'], 2) }}
@@ -214,13 +272,13 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="12" class="text-center text-muted py-4">No transactions found for the selected period.</td>
+                                <td colspan="10" class="text-center text-muted py-4">No transactions found for the selected period.</td>
                             </tr>
                         @endforelse
                     </tbody>
                     <tfoot class="bg-light">
                         <tr>
-                            <td colspan="6" class="text-right"><strong>Totals:</strong></td>
+                            <td colspan="4" class="text-right"><strong>Totals:</strong></td>
                             <td class="text-right"><strong>{{ number_format($summary['total_purchase_amount'], 2) }}</strong></td>
                             <td class="text-right"><strong>{{ number_format($summary['total_paid'], 2) }}</strong></td>
                             <td class="text-right"><strong>{{ number_format($summary['total_due'], 2) }}</strong></td>
@@ -230,6 +288,44 @@
                         </tr>
                     </tfoot>
                 </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Purchase Detail Modal (same content as purchases.show) -->
+<div class="modal fade" id="purchaseDetailModal" tabindex="-1" role="dialog" aria-labelledby="purchaseDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="purchaseDetailModalLabel">Purchase Details</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="purchaseDetailModalBody">
+                <div class="text-center py-5 text-muted">
+                    <span class="spinner-border spinner-border-sm mr-2" role="status"></span> Loading...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Payment Detail Modal -->
+<div class="modal fade" id="paymentDetailModal" tabindex="-1" role="dialog" aria-labelledby="paymentDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="paymentDetailModalLabel">Payment Details</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="paymentDetailModalBody">
+                <div class="text-center py-5 text-muted">
+                    <span class="spinner-border spinner-border-sm mr-2" role="status"></span> Loading...
+                </div>
             </div>
         </div>
     </div>
@@ -249,17 +345,105 @@ function toggleCustomDates() {
         endDateGroup.style.display = 'none';
     }
 }
+
+// Purchase detail modal (purchase link in ledger – same view as purchases.show)
+document.addEventListener('DOMContentLoaded', function() {
+    var purchaseModalEl = document.getElementById('purchaseDetailModal');
+    document.addEventListener('click', function(e) {
+        var link = e.target.closest('.ledger-purchase-link');
+        if (link) {
+            e.preventDefault();
+            var purchaseId = link.getAttribute('data-purchase-id');
+            if (!purchaseId || !purchaseModalEl) return;
+            var bodyEl = document.getElementById('purchaseDetailModalBody');
+            if (!bodyEl) return;
+            bodyEl.innerHTML = '<div class="text-center py-5 text-muted"><span class="spinner-border spinner-border-sm mr-2" role="status"></span> Loading...</div>';
+            if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                var m = new bootstrap.Modal(purchaseModalEl);
+                m.show();
+            } else {
+                purchaseModalEl.classList.add('show');
+                purchaseModalEl.style.display = 'block';
+                document.body.classList.add('modal-open');
+            }
+            fetch("{{ url('purchases') }}/" + purchaseId + "/content", { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    if (data && data.html) {
+                        bodyEl.innerHTML = data.html;
+                    } else {
+                        bodyEl.innerHTML = '<div class="alert alert-danger">Failed to load purchase details.</div>';
+                    }
+                })
+                .catch(function() {
+                    bodyEl.innerHTML = '<div class="alert alert-danger">Failed to load purchase details.</div>';
+                });
+            return;
+        }
+    });
+    if (purchaseModalEl) {
+        var purchaseCloseBtn = purchaseModalEl.querySelector('.modal-header .close, .modal-header [data-dismiss="modal"]');
+        if (purchaseCloseBtn) purchaseCloseBtn.addEventListener('click', function() {
+            if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                var m = bootstrap.Modal.getInstance(purchaseModalEl);
+                if (m) m.hide();
+            } else {
+                purchaseModalEl.classList.remove('show');
+                purchaseModalEl.style.display = 'none';
+                document.body.classList.remove('modal-open');
+            }
+        });
+    }
+
+    // Payment detail modal (supplier payment link in ledger)
+    var paymentModalEl = document.getElementById('paymentDetailModal');
+    document.addEventListener('click', function(e) {
+        var link = e.target.closest('.ledger-payment-link');
+        if (!link) return;
+        e.preventDefault();
+        var transactionId = link.getAttribute('data-transaction-id');
+        if (!transactionId || !paymentModalEl) return;
+        var bodyEl = document.getElementById('paymentDetailModalBody');
+        if (!bodyEl) return;
+
+        bodyEl.innerHTML = '<div class="text-center py-5 text-muted"><span class="spinner-border spinner-border-sm mr-2" role="status"></span> Loading...</div>';
+        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            var m = new bootstrap.Modal(paymentModalEl);
+            m.show();
+        } else {
+            paymentModalEl.classList.add('show');
+            paymentModalEl.style.display = 'block';
+            document.body.classList.add('modal-open');
+        }
+
+        fetch("{{ url('supplier-payments') }}/" + transactionId + "/content", { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data && data.html) {
+                    bodyEl.innerHTML = data.html;
+                } else {
+                    bodyEl.innerHTML = '<div class="alert alert-danger">Failed to load payment details.</div>';
+                }
+            })
+            .catch(function() {
+                bodyEl.innerHTML = '<div class="alert alert-danger">Failed to load payment details.</div>';
+            });
+    });
+
+    if (paymentModalEl) {
+        var closeBtn = paymentModalEl.querySelector('.modal-header .close, .modal-header [data-dismiss="modal"]');
+        if (closeBtn) closeBtn.addEventListener('click', function() {
+            if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                var m = bootstrap.Modal.getInstance(paymentModalEl);
+                if (m) m.hide();
+            } else {
+                paymentModalEl.classList.remove('show');
+                paymentModalEl.style.display = 'none';
+                document.body.classList.remove('modal-open');
+            }
+        });
+    }
+});
 </script>
 
-<style>
-@media print {
-    .btn, .card-header .text-muted, #dateFilterForm {
-        display: none !important;
-    }
-    .card {
-        border: none !important;
-        box-shadow: none !important;
-    }
-}
-</style>
 @endsection

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Dashboard;
 use App\Models\Supplier;
 use App\Models\Purchase;
 use App\Models\PurchasePaymentLog;
+use App\Models\AccountTransaction;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Intervention\Image\Facades\Image;
@@ -259,6 +260,16 @@ class SupplierController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
+        // Standalone supplier payments (from Payments → Supplier Payment) in date range
+        $supplierPayments = AccountTransaction::query()
+            ->where('source_type', AccountTransaction::SOURCE_SUPPLIER_PAYMENT)
+            ->where('account_type', AccountTransaction::ACCOUNT_TYPE_SUPPLIER)
+            ->where('account_ref_id', $supplier->id)
+            ->whereBetween('transaction_date', [$startDate, $endDate])
+            ->orderBy('transaction_date', 'desc')
+            ->orderBy('id', 'desc')
+            ->get();
+
         // Calculate opening balance (credit amount before start date)
         $openingBalance = $this->calculateOpeningBalance($supplier, $startDateTime);
 
@@ -286,7 +297,7 @@ class SupplierController extends Controller
             ]);
         }
 
-        // Add payments
+        // Add purchase payments (payments against a specific purchase)
         foreach ($payments as $payment) {
             $transactions->push([
                 'date' => $payment->created_at->format('Y-m-d'),
@@ -302,8 +313,33 @@ class SupplierController extends Controller
                 'paid' => $payment->amount_paid,
                 'due' => 0,
                 'debit' => 0,
-                'credit' => $payment->amount_paid, // Payment made (credit from supplier perspective)
+                'credit' => $payment->amount_paid,
                 'is_purchase' => false,
+                'is_supplier_payment' => false,
+                'payment_transaction_id' => null,
+            ]);
+        }
+
+        // Add standalone supplier payments (Payments → Supplier Payment)
+        foreach ($supplierPayments as $sp) {
+            $transactions->push([
+                'date' => $sp->transaction_date->format('Y-m-d'),
+                'datetime' => $sp->transaction_date,
+                'type' => 'Supplier Payment',
+                'type_badge' => 'badge-info',
+                'purchase_no' => null,
+                'purchase_id' => null,
+                'description' => $sp->description ?? 'Supplier payment',
+                'purchase_status' => null,
+                'payment_status' => null,
+                'total' => 0,
+                'paid' => (float) $sp->amount,
+                'due' => 0,
+                'debit' => 0,
+                'credit' => (float) $sp->amount,
+                'is_purchase' => false,
+                'is_supplier_payment' => true,
+                'payment_transaction_id' => $sp->id,
             ]);
         }
 
@@ -321,14 +357,15 @@ class SupplierController extends Controller
         // Calculate closing balance
         $closingBalance = $runningBalance;
 
-        // Calculate summary totals
+        // Calculate summary totals (include standalone supplier payments in payment totals)
+        $supplierPaymentAmount = $supplierPayments->sum('amount');
         $summary = [
             'total_purchases' => $purchases->count(),
             'total_purchase_amount' => $purchases->sum('total'),
             'total_paid' => $purchases->sum('pay'),
             'total_due' => $purchases->sum('due'),
-            'total_payments' => $payments->count(),
-            'total_payment_amount' => $payments->sum('amount_paid'),
+            'total_payments' => $payments->count() + $supplierPayments->count(),
+            'total_payment_amount' => $payments->sum('amount_paid') + (float) $supplierPaymentAmount,
         ];
 
         return view('suppliers.ledger', [
@@ -386,6 +423,15 @@ class SupplierController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
+        $supplierPaymentsPdf = AccountTransaction::query()
+            ->where('source_type', AccountTransaction::SOURCE_SUPPLIER_PAYMENT)
+            ->where('account_type', AccountTransaction::ACCOUNT_TYPE_SUPPLIER)
+            ->where('account_ref_id', $supplier->id)
+            ->whereBetween('transaction_date', [$startDate, $endDate])
+            ->orderBy('transaction_date', 'desc')
+            ->orderBy('id', 'desc')
+            ->get();
+
         $openingBalance = $this->calculateOpeningBalance($supplier, $startDateTime);
 
         $transactions = collect();
@@ -427,6 +473,25 @@ class SupplierController extends Controller
             ]);
         }
 
+        foreach ($supplierPaymentsPdf as $sp) {
+            $transactions->push([
+                'date' => $sp->transaction_date->format('Y-m-d'),
+                'datetime' => $sp->transaction_date,
+                'type' => 'Supplier Payment',
+                'purchase_no' => null,
+                'purchase_id' => null,
+                'description' => $sp->description ?? 'Supplier payment',
+                'purchase_status' => null,
+                'payment_status' => null,
+                'total' => 0,
+                'paid' => (float) $sp->amount,
+                'due' => 0,
+                'debit' => 0,
+                'credit' => (float) $sp->amount,
+                'is_purchase' => false,
+            ]);
+        }
+
         $transactions = $transactions->sortByDesc('datetime')->values();
         $runningBalance = $openingBalance;
         $transactions = $transactions->map(function ($transaction) use (&$runningBalance) {
@@ -436,13 +501,14 @@ class SupplierController extends Controller
         });
 
         $closingBalance = $runningBalance;
+        $supplierPaymentAmountPdf = (float) $supplierPaymentsPdf->sum('amount');
         $summary = [
             'total_purchases' => $purchases->count(),
             'total_purchase_amount' => $purchases->sum('total'),
             'total_paid' => $purchases->sum('pay'),
             'total_due' => $purchases->sum('due'),
-            'total_payments' => $payments->count(),
-            'total_payment_amount' => $payments->sum('amount_paid'),
+            'total_payments' => $payments->count() + $supplierPaymentsPdf->count(),
+            'total_payment_amount' => $payments->sum('amount_paid') + $supplierPaymentAmountPdf,
         ];
 
         $pdf = Pdf::loadView('suppliers.ledger-pdf', [
@@ -460,6 +526,7 @@ class SupplierController extends Controller
 
     /**
      * Calculate opening balance (credit amount before start date).
+     * Includes: dues from purchases, minus purchase payments, minus standalone supplier payments.
      */
     protected function calculateOpeningBalance(Supplier $supplier, Carbon $startDate): float
     {
@@ -468,18 +535,25 @@ class SupplierController extends Controller
             ->where('purchase_date', '<', $startDate->format('Y-m-d'))
             ->get();
 
-        // Get all payments before start date (exclude deleted payments)
+        // Get all purchase payments before start date (exclude deleted)
         $paymentsBefore = PurchasePaymentLog::whereHas('purchase', function ($query) use ($supplier) {
                 $query->where('supplier_id', $supplier->id);
             })
             ->where('created_at', '<', $startDate)
             ->get();
 
-        // Calculate balance: sum of all dues minus sum of all payments
+        // Standalone supplier payments before start date
+        $supplierPaymentsBefore = (float) AccountTransaction::query()
+            ->where('source_type', AccountTransaction::SOURCE_SUPPLIER_PAYMENT)
+            ->where('account_type', AccountTransaction::ACCOUNT_TYPE_SUPPLIER)
+            ->where('account_ref_id', $supplier->id)
+            ->where('transaction_date', '<', $startDate->format('Y-m-d'))
+            ->sum('amount');
+
         $totalDue = $purchasesBefore->sum('due');
         $totalPaid = $paymentsBefore->sum('amount_paid');
 
-        return max(0, $totalDue - $totalPaid);
+        return max(0, $totalDue - $totalPaid - $supplierPaymentsBefore);
     }
 
     /**

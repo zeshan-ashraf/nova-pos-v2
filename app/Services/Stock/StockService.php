@@ -56,7 +56,7 @@ class StockService
             ? (\is_string($purchaseDate) ? $purchaseDate : \Illuminate\Support\Carbon::parse($purchaseDate)->toDateString())
             : null;
 
-        return $this->insertAndUpdate($product, $qty, 'in', 'purchase', (string) $purchaseId, $price, $supplierId, null, $adjustmentDate);
+        return $this->insertAndUpdate($product, $qty, 'in', 'purchase', (string) $purchaseId, $price, $supplierId, null, $adjustmentDate, $price);
     }
 
     /**
