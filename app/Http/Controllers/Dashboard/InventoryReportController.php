@@ -23,6 +23,7 @@ class InventoryReportController extends Controller
         $shopFilter = $this->getShopFilter($request, $authUser);
         $row = $this->getRowCount($request);
 
+        // Qty and all stock data from products table (product_store, low_stock_warning, buying_price, etc.)
         $productsQuery = Product::with(['shop.parent']);
 
         $this->applyShopFilter($productsQuery, $shopFilter['shop_ids']);
@@ -37,19 +38,63 @@ class InventoryReportController extends Controller
             }
         }
 
-        $products = $productsQuery->orderBy('product_store')->paginate($row)->appends($request->query());
-        Product::eagerLoadSameShopCategory($products->getCollection());
+        // Summary from filtered query only (before sort/join/paginate) so totals are correct on every page
+        $summaryQuery = clone $productsQuery;
+        $totalProducts = $summaryQuery->count();
+        $lowStockCount = (clone $summaryQuery)->whereColumn('product_store', '<=', 'low_stock_warning')->count();
+        $outOfStockCount = (clone $summaryQuery)->where('product_store', '<=', 0)->count();
+        $totalStockValue = (clone $summaryQuery)->sum(DB::raw('product_store * buying_price'));
 
-        // Summary
-        $totalProducts = (clone $productsQuery)->count();
-        $lowStockCount = (clone $productsQuery)->whereColumn('product_store', '<=', 'low_stock_warning')->count();
-        $outOfStockCount = (clone $productsQuery)->where('product_store', '<=', 0)->count();
-        $totalStockValue = (clone $productsQuery)->sum(DB::raw('product_store * buying_price'));
+        // Sort: product_name, product_code, category, product_store. Order: asc / desc (toggle on column click).
+        $allowedSort = ['product_name', 'product_code', 'category', 'product_store'];
+        $sort = $request->input('sort', 'product_name');
+        if (!in_array($sort, $allowedSort, true)) {
+            $sort = 'product_name';
+        }
+        $order = strtolower($request->input('order', 'asc')) === 'desc' ? 'desc' : 'asc';
+
+        if ($sort === 'category') {
+            $productsQuery->leftJoin('categories', 'products.category_id', '=', 'categories.id')
+                ->select('products.*');
+        }
+        $sortColumn = match ($sort) {
+            'product_code' => 'products.product_code',
+            'category' => 'categories.name',
+            'product_store' => 'products.product_store',
+            default => 'products.product_name',
+        };
+        $productsQuery->orderBy($sortColumn, $order);
+
+        $products = $productsQuery->paginate($row)->appends($request->query());
+        $this->eagerLoadCategoryForStockReport($products->getCollection());
 
         return view('reports.inventory.stock', compact(
-            'shopFilter', 'products', 'totalProducts', 'lowStockCount', 
-            'outOfStockCount', 'totalStockValue', 'row'
+            'shopFilter', 'products', 'totalProducts', 'lowStockCount',
+            'outOfStockCount', 'totalStockValue', 'row', 'sort', 'order'
         ));
+    }
+
+    /**
+     * Eager load category relation for stock report (by category_id only, no shop scope)
+     * so the Category column displays correctly for all products.
+     */
+    private function eagerLoadCategoryForStockReport($products): void
+    {
+        if ($products->isEmpty()) {
+            return;
+        }
+        $categoryIds = $products->pluck('category_id')->filter()->unique()->values()->all();
+        if (empty($categoryIds)) {
+            $products->each->setRelation('category', null);
+            return;
+        }
+        $categories = Category::withoutGlobalScope('shop')
+            ->whereIn('id', $categoryIds)
+            ->get()
+            ->keyBy('id');
+        foreach ($products as $product) {
+            $product->setRelation('category', $categories->get($product->category_id));
+        }
     }
 
     public function stockMovement(Request $request)

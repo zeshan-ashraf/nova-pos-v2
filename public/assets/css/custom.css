@@ -69,11 +69,17 @@ body {
 /* Navbar quick action links (Create Sale Invoice, Create Purchase, Create Sale Return, etc.) */
 .navbar-quick-link {
     padding: 0.4rem 0.75rem !important;
-    font-size: 13px !important;
+    font-size: 12px !important;
     white-space: nowrap;
     border-radius: 0.25rem;
     font-weight: bold;
     color: #000 !important;
+}
+
+/* Navbar list links: override theme defaults (backend.css) */
+.navbar-list li > a {
+    font-size: 12px !important;
+    line-height: 12px !important;
 }
 /* Navbar quick link active state (current page) */
 .navbar-quick-link.active {
@@ -206,4 +212,9 @@ body {
 .bank-select + .select2-container .select2-selection__choice__remove {
     color: #fff !important;
     margin-right: 0.25em;
+}
+
+/* Sidebar: arrow color when menu is active/expanded */
+.iq-sidebar-menu .iq-menu li a[aria-expanded="true"] .iq-arrow-right.arrow-active {
+    color: #ff7e41 !important;
 }

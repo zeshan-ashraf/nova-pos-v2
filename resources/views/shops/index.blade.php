@@ -30,7 +30,7 @@
                 <div class="d-flex">
                     @if (auth()->user()->can('shop.create'))
                         <a href="{{ route('shops.create') }}" class="btn btn-primary add-list mr-2">
-                            <i class="fa-solid fa-plus mr-3"></i>Add Shop
+                            <i class="fas fa-plus mr-3"></i>Add Shop
                         </a>
                     @endif
                     <a href="{{ route('shops.index') }}" class="btn btn-danger add-list">

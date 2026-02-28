@@ -19,7 +19,7 @@
                         the permission experience, ensuring permission retention. </p>
                 </div>
                 <div>
-                    <a href="{{ route('permission.create') }}" class="btn btn-primary add-list"><i class="fa-solid fa-plus mr-3"></i>Add Permission</a>
+                    <a href="{{ route('permission.create') }}" class="btn btn-primary add-list"><i class="fas fa-plus mr-3"></i>Add Permission</a>
                 </div>
             </div>
         </div>

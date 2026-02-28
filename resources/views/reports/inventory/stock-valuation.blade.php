@@ -106,14 +106,14 @@
                             <thead>
                                 <tr>
                                     <th>Product</th>
-                                    <th>SKU</th>
+                                    <th>Code</th>
+                                    <th>Category</th>
                                     <th class="text-right">Qty</th>
                                     <th class="text-right">Buying</th>
                                     <th class="text-right">Selling</th>
                                     <th class="text-right">Cost value</th>
                                     <th class="text-right">Sale value</th>
                                     <th class="text-right">Profit potential</th>
-                                    <th>Category</th>
                                 </tr>
                             </thead>
                             <tbody id="reportBody"></tbody>
@@ -158,13 +158,13 @@
             tr.innerHTML =
                 '<td>' + (row.product_name || '–') + '</td>' +
                 '<td>' + (row.sku || '–') + '</td>' +
+                '<td>' + (row.category || '–') + '</td>' +
                 '<td class="text-right">' + (row.quantity ?? '–') + '</td>' +
                 '<td class="text-right">' + (row.buying_price ?? '–') + '</td>' +
                 '<td class="text-right">' + (row.selling_price ?? '–') + '</td>' +
                 '<td class="text-right">' + (row.stock_cost_value ?? '–') + '</td>' +
                 '<td class="text-right">' + (row.stock_sale_value ?? '–') + '</td>' +
-                '<td class="text-right">' + (row.profit_potential ?? '–') + '</td>' +
-                '<td>' + (row.category || '–') + '</td>';
+                '<td class="text-right">' + (row.profit_potential ?? '–') + '</td>';
             reportBody.appendChild(tr);
         });
     }

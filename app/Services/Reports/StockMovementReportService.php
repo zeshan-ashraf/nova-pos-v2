@@ -2,6 +2,7 @@
 
 namespace App\Services\Reports;
 
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
@@ -36,140 +37,54 @@ class StockMovementReportService
         $offset = ($page - 1) * $perPage;
 
         $bindings = [];
-        $where = $this->buildWhere($filters, $bindings);
+        $where = $this->buildWhere($filters, $bindings, 'sl');
 
-        // Total count for pagination (no window function needed).
-        $countSql = "SELECT COUNT(*) AS total FROM stock_logs WHERE {$where}";
-        $total = (int) DB::selectOne($countSql, $bindings)->total;
-
-        // Running balance: delta = +qty for 'in', -qty for 'out'. Balance = SUM(delta) OVER (PARTITION BY product_id, shop_partition ORDER BY created_at, id).
-        // shop_id can be null; use COALESCE(shop_id, 0) for partition so all null-shop rows for a product are in one partition.
-        $dataBindings = array_merge($bindings, [$perPage, $offset]);
-
-        $dataSql = "
-            WITH filtered AS (
-                SELECT
-                    sl.id,
-                    sl.product_id,
-                    sl.shop_id,
-                    COALESCE(sl.qty, 0) AS qty,
-                    sl.direction,
-                    sl.source_type,
-                    sl.source_id,
-                    sl.reason,
-                    sl.created_at
-                FROM stock_logs sl
-                WHERE {$where}
-            ),
-            with_delta AS (
-                SELECT
-                    *,
-                    CASE WHEN direction = 'in' THEN COALESCE(qty, 0) ELSE -COALESCE(qty, 0) END AS delta
-                FROM filtered
-            )
-            SELECT
-                w.id,
-                w.product_id,
-                w.shop_id,
-                p.product_name,
-                p.product_code,
-                w.created_at AS date,
-                w.direction,
-                w.source_type AS movement_type,
-                w.source_id,
-                w.qty,
-                SUM(w.delta) OVER (
-                    PARTITION BY w.product_id, COALESCE(w.shop_id, 0)
-                    ORDER BY w.created_at ASC, w.id ASC
-                    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                ) AS balance
-            FROM with_delta w
-            JOIN products p ON p.id = w.product_id
-            ORDER BY w.created_at ASC, w.id ASC
-            LIMIT ? OFFSET ?
-        ";
-
-        $rows = DB::select($dataSql, $dataBindings);
-
-        $data = [];
-        foreach ($rows as $row) {
-            $qty = (int) $row->qty;
-            $isIn = strtolower((string) $row->direction) === 'in';
-            $data[] = [
-                'id'           => (int) $row->id,
-                'product_id'   => $productId,
-                'product_name' => $row->product_name ?? null,
-                'date'         => Carbon::parse($row->date)->toIso8601String(),
-                'source_type'  => $row->source_type ?? null,
-                'source_id'    => $row->source_id ?? null,
-                'qty_in'       => (int) $row->qty_in,
-                'qty_out'      => (int) $row->qty_out,
-                'balance'      => $balance,
-            ];
-        }
-
-        return ['rows' => $data, 'opening_balances' => $openingBalances];
-    }
-
-    /**
-     * MySQL < 8: no window; fetch rows ordered by product_id, created_at, id and compute running balance in PHP.
-     */
-    private function getReportWithoutWindow(
-        string $where,
-        array $bindings,
-        array $filters,
-        ?string $fromDate,
-        ?string $toDate,
-        int $perPage,
-        int $offset,
-        int $total
-    ): array {
-        $dataBindings = array_merge($bindings, [$perPage, $offset]);
+        $countSql = "SELECT COUNT(*) AS total FROM stock_logs sl WHERE {$where}";
+        $total = (int) (DB::selectOne($countSql, $bindings)->total ?? 0);
+        $lastPage = $total > 0 ? (int) ceil($total / $perPage) : 1;
 
         $dataSql = "
             SELECT
                 sl.id,
                 sl.product_id,
                 sl.shop_id,
-                COALESCE(sl.qty, 0) AS qty,
-                sl.direction,
-                sl.source_type,
-                sl.source_id,
-                sl.created_at AS date,
                 p.product_name,
-                CASE WHEN sl.direction = 'in' THEN sl.qty ELSE 0 END AS qty_in,
-                CASE WHEN sl.direction = 'out' THEN sl.qty ELSE 0 END AS qty_out
+                p.product_code,
+                sl.created_at AS date,
+                sl.direction,
+                sl.source_type AS movement_type,
+                sl.source_id,
+                ref_p.purchase_no AS ref_purchase_no,
+                ref_o.invoice_no AS ref_invoice_no,
+                COALESCE(sl.qty, 0) AS qty,
+                CASE WHEN sl.direction = 'in' THEN COALESCE(sl.qty, 0) ELSE 0 END AS qty_in,
+                CASE WHEN sl.direction = 'out' THEN COALESCE(sl.qty, 0) ELSE 0 END AS qty_out,
+                SUM(
+                    CASE WHEN sl.direction = 'in' THEN COALESCE(sl.qty, 0) ELSE -COALESCE(sl.qty, 0) END
+                ) OVER (
+                    PARTITION BY sl.product_id, COALESCE(sl.shop_id, 0)
+                    ORDER BY sl.created_at ASC, sl.id ASC
+                    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                ) AS balance
             FROM stock_logs sl
             JOIN products p ON p.id = sl.product_id
+            LEFT JOIN purchases ref_p ON sl.source_type = 'purchase' AND sl.source_id = ref_p.id
+            LEFT JOIN orders ref_o ON sl.source_type = 'sale' AND sl.source_id = ref_o.id
             WHERE {$where}
-            ORDER BY sl.product_id ASC, sl.created_at ASC, sl.id ASC
+            ORDER BY sl.created_at DESC, sl.id DESC
             LIMIT ? OFFSET ?
         ";
 
-        $rows = DB::select($dataSql, $dataBindings);
-        $productIdsOnPage = array_values(array_unique(array_map(function ($r) {
-            return (int) $r->product_id;
-        }, $rows)));
-        $openingBalances = $this->getOpeningBalances($filters, $fromDate, $productIdsOnPage);
+        $rows = [];
+        try {
+            $rows = DB::select($dataSql, array_merge($bindings, [$perPage, $offset]));
+        } catch (QueryException $e) {
+            // Fallback when window functions are not supported (older MySQL/MariaDB).
+            $rows = $this->getRowsWithoutWindow($where, $bindings, $perPage, $offset);
+        }
 
-        $runningByProduct = [];
         $data = [];
-        $seenProductIds = [];
         foreach ($rows as $row) {
-            $productId = (int) $row->product_id;
-            $delta = strtolower((string) $row->direction) === 'in' ? (int) $row->qty : -(int) $row->qty;
-            $runningByProduct[$productId] = ($runningByProduct[$productId] ?? 0) + $delta;
-            $balance = ($openingBalances[$productId] ?? 0) + $runningByProduct[$productId];
-
-            if (!in_array($productId, $seenProductIds, true)) {
-                $seenProductIds[] = $productId;
-                $data[] = $this->openingBalanceRow(
-                    $fromDate,
-                    $row->product_name,
-                    $openingBalances[$productId] ?? 0
-                );
-            }
-
             $data[] = [
                 'id'            => (int) $row->id,
                 'product_id'    => (int) $row->product_id,
@@ -177,47 +92,93 @@ class StockMovementReportService
                 'product_name'  => $row->product_name ?? null,
                 'product_code'  => $row->product_code ?? null,
                 'date'          => Carbon::parse($row->date)->toIso8601String(),
-                'reference'     => $this->buildReference($row->movement_type, $row->source_id),
-                'movement_type' => $row->movement_type,
-                'qty_in'        => $isIn ? $qty : 0,
-                'qty_out'       => $isIn ? 0 : $qty,
-                'balance'       => (int) $row->balance,
+                'reference'     => $this->buildReference(
+                    $row->movement_type ?? null,
+                    $row->source_id ?? null,
+                    $row->ref_purchase_no ?? null,
+                    $row->ref_invoice_no ?? null
+                ),
+                'movement_type' => $row->movement_type ?? null,
+                'qty_in'        => (int) ($row->qty_in ?? 0),
+                'qty_out'       => (int) ($row->qty_out ?? 0),
+                'balance'       => (int) ($row->balance ?? 0),
             ];
         }
 
-        $lastPage = $total > 0 ? (int) ceil($total / $perPage) : 1;
-
-    private function openingBalanceRow(?string $fromDate, ?string $productName, int $opening): array
-    {
         return [
             'data' => $data,
             'meta' => [
-                'total'         => $total,
-                'per_page'      => $perPage,
-                'current_page'  => $page,
-                'last_page'     => $lastPage,
+                'total'        => $total,
+                'per_page'     => $perPage,
+                'current_page' => $page,
+                'last_page'    => $lastPage,
             ],
         ];
+    }
+
+    /**
+     * Fallback when window functions are not available.
+     * NOTE: Balance is computed within the returned page only (sufficient for basic visibility).
+     */
+    private function getRowsWithoutWindow(string $where, array $bindings, int $perPage, int $offset): array
+    {
+        $sql = "
+            SELECT
+                sl.id,
+                sl.product_id,
+                sl.shop_id,
+                p.product_name,
+                p.product_code,
+                sl.created_at AS date,
+                sl.direction,
+                sl.source_type AS movement_type,
+                sl.source_id,
+                ref_p.purchase_no AS ref_purchase_no,
+                ref_o.invoice_no AS ref_invoice_no,
+                COALESCE(sl.qty, 0) AS qty,
+                CASE WHEN sl.direction = 'in' THEN COALESCE(sl.qty, 0) ELSE 0 END AS qty_in,
+                CASE WHEN sl.direction = 'out' THEN COALESCE(sl.qty, 0) ELSE 0 END AS qty_out
+            FROM stock_logs sl
+            JOIN products p ON p.id = sl.product_id
+            LEFT JOIN purchases ref_p ON sl.source_type = 'purchase' AND sl.source_id = ref_p.id
+            LEFT JOIN orders ref_o ON sl.source_type = 'sale' AND sl.source_id = ref_o.id
+            WHERE {$where}
+            ORDER BY sl.created_at DESC, sl.id DESC
+            LIMIT ? OFFSET ?
+        ";
+        $rows = DB::select($sql, array_merge($bindings, [$perPage, $offset]));
+
+        // Running balance: process in chronological order (oldest first)
+        $chrono = array_reverse($rows);
+        $running = [];
+        foreach ($chrono as $r) {
+            $key = ((int) $r->product_id) . '|' . (string) ($r->shop_id ?? 0);
+            $delta = strtolower((string) $r->direction) === 'in' ? (int) $r->qty : -(int) $r->qty;
+            $running[$key] = ($running[$key] ?? 0) + $delta;
+            $r->balance = $running[$key];
+        }
+        // Return newest first (same order as query)
+        return $rows;
     }
 
     /**
      * Build WHERE clause and bindings from filters.
      * user_id is accepted but not applied (stock_logs has no user_id column).
      */
-    private function buildWhere(array $filters, array &$bindings): string
+    private function buildWhere(array $filters, array &$bindings, string $alias = 'sl'): string
     {
-        $conditions = ['1 = 1'];
+        $conditions = ['1 = 1', "{$alias}.deleted_at IS NULL"];
 
         if (!empty($filters['from_date'])) {
-            $conditions[] = 'created_at >= ?';
+            $conditions[] = "{$alias}.created_at >= ?";
             $bindings[] = Carbon::parse($filters['from_date'])->startOfDay()->toDateTimeString();
         }
         if (!empty($filters['to_date'])) {
-            $conditions[] = 'created_at <= ?';
+            $conditions[] = "{$alias}.created_at <= ?";
             $bindings[] = Carbon::parse($filters['to_date'])->endOfDay()->toDateTimeString();
         }
         if (isset($filters['product_id']) && $filters['product_id'] !== '' && $filters['product_id'] !== null) {
-            $conditions[] = 'product_id = ?';
+            $conditions[] = "{$alias}.product_id = ?";
             $bindings[] = $filters['product_id'];
         }
         if (isset($filters['shop_ids']) && is_array($filters['shop_ids'])) {
@@ -225,17 +186,17 @@ class StockMovementReportService
                 $conditions[] = '1 = 0';
             } else {
                 $placeholders = implode(',', array_fill(0, count($filters['shop_ids']), '?'));
-                $conditions[] = "shop_id IN ({$placeholders})";
+                $conditions[] = "{$alias}.shop_id IN ({$placeholders})";
                 foreach ($filters['shop_ids'] as $sid) {
                     $bindings[] = $sid;
                 }
             }
         } elseif (isset($filters['shop_id']) && $filters['shop_id'] !== '' && $filters['shop_id'] !== null && $filters['shop_id'] !== 'all') {
-            $conditions[] = 'shop_id = ?';
+            $conditions[] = "{$alias}.shop_id = ?";
             $bindings[] = $filters['shop_id'];
         }
         if (!empty($filters['movement_type'])) {
-            $conditions[] = 'source_type = ?';
+            $conditions[] = "{$alias}.source_type = ?";
             $bindings[] = $filters['movement_type'];
         }
         // user_id: not stored on stock_logs; ignored until schema supports it
@@ -244,13 +205,19 @@ class StockMovementReportService
     }
 
     /**
-     * Human-readable reference from source_type and source_id.
-     * Works for any future source_type without code change.
+     * Human-readable reference: for purchase show purchase_no, for sale show invoice_no, else label (#id).
      */
-    private function buildReference(?string $sourceType, ?string $sourceId): string
+    private function buildReference(?string $sourceType, ?string $sourceId, ?string $purchaseNo = null, ?string $invoiceNo = null): string
     {
         $type = $sourceType ?? '';
         $id = trim((string) $sourceId ?? '');
+
+        if ($type === 'purchase' && $purchaseNo !== null && $purchaseNo !== '') {
+            return $purchaseNo;
+        }
+        if ($type === 'sale' && $invoiceNo !== null && $invoiceNo !== '') {
+            return $invoiceNo;
+        }
 
         $labels = [
             'opening'         => 'Opening',

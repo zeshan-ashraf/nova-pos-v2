@@ -67,8 +67,8 @@ class SalesReportController extends Controller
             ->limit(10)
             ->get();
 
-        // Paginated orders
-        $orders = $ordersQuery->orderByDesc('id')->paginate($row)->appends($request->query());
+        // Paginated orders (chronological: oldest first)
+        $orders = $ordersQuery->orderBy('order_date')->orderBy('id')->paginate($row)->appends($request->query());
 
         return view('reports.sales.summary', compact(
             'dateRange',
@@ -104,7 +104,7 @@ class SalesReportController extends Controller
 
         $this->applyShopFilter($ordersQuery, $shopFilter['shop_ids']);
 
-        // Daily breakdown
+        // Daily breakdown (chronological: oldest first)
         $dailyBreakdown = (clone $ordersQuery)
             ->select(
                 DB::raw('DATE(order_date) as date'),
@@ -114,7 +114,7 @@ class SalesReportController extends Controller
                 DB::raw('COUNT(*) as count')
             )
             ->groupBy(DB::raw('DATE(order_date)'))
-            ->orderBy('date', 'desc')
+            ->orderBy('date')
             ->get();
 
         // Summary
@@ -123,8 +123,8 @@ class SalesReportController extends Controller
         $totalDue = (clone $ordersQuery)->sum('due');
         $totalOrders = (clone $ordersQuery)->count();
 
-        // Paginated orders
-        $orders = $ordersQuery->orderByDesc('id')->paginate($row)->appends($request->query());
+        // Paginated orders (chronological: oldest first)
+        $orders = $ordersQuery->orderBy('order_date')->orderBy('id')->paginate($row)->appends($request->query());
 
         return view('reports.sales.daily', compact(
             'dateRange',

@@ -75,37 +75,35 @@ class Product extends Model
 
     /**
      * Eager load sameShopCategory for a collection of products (avoids N+1 with scoped relation).
+     * Loads categories without global shop scope. Matches (category_id, product.shop_id); if not found,
+     * falls back to category with same id and shop_id null (global categories).
      */
     public static function eagerLoadSameShopCategory(Collection $products): void
     {
-        $pairs = $products
-            ->filter(fn (Product $p) => $p->category_id !== null)
-            ->map(fn (Product $p) => ['id' => $p->category_id, 'shop_id' => $p->shop_id])
-            ->unique(fn ($p) => $p['id'] . '-' . ($p['shop_id'] ?? 'null'))
-            ->values();
-
-        if ($pairs->isEmpty()) {
+        $withCategory = $products->filter(fn (Product $p) => $p->category_id !== null);
+        if ($withCategory->isEmpty()) {
             $products->each->setRelation('sameShopCategory', null);
             return;
         }
 
-        $categories = Category::query()
-            ->where(function ($query) use ($pairs) {
-                foreach ($pairs as $pair) {
-                    $query->orWhere(function ($q) use ($pair) {
-                        $q->where('id', $pair['id']);
-                        $pair['shop_id'] === null
-                            ? $q->whereNull('shop_id')
-                            : $q->where('shop_id', $pair['shop_id']);
-                    });
-                }
-            })
-            ->get()
-            ->keyBy(fn (Category $c) => $c->id . '-' . ($c->shop_id ?? 'null'));
+        $categoryIds = $withCategory->pluck('category_id')->unique()->values()->all();
+        // Load all categories we might need: without global shop scope so we get every shop's + global
+        $allCategories = Category::withoutGlobalScope('shop')
+            ->whereIn('id', $categoryIds)
+            ->get();
+
+        // Key by "id-shop_id" for lookup; also keep by "id-null" for global fallback
+        $byKey = $allCategories->keyBy(fn (Category $c) => $c->id . '-' . ($c->shop_id ?? 'null'));
+        $byIdGlobal = $allCategories->whereNull('shop_id')->keyBy('id');
 
         foreach ($products as $product) {
+            if ($product->category_id === null) {
+                $product->setRelation('sameShopCategory', null);
+                continue;
+            }
             $key = $product->category_id . '-' . ($product->shop_id ?? 'null');
-            $product->setRelation('sameShopCategory', $categories->get($key));
+            $category = $byKey->get($key) ?? $byIdGlobal->get($product->category_id);
+            $product->setRelation('sameShopCategory', $category);
         }
     }
 

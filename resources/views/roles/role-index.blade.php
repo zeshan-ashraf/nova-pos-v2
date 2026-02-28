@@ -19,7 +19,7 @@
                         the role experience, ensuring role retention. </p>
                 </div>
                 <div>
-                    <a href="{{ route('role.create') }}" class="btn btn-primary add-list"><i class="fa-solid fa-plus mr-3"></i>Add Role</a>
+                    <a href="{{ route('role.create') }}" class="btn btn-primary add-list"><i class="fas fa-plus mr-3"></i>Add Role</a>
                 </div>
             </div>
         </div>

@@ -44,7 +44,7 @@
                             <td>
                                 <div class="d-flex align-items-center list-action">
                                     <a class="btn btn-success mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Download"
-                                        href="{{ route('backup.download', $file->getFileName()) }}"><i class="fa-solid fa-download mr-0"></i>
+                                        href="{{ route('backup.download', $file->getFileName()) }}"><i class="fas fa-download mr-0"></i>
                                     </a>
                                     <a class="btn btn-danger mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Delete"
                                         href="{{ route('backup.delete', $file->getFileName()) }}"><i class="las la-trash"></i>

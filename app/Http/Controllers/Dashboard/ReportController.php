@@ -20,7 +20,7 @@ class ReportController extends Controller
             'sales' => [
                 'name' => 'Sales Reports',
                 'permission' => 'reports.sales',
-                'icon' => 'fa-solid fa-chart-line',
+                'icon' => 'fas fa-chart-line',
                 'reports' => [
                     [
                         'name' => 'Sales Summary',
@@ -51,7 +51,7 @@ class ReportController extends Controller
             'purchases' => [
                 'name' => 'Purchase Reports',
                 'permission' => 'reports.purchases',
-                'icon' => 'fa-solid fa-shopping-cart',
+                'icon' => 'fas fa-shopping-cart',
                 'reports' => [
                     [
                         'name' => 'Purchase Summary',
@@ -76,7 +76,7 @@ class ReportController extends Controller
             'financial' => [
                 'name' => 'Financial Reports',
                 'permission' => 'reports.financial',
-                'icon' => 'fa-solid fa-dollar-sign',
+                'icon' => 'fas fa-dollar-sign',
                 'reports' => [
                     [
                         'name' => 'Profit & Loss',
@@ -107,7 +107,7 @@ class ReportController extends Controller
             'credit' => [
                 'name' => 'Credit Reports',
                 'permission' => 'reports.credit',
-                'icon' => 'fa-solid fa-credit-card',
+                'icon' => 'fas fa-credit-card',
                 'reports' => [
                     [
                         'name' => 'Customer Credit',
@@ -132,7 +132,7 @@ class ReportController extends Controller
             'inventory' => [
                 'name' => 'Inventory Reports',
                 'permission' => 'reports.inventory',
-                'icon' => 'fa-solid fa-boxes-stacked',
+                'icon' => 'fas fa-boxes',
                 'reports' => [
                     [
                         'name' => 'Stock Report',
@@ -163,7 +163,7 @@ class ReportController extends Controller
             'payment' => [
                 'name' => 'Payment Reports',
                 'permission' => 'reports.payment',
-                'icon' => 'fa-solid fa-money-bill-wave',
+                'icon' => 'fas fa-money-bill-wave',
                 'reports' => [
                     [
                         'name' => 'Payment Collection',
@@ -188,7 +188,7 @@ class ReportController extends Controller
             'returns' => [
                 'name' => 'Return Reports',
                 'permission' => 'reports.returns',
-                'icon' => 'fa-solid fa-arrow-rotate-left',
+                'icon' => 'fas fa-undo-alt',
                 'reports' => [
                     [
                         'name' => 'Sale Return',
@@ -201,7 +201,7 @@ class ReportController extends Controller
             'employee' => [
                 'name' => 'Employee Reports',
                 'permission' => 'reports.employee',
-                'icon' => 'fa-solid fa-users',
+                'icon' => 'fas fa-users',
                 'reports' => [
                     [
                         'name' => 'Salary Report',
@@ -220,7 +220,7 @@ class ReportController extends Controller
             'comparative' => [
                 'name' => 'Comparative Reports',
                 'permission' => 'reports.comparative',
-                'icon' => 'fa-solid fa-chart-bar',
+                'icon' => 'fas fa-chart-bar',
                 'reports' => [
                     [
                         'name' => 'Shop Comparison',
@@ -239,7 +239,7 @@ class ReportController extends Controller
             'executive' => [
                 'name' => 'Executive Reports',
                 'permission' => 'reports.executive',
-                'icon' => 'fa-solid fa-briefcase',
+                'icon' => 'fas fa-briefcase',
                 'reports' => [
                     [
                         'name' => 'Executive Summary',

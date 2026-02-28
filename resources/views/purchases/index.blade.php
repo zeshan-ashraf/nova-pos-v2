@@ -25,7 +25,7 @@
                     <h4 class="mb-3">Purchases List</h4>
                 </div>
                 <div>
-                    <a href="{{ route('purchases.create') }}" class="btn btn-primary add-list"><i class="fa-solid fa-plus mr-3"></i>Create Purchase</a>
+                    <a href="{{ route('purchases.create') }}" class="btn btn-primary add-list"><i class="fas fa-plus mr-3"></i>Create Purchase</a>
                     <a href="{{ route('purchases.index') }}" class="btn btn-danger add-list"><i class="las la-trash mr-3"></i>Clear Search</a>
                 </div>
             </div>

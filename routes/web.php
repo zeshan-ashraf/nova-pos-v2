@@ -38,6 +38,7 @@ use App\Http\Controllers\Dashboard\ReturnReportController;
 use App\Http\Controllers\Dashboard\EmployeeReportController;
 use App\Http\Controllers\Dashboard\ComparativeReportController;
 use App\Http\Controllers\Dashboard\ExecutiveReportController;
+use App\Http\Controllers\Dashboard\SuperAdminDashboardController;
 use App\Http\Controllers\Dashboard\SystemResetController;
 
 /*
@@ -59,6 +60,7 @@ Route::get('/', function () {
 // DEFAULT DASHBOARD & PROFILE
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth'])->name('dashboard');
+    Route::get('/super-admin/dashboard', [SuperAdminDashboardController::class, 'index'])->name('super-admin.dashboard');
 
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
     Route::get('/profile/edit', [ProfileController::class, 'edit'])->name('profile.edit');

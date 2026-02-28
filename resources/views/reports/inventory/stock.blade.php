@@ -19,6 +19,8 @@
             <div class="card">
                 <div class="card-body">
                     <form action="{{ route('reports.inventory.stock') }}" method="GET">
+                        <input type="hidden" name="sort" value="{{ $sort ?? 'product_name' }}">
+                        <input type="hidden" name="order" value="{{ $order ?? 'asc' }}">
                         <div class="row align-items-end">
                             @if(auth()->user()->shop_id == null)
                             <div class="col-md-3">
@@ -104,6 +106,8 @@
                         <input type="hidden" name="shop_id" value="{{ $shopFilter['selected_shop_id'] ?? 'all' }}">
                         @endif
                         <input type="hidden" name="stock_status" value="{{ request('stock_status') }}">
+                        <input type="hidden" name="sort" value="{{ $sort ?? 'product_name' }}">
+                        <input type="hidden" name="order" value="{{ $order ?? 'asc' }}">
                         <select name="row" class="form-control form-control-sm d-inline-block" style="width: auto;" onchange="this.form.submit()">
                             <option value="10" {{ ($row ?? 50) == 10 ? 'selected' : '' }}>10</option>
                             <option value="25" {{ ($row ?? 50) == 25 ? 'selected' : '' }}>25</option>
@@ -118,11 +122,19 @@
                             <thead>
                                 <tr>
                                     <th>#</th>
-                                    <th>Product</th>
-                                    <th>Code</th>
-                                    <th>Category</th>
-                                    <th>Shop</th>
-                                    <th class="text-right">Qty</th>
+                                    @php
+                                        $currentSort = $sort ?? 'product_name';
+                                        $currentOrder = $order ?? 'asc';
+                                        $queryParams = request()->only(['shop_id', 'stock_status', 'row', 'sort', 'order']);
+                                        $sortUrl = function ($column) use ($queryParams, $currentSort, $currentOrder) {
+                                            $order = ($currentSort === $column && $currentOrder === 'asc') ? 'desc' : 'asc';
+                                            return route('reports.inventory.stock', array_merge($queryParams, ['sort' => $column, 'order' => $order]));
+                                        };
+                                    @endphp
+                                    <th><a href="{{ $sortUrl('product_name') }}" class="text-decoration-none" style="color: #32BDEA;">Product @if($currentSort === 'product_name')<i class="ri-arrow-{{ $currentOrder === 'asc' ? 'up' : 'down' }}-line"></i>@endif</a></th>
+                                    <th><a href="{{ $sortUrl('product_code') }}" class="text-decoration-none" style="color: #32BDEA;">Code @if($currentSort === 'product_code')<i class="ri-arrow-{{ $currentOrder === 'asc' ? 'up' : 'down' }}-line"></i>@endif</a></th>
+                                    <th><a href="{{ $sortUrl('category') }}" class="text-decoration-none" style="color: #32BDEA;">Category @if($currentSort === 'category')<i class="ri-arrow-{{ $currentOrder === 'asc' ? 'up' : 'down' }}-line"></i>@endif</a></th>
+                                    <th class="text-right"><a href="{{ $sortUrl('product_store') }}" class="text-decoration-none" style="color: #32BDEA;">Qty @if($currentSort === 'product_store')<i class="ri-arrow-{{ $currentOrder === 'asc' ? 'up' : 'down' }}-line"></i>@endif</a></th>
                                     <th class="text-right">Low threshold</th>
                                     <th>Status</th>
                                     <th class="text-right">Buying price</th>
@@ -137,17 +149,12 @@
                                     $isOut = $qty <= 0;
                                     $isLow = !$isOut && $threshold > 0 && $qty <= $threshold;
                                     $value = $qty * (float) ($product->buying_price ?? 0);
-                                    $shopName = 'N/A';
-                                    if ($product->shop) {
-                                        $shopName = $product->shop->parent ? $product->shop->parent->name . ' – ' . $product->shop->name : $product->shop->name;
-                                    }
                                 @endphp
                                 <tr>
                                     <td>{{ ($products->currentPage() - 1) * $products->perPage() + $loop->iteration }}</td>
                                     <td>{{ $product->product_name }}</td>
                                     <td>{{ $product->product_code ?? '–' }}</td>
-                                    <td>{{ $product->same_shop_category?->name ?? '–' }}</td>
-                                    <td>{{ $shopName }}</td>
+                                    <td>{{ $product->category?->name ?? '–' }}</td>
                                     <td class="text-right">{{ number_format($qty, 0) }}</td>
                                     <td class="text-right">{{ number_format($threshold, 0) }}</td>
                                     <td>
@@ -164,7 +171,7 @@
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="10" class="text-center">No products match the selected filters.</td>
+                                    <td colspan="9" class="text-center">No products match the selected filters.</td>
                                 </tr>
                                 @endforelse
                             </tbody>

@@ -14,7 +14,7 @@
                 <div class="card-body">
                     <div class="alert alert-light border d-flex align-items-center mb-4">
                         <div class="mr-3 d-flex align-items-center justify-content-center rounded-circle bg-primary text-white" style="width: 44px; height: 44px;">
-                            <i class="fa-solid fa-store"></i>
+                            <i class="fas fa-store"></i>
                         </div>
                         <div>
                             <div class="font-weight-bold mb-1">

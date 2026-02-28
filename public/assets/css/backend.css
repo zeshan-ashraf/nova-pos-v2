@@ -7219,7 +7219,7 @@ a.text-light-gray:hover, a.text-light-gray:focus {
     color: #FF7E41; }
 
 .sidebar-default .iq-sidebar-menu .iq-menu li a[aria-expanded="true"] {
-  color: #FF7E41;
+  color: #FF7E41 !important;
   text-decoration: none;
   transition: none; }
   .sidebar-default .iq-sidebar-menu .iq-menu li a[aria-expanded="true"] i.iq-arrow-left {
@@ -7247,14 +7247,14 @@ a.text-light-gray:hover, a.text-light-gray:focus {
   margin: 0; }
 
 .sidebar-default .iq-sidebar-menu .iq-menu > li.active > a {
-  color: #01041b;
+ /* color: #01041b; */
   text-decoration: none;
   background: #f4f5fa; }
   .sidebar-default .iq-sidebar-menu .iq-menu > li.active > a svg {
     color: #FF7E41; }
 
 .sidebar-default .iq-sidebar-menu .iq-menu li.active .iq-submenu li.active > a {
-  color: #01041b;
+  color: #FF7E41;
   border-radius: 0; }
   .sidebar-default .iq-sidebar-menu .iq-menu li.active .iq-submenu li.active > a svg {
     color: #FF7E41; }

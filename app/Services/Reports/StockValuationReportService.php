@@ -2,6 +2,7 @@
 
 namespace App\Services\Reports;
 
+use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -63,7 +64,7 @@ class StockValuationReportService
         $query->orderBy('products.product_name');
 
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
-        Product::eagerLoadSameShopCategory(collect($paginator->items()));
+        $this->eagerLoadCategory(collect($paginator->items()));
 
         $data = $this->formatRows($paginator->items());
 
@@ -131,7 +132,7 @@ class StockValuationReportService
             $stockSale = (float) ($row->stock_sale_value ?? 0);
             $profitPotential = (float) ($row->profit_potential ?? 0);
 
-            $categoryName = $row->same_shop_category?->name ?? null;
+            $categoryName = $row->category?->name ?? null;
 
             $rows[] = [
                 'product_id'        => (int) $row->id,
@@ -147,5 +148,27 @@ class StockValuationReportService
             ];
         }
         return $rows;
+    }
+
+    /**
+     * Eager load category by category_id (no shop scope) so category column displays.
+     */
+    private function eagerLoadCategory(Collection $products): void
+    {
+        if ($products->isEmpty()) {
+            return;
+        }
+        $categoryIds = $products->pluck('category_id')->filter()->unique()->values()->all();
+        if (empty($categoryIds)) {
+            $products->each->setRelation('category', null);
+            return;
+        }
+        $categories = Category::withoutGlobalScope('shop')
+            ->whereIn('id', $categoryIds)
+            ->get()
+            ->keyBy('id');
+        foreach ($products as $product) {
+            $product->setRelation('category', $categories->get($product->category_id));
+        }
     }
 }

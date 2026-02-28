@@ -17,7 +17,7 @@
                     <h4 class="mb-3">User List</h4>
                 </div>
                 <div>
-                <a href="{{ route('users.create') }}" class="btn btn-primary add-list"><i class="fa-solid fa-plus mr-3"></i>Create User</a>
+                <a href="{{ route('users.create') }}" class="btn btn-primary add-list"><i class="fas fa-plus mr-3"></i>Create User</a>
                 <a href="{{ route('users.index') }}" class="btn btn-danger add-list"><i class="las la-trash mr-3"></i>Clear Search</a>
                 </div>
             </div>

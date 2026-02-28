@@ -38,7 +38,7 @@ class PurchaseReportController extends Controller
         $totalVat = (clone $purchasesQuery)->sum('vat');
         $totalDiscount = (clone $purchasesQuery)->sum('invoice_discount');
 
-        $purchases = $purchasesQuery->orderByDesc('id')->paginate($row)->appends($request->query());
+        $purchases = $purchasesQuery->orderBy('purchase_date')->orderBy('id')->paginate($row)->appends($request->query());
 
         return view('reports.purchases.summary', compact(
             'dateRange', 'shopFilter', 'totalPurchases', 'totalAmount', 

@@ -203,9 +203,6 @@
                                     <a class="btn btn-sm btn-success mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Print" href="{{ route('order.invoiceDownload', $order->id) }}">
                                         Print
                                     </a>
-                                    <a class="btn btn-sm btn-secondary mr-2" data-toggle="tooltip" data-placement="top" title="View Payment Log" data-original-title="View Stock Log" href="{{ route('order.paymentLog', $order->id) }}">
-                                        <i class="ri-archive-line mr-0"></i>
-                                    </a>
                                     <button type="button" class="btn btn-sm btn-danger mr-2 border-none" data-toggle="tooltip" data-placement="top" title="" data-original-title="Delete" onclick="showDeleteModal({{ $order->id }})">
                                         <i class="ri-delete-bin-line mr-0"></i>
                                     </button>
