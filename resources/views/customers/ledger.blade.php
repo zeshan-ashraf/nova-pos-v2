@@ -16,7 +16,6 @@
     #invoiceDetailModalBody .product-table .product-code-col { width: 10%; }
     #invoiceDetailModalBody .product-table .quantity-col { width: 10%; }
     #invoiceDetailModalBody .product-table .unit-price-col { width: 10%; }
-    #invoiceDetailModalBody .product-table .discount-col { width: 10%; }
     #invoiceDetailModalBody .product-table .total-col { width: 12%; }
     #invoiceDetailModalBody .invoice-summary { margin-top: 20px; padding-top: 15px; border-top: 2px solid #e9ecef; }
     #invoiceDetailModalBody .summary-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 15px; }

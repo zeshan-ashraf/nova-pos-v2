@@ -214,7 +214,6 @@
                                         <th>Available to Return</th>
                                         <th>Return Qty</th>
                                         <th>Unit Price</th>
-                                        <th>Item Discount</th>
                                         <th>Total</th>
                                     </tr>
                                 </thead>
@@ -354,7 +353,7 @@
                             const availableQty = detail.available_to_return;
                             const isDisabled = availableQty <= 0;
                             
-                            tbody += `<tr data-order-detail-id="${detail.id}">
+                            tbody += `<tr data-order-detail-id="${detail.id}" data-original-qty="${detail.quantity}" data-original-item-discount="${detail.item_discount || 0}">
                                 <td>
                                     <input type="checkbox" class="return-checkbox" data-index="${index}" ${isDisabled ? 'disabled' : ''}>
                                     <input type="hidden" name="products[${index}][order_detail_id]" value="${detail.id}">
@@ -386,21 +385,14 @@
                                         style="width: 100px;">
                                 </td>
                                 <td>
-                                    <input type="number" step="0.01" class="form-control item-discount" 
-                                        name="products[${index}][item_discount]" 
-                                        data-index="${index}"
-                                        value="${detail.item_discount || 0}" 
-                                        min="0"
-                                        style="width: 100px;">
-                                </td>
-                                <td>
                                     <span class="total-display" data-index="${index}">0.00</span>
+                                    <input type="hidden" class="item-discount-value" name="products[${index}][item_discount]" value="0">
                                     <input type="hidden" class="total-value" name="products[${index}][total]" value="0">
                                 </td>
                             </tr>`;
                         });
                     } else {
-                        tbody = '<tr><td colspan="10" class="text-center">No items found in this order</td></tr>';
+                        tbody = '<tr><td colspan="9" class="text-center">No items found in this order</td></tr>';
                     }
                     $('#returnTableBody').html(tbody);
                     $('#orderDetailsTable').show();
@@ -448,8 +440,8 @@
             calculateRowTotal(index);
         });
 
-        // Handle unit price and discount change
-        $(document).on('input', '.unit-price, .item-discount', function() {
+        // Handle unit price change (discount per line is hidden but still applied via hidden input)
+        $(document).on('input', '.unit-price', function() {
             const index = $(this).data('index');
             calculateRowTotal(index);
         });
@@ -459,13 +451,16 @@
             calculateReturnTotal();
         });
 
-        // Calculate row total
+        // Calculate row total (item_discount proportional to return qty, from hidden data)
         function calculateRowTotal(index) {
             const $row = $(`tr[data-order-detail-id]`).eq(index);
             const unitPrice = parseFloat($row.find('.unit-price').val()) || 0;
             const quantity = parseFloat($row.find('.return-quantity').val()) || 0;
-            const itemDiscount = parseFloat($row.find('.item-discount').val()) || 0;
+            const originalQty = parseFloat($row.data('original-qty')) || 1;
+            const originalItemDiscount = parseFloat($row.data('original-item-discount')) || 0;
+            const itemDiscount = originalQty > 0 ? (originalItemDiscount / originalQty) * quantity : 0;
             
+            $row.find('.item-discount-value').val(itemDiscount.toFixed(2));
             const total = Math.max(0, (unitPrice * quantity) - itemDiscount);
             
             $row.find('.total-display').text(total.toFixed(2));

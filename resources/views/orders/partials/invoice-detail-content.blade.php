@@ -56,7 +56,7 @@
             @endphp
             <div class="row mb-2">
                 <div class="col-6"><div class="balance-info-item"><strong>Credit Limit:</strong> <span class="text-primary">{{ number_format($creditLimit, 2) }}</span></div></div>
-                <div class="col-6"><div class="balance-info-item"><strong>Credit Amount:</strong> <span class="text-danger">{{ number_format($creditAmount, 2) }}</span></div></div>
+                <div class="col-6"><div class="balance-info-item"><strong>Previous Balance:</strong> <span class="text-danger">{{ number_format($creditAmount, 2) }}</span></div></div>
             </div>
             <div class="row mb-2">
                 <div class="col-6"><div class="balance-info-item"><strong>Available Credit:</strong> <span class="text-success">{{ number_format($availableCredit, 2) }}</span></div></div>
@@ -80,7 +80,6 @@
                     <th class="product-code-col">Code</th>
                     <th class="quantity-col">Quantity</th>
                     <th class="unit-price-col">Unit Price</th>
-                    <th class="discount-col">Discount</th>
                     <th class="total-col">Total</th>
                 </tr>
             </thead>
@@ -91,7 +90,6 @@
                     <td>{{ $item->product ? ($item->product->product_code ?? '-') : '-' }}</td>
                     <td>{{ $item->quantity }}</td>
                     <td>{{ number_format($item->unitcost, 2) }}</td>
-                    <td>{{ number_format($item->item_discount ?? 0, 2) }}</td>
                     <td>{{ number_format($item->total, 2) }}</td>
                 </tr>
                 @endforeach

@@ -1310,11 +1310,11 @@ class OrderController extends Controller
 
         $pay1 = (float) ($validatedData['pay_1'] ?? 0);
         $pay2 = (float) ($validatedData['pay_2'] ?? 0);
-        $payAmount = $pay1 + $pay2;
         $paymentMethod1 = $validatedData['payment_method_1'];
         $paymentMethod2 = $validatedData['payment_method_2'] ?? null;
         $shopBankId1 = !empty($validatedData['shop_bank_id_1']) ? (int) $validatedData['shop_bank_id_1'] : null;
         $shopBankId2 = !empty($validatedData['shop_bank_id_2']) ? (int) $validatedData['shop_bank_id_2'] : null;
+        $payAmount = $pay1 + $pay2;
 
         // Route logic: Customer flow OR Shop transfer flow
         if (isset($validatedData['customer_id']) && $validatedData['customer_id']) {
@@ -1354,13 +1354,27 @@ class OrderController extends Controller
             $vat = $validatedData['vat'] ?? 0;
             $invoiceDiscount = $validatedData['invoice_discount'] ?? 0;
             $total = max(0, $subtotal + $vat - $invoiceDiscount);
-            $pay = $payAmount;
+            // Pay = only actual cash/bank/cheque received; credit amounts go to due
+            $payPaid = 0;
+            if (in_array($paymentMethod1, ['cash', 'bank', 'cheque'])) {
+                $payPaid += $pay1;
+            }
+            if ($paymentMethod2 && in_array($paymentMethod2, ['cash', 'bank', 'cheque'])) {
+                $payPaid += $pay2;
+            }
+            $pay = $payPaid;
             $due = max(0, $total - $pay);
+
+            // Walk-in customer: must be fully paid (no partial)
+            if ($customer->is_walkin && abs($pay - $total) > 0.01) {
+                return back()->withErrors(['pay_1' => 'Walk-in sale must be fully paid.'])
+                    ->withInput();
+            }
 
             // When both payments are cash/bank/cheque (no credit), sum must equal invoice total
             $method1NonCredit = in_array($paymentMethod1, ['cash', 'bank', 'cheque']);
             $method2NonCredit = $paymentMethod2 && in_array($paymentMethod2, ['cash', 'bank', 'cheque']);
-            if ($method1NonCredit && $method2NonCredit && $pay2 > 0 && abs($pay - $total) > 0.01) {
+            if ($method1NonCredit && $method2NonCredit && $pay2 > 0 && abs($payAmount - $total) > 0.01) {
                 return back()->withErrors(['pay_1' => 'When paying by Cash, Bank or Cheque only, the total of both amounts must equal the invoice total.'])
                     ->withInput();
             }
@@ -1369,14 +1383,8 @@ class OrderController extends Controller
                     ->withInput();
             }
 
-            // Walk-in customer: must be fully paid (no partial)
-            if ($customer->is_walkin && abs($pay - $total) > 0.01) {
-                return back()->withErrors(['pay_1' => 'Walk-in sale must be fully paid.'])
-                    ->withInput();
-            }
-
-            // Sales invoices are always complete (no pending)
             $orderStatus = 'complete';
+            $paymentStatus = $due > 0 ? ($pay > 0 ? 'partial' : 'credit') : $paymentMethod1;
 
             $orderData = [
                 'customer_id' => $validatedData['customer_id'],
@@ -1389,7 +1397,7 @@ class OrderController extends Controller
                 'vat' => $vat,
                 'invoice_no' => $invoice_no,
                 'total' => $total,
-                'payment_status' => $paymentMethod1,
+                'payment_status' => $paymentStatus,
                 'pay' => $pay,
                 'due' => $due,
                 'comment' => $request->input('comment'),
@@ -1574,12 +1582,19 @@ class OrderController extends Controller
             $vat = $validatedData['vat'] ?? 0;
             $invoiceDiscount = $validatedData['invoice_discount'] ?? 0;
             $total = max(0, $subtotal + $vat - $invoiceDiscount);
-            $pay = $payAmount;
+            $payPaid = 0;
+            if (in_array($paymentMethod1, ['cash', 'bank', 'cheque'])) {
+                $payPaid += $pay1;
+            }
+            if ($paymentMethod2 && in_array($paymentMethod2, ['cash', 'bank', 'cheque'])) {
+                $payPaid += $pay2;
+            }
+            $pay = $payPaid;
             $due = max(0, $total - $pay);
 
             $method1NonCredit = in_array($paymentMethod1, ['cash', 'bank', 'cheque']);
             $method2NonCredit = $paymentMethod2 && in_array($paymentMethod2, ['cash', 'bank', 'cheque']);
-            if ($method1NonCredit && $method2NonCredit && $pay2 > 0 && abs($pay - $total) > 0.01) {
+            if ($method1NonCredit && $method2NonCredit && $pay2 > 0 && abs($payAmount - $total) > 0.01) {
                 return back()->withErrors(['pay_1' => 'When paying by Cash, Bank or Cheque only, the total of both amounts must equal the invoice total.'])
                     ->withInput();
             }
@@ -1589,6 +1604,7 @@ class OrderController extends Controller
             }
 
             $orderStatus = 'complete';
+            $paymentStatus = $due > 0 ? ($pay > 0 ? 'partial' : 'credit') : $paymentMethod1;
 
             $order_id = null;
             $purchase_id = null;
@@ -1598,7 +1614,7 @@ class OrderController extends Controller
                     &$order_id, &$purchase_id, $validatedData, $motherShop, $childShop, $supplier,
                     $systemCustomer, $invoice_no, $subtotal, $totalProducts, $vat, $invoiceDiscount,
                     $total, $pay, $due, $authUser, $request, $creditService, $supplierCreditService, $orderStatus,
-                    $paymentMethod1, $paymentMethod2, $pay1, $pay2, $shopBankId1, $shopBankId2
+                    $paymentStatus, $paymentMethod1, $paymentMethod2, $pay1, $pay2, $shopBankId1, $shopBankId2
                 ) {
                     $orderData = [
                         'customer_id' => $systemCustomer->id,
@@ -1611,7 +1627,7 @@ class OrderController extends Controller
                         'vat' => $vat,
                         'invoice_no' => $invoice_no,
                         'total' => $total,
-                        'payment_status' => $paymentMethod1,
+                        'payment_status' => $paymentStatus,
                         'pay' => $pay,
                         'due' => $due,
                         'comment' => $request->input('comment'),

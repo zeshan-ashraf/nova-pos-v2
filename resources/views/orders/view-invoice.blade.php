@@ -56,9 +56,6 @@
         .product-table .quantity-col {
             width: 10%;
         }
-        .product-table .discount-col {
-            width: 10%;
-        }
         .product-table .total-col {
             width: 12%;
         }

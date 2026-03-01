@@ -67,9 +67,6 @@
         .product-table .quantity-col {
             width: 10%;
         }
-        .product-table .discount-col {
-            width: 10%;
-        }
         .product-table .total-col {
             width: 12%;
         }
@@ -357,7 +354,7 @@
                                                     </div>
                                                     <div class="col-6">
                                                         <div class="balance-info-item">
-                                                            <strong>Credit Amount:</strong> <span id="customerCreditAmount" class="text-danger">-</span>
+                                                            <strong>Previous Balance:</strong> <span id="customerCreditAmount" class="text-danger">-</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -410,7 +407,6 @@
                                         <th class="quantity-col">Quantity</th>
                                         <th class="stock-col">Stock</th>
                                         <th class="unit-price-col">Unit Price</th>
-                                        <th class="discount-col">Discount</th>
                                         <th class="total-col">Total</th>
                                         <th class="action-col">Action</th>
                                     </tr>
@@ -439,11 +435,8 @@
                                             <input type="number" step="0.01" class="form-control unit-price" name="products[0][unit_price]" value="0" data-row="0" min="0">
                                         </td>
                                         <td>
-                                            <span class="discount-display" data-row="0">0.00</span>
-                                            <input type="hidden" class="item-discount-value" name="products[0][item_discount]" value="0">
-                                        </td>
-                                        <td>
                                             <span class="total-display" data-row="0">0.00</span>
+                                            <input type="hidden" class="item-discount-value" name="products[0][item_discount]" value="0">
                                             <input type="hidden" class="total-value" name="products[0][total]" value="0">
                                         </td>
                                         <td>
@@ -1015,7 +1008,6 @@
                     $row.find('.item-discount-value').val(p.item_discount || 0);
                     $row.find('.total-value').val(p.total || 0);
                     $row.find('.product-code-display').text(code);
-                    $row.find('.discount-display').text(parseFloat(p.item_discount || 0).toFixed(2));
                     $row.find('.total-display').text(parseFloat(p.total || 0).toFixed(2));
 var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
                 $row.find('.stock-display').text(stock);
@@ -1144,11 +1136,9 @@ var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
         
         const total = unitPrice * quantity;
         const discount = (originalPrice - unitPrice) * quantity;
-        const discountDisplay = discount > 0 ? discount.toFixed(2) : '0.00';
         
         $row.find('.total-display').text(total.toFixed(2));
         $row.find('.total-value').val(total.toFixed(2));
-        $row.find('.discount-display').text(discountDisplay);
         $row.find('.item-discount-value').val(discount > 0 ? discount.toFixed(2) : '0.00');
         
         calculateInvoiceTotal();
@@ -1259,7 +1249,7 @@ var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
         calculateDue();
     });
 
-    // Payment method 2 change: show/hide bank dropdown for row 2
+    // Payment method 2 change: show/hide bank dropdown; when Credit, auto-fill pay_2 with due amount
     $(document).on('change', '#payment_method_2', function() {
         clearPaymentError();
         const method = $(this).val();
@@ -1269,6 +1259,12 @@ var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
         } else {
             $('#bank_select_row_2').hide();
             $('#shop_bank_id_2').val('').prop('required', false);
+        }
+        if (method === 'credit') {
+            const invoiceTotal = parseFloat($('#invoice_total_hidden').val()) || 0;
+            const pay1 = parseFloat($('#pay_1').val()) || 0;
+            const due = Math.max(0, invoiceTotal - pay1);
+            $('#pay_2').val(due.toFixed(2));
         }
         calculateDue();
     });
@@ -1476,11 +1472,8 @@ var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
                     <input type="number" step="0.01" class="form-control unit-price" name="products[${rowCount}][unit_price]" value="0" data-row="${rowCount}" min="0">
                 </td>
                 <td>
-                    <span class="discount-display" data-row="${rowCount}">0.00</span>
-                    <input type="hidden" class="item-discount-value" name="products[${rowCount}][item_discount]" value="0">
-                </td>
-                <td>
                     <span class="total-display" data-row="${rowCount}">0.00</span>
+                    <input type="hidden" class="item-discount-value" name="products[${rowCount}][item_discount]" value="0">
                     <input type="hidden" class="total-value" name="products[${rowCount}][total]" value="0">
                 </td>
                 <td>

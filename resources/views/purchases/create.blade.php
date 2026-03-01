@@ -64,9 +64,6 @@
         .product-table .quantity-col {
             width: 10%;
         }
-        .product-table .discount-col {
-            width: 10%;
-        }
         .product-table .total-col {
             width: 12%;
         }
@@ -225,7 +222,6 @@
                                         <th class="unit-price-col">Unit Price</th>
                                         <th class="stock-col">Stock</th>
                                         <th class="quantity-col">Quantity</th>
-                                        <th class="discount-col">Discount</th>
                                         <th class="total-col">Total</th>
                                         <th class="action-col">Action</th>
                                     </tr>
@@ -249,11 +245,8 @@
                                             <input type="number" class="form-control quantity" name="products[0][quantity]" value="1" data-row="0" min="1">
                                         </td>
                                         <td>
-                                            <span class="discount-display" data-row="0">0.00</span>
-                                            <input type="hidden" class="item-discount-value" name="products[0][item_discount]" value="0">
-                                        </td>
-                                        <td>
                                             <span class="total-display" data-row="0">0.00</span>
+                                            <input type="hidden" class="item-discount-value" name="products[0][item_discount]" value="0">
                                             <input type="hidden" class="total-value" name="products[0][total]" value="0">
                                         </td>
                                         <td>
@@ -593,11 +586,9 @@
         
         const total = unitPrice * quantity;
         const discount = (originalPrice - unitPrice) * quantity;
-        const discountDisplay = discount > 0 ? discount.toFixed(2) : '0.00';
         
         $row.find('.total-display').text(total.toFixed(2));
         $row.find('.total-value').val(total.toFixed(2));
-        $row.find('.discount-display').text(discountDisplay);
         $row.find('.item-discount-value').val(discount > 0 ? discount.toFixed(2) : '0.00');
         
         calculatePurchaseTotal();
@@ -740,11 +731,8 @@
                     <input type="number" class="form-control quantity" name="products[${rowCount}][quantity]" value="1" data-row="${rowCount}" min="1">
                 </td>
                 <td>
-                    <span class="discount-display" data-row="${rowCount}">0.00</span>
-                    <input type="hidden" class="item-discount-value" name="products[${rowCount}][item_discount]" value="0">
-                </td>
-                <td>
                     <span class="total-display" data-row="${rowCount}">0.00</span>
+                    <input type="hidden" class="item-discount-value" name="products[${rowCount}][item_discount]" value="0">
                     <input type="hidden" class="total-value" name="products[${rowCount}][total]" value="0">
                 </td>
                 <td>

@@ -44,7 +44,7 @@
                             <input type="text" class="form-control bg-white" value="{{ number_format($saleReturn->vat ?? 0, 2) }}" readonly>
                         </div>
                         <div class="form-group col-md-6">
-                            <label>Discount</label>
+                            <label>Discount on Return</label>
                             <input type="text" class="form-control bg-white" value="{{ number_format($saleReturn->invoice_discount ?? 0, 2) }}" readonly>
                         </div>
                         <div class="form-group col-md-6">
@@ -79,7 +79,6 @@
                                     <th>Product Code</th>
                                     <th>Quantity</th>
                                     <th>Unit Price</th>
-                                    <th>Item Discount</th>
                                     <th>Total</th>
                                 </tr>
                             </thead>
@@ -91,7 +90,6 @@
                                     <td>{{ $detail->product->product_code ?? 'N/A' }}</td>
                                     <td>{{ $detail->quantity }}</td>
                                     <td>{{ number_format($detail->unitcost, 2) }}</td>
-                                    <td>{{ number_format($detail->item_discount ?? 0, 2) }}</td>
                                     <td>{{ number_format($detail->total, 2) }}</td>
                                 </tr>
                                 @endforeach
