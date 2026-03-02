@@ -53,43 +53,52 @@
             <h4 class="mb-1">Customer Ledger</h4>
             <p class="mb-0 text-muted">{{ $customer->shopname ?? $customer->name }} ({{ $customer->phone ?? '—' }})</p>
         </div>
-        <div class="col-lg-4 text-right">
+        <div class="col-lg-4 text-right d-print-none">
             <a href="{{ route('customer-payments.create', ['customer_id' => $customer->id]) }}" class="btn btn-success btn-sm mr-2">Record Payment</a>
             <a href="{{ route('customers.show', $customer->id) }}" class="btn btn-secondary btn-sm">Back to Profile</a>
         </div>
     </div>
 
     <!-- Date Filter -->
-    <div class="border rounded p-3 bg-white mb-3">
-        <form action="{{ route('customers.ledger', $customer->id) }}" method="GET" id="dateFilterForm">
-            <div class="row align-items-end">
-                <div class="col-md-3">
-                    <label for="date_filter" class="form-label">Date Filter</label>
-                    <select class="form-control form-control-sm" name="date_filter" id="date_filter" onchange="toggleCustomDates()">
-                        <option value="all" {{ ($date_filter ?? '') == 'all' ? 'selected' : '' }}>All</option>
-                        <option value="today" {{ ($date_filter ?? 'today') == 'today' ? 'selected' : '' }}>Today</option>
-                        <option value="yesterday" {{ ($date_filter ?? '') == 'yesterday' ? 'selected' : '' }}>Yesterday</option>
-                        <option value="last_7_days" {{ ($date_filter ?? '') == 'last_7_days' ? 'selected' : '' }}>Last 7 Days</option>
-                        <option value="current_month" {{ ($date_filter ?? '') == 'current_month' ? 'selected' : '' }}>Current Month</option>
-                        <option value="last_30_days" {{ ($date_filter ?? '') == 'last_30_days' ? 'selected' : '' }}>Last 30 Days</option>
-                        <option value="custom" {{ ($date_filter ?? '') == 'custom' ? 'selected' : '' }}>Custom Range</option>
-                    </select>
-                </div>
-                <div class="col-md-3" id="start_date_group" style="display: {{ ($date_filter ?? '') == 'custom' ? 'block' : 'none' }};">
-                    <label for="start_date" class="form-label">From Date</label>
-                    <input type="date" class="form-control form-control-sm" name="start_date" id="start_date" value="{{ $start_date ?? '' }}">
-                </div>
-                <div class="col-md-3" id="end_date_group" style="display: {{ ($date_filter ?? '') == 'custom' ? 'block' : 'none' }};">
-                    <label for="end_date" class="form-label">To Date</label>
-                    <input type="date" class="form-control form-control-sm" name="end_date" id="end_date" value="{{ $end_date ?? '' }}">
-                </div>
-                <div class="col-md-3">
-                    <button type="submit" class="btn btn-primary btn-sm">Filter</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm ml-2" onclick="printLedgerFullWidth()">Print</button>
-                    <a href="{{ route('customers.ledgerPdf', ['customer' => $customer->id, 'date_filter' => $date_filter ?? '', 'start_date' => $start_date ?? '', 'end_date' => $end_date ?? '']) }}" class="btn btn-outline-danger btn-sm ml-2" target="_blank">PDF</a>
-                </div>
+    <div class="row d-print-none">
+    <div class="col-lg-12 mb-3">
+        <div class="card report-filter-card border-primary shadow-sm">
+            <div class="card-header border-0 py-2">
+                <h6 class="mb-0 text-primary"><i class="ri-filter-3-line mr-1"></i> Filters</h6>
             </div>
-        </form>
+            <div class="card-body pt-0">
+                <form action="{{ route('customers.ledger', $customer->id) }}" method="GET" id="dateFilterForm">
+                    <div class="row align-items-end">
+                        <div class="col-md-3">
+                            <label for="date_filter" class="form-label">Date Filter</label>
+                            <select class="form-control" name="date_filter" id="date_filter" onchange="toggleCustomDates()">
+                                <option value="all" {{ ($date_filter ?? '') == 'all' ? 'selected' : '' }}>All</option>
+                                <option value="today" {{ ($date_filter ?? 'today') == 'today' ? 'selected' : '' }}>Today</option>
+                                <option value="yesterday" {{ ($date_filter ?? '') == 'yesterday' ? 'selected' : '' }}>Yesterday</option>
+                                <option value="last_7_days" {{ ($date_filter ?? '') == 'last_7_days' ? 'selected' : '' }}>Last 7 Days</option>
+                                <option value="current_month" {{ ($date_filter ?? '') == 'current_month' ? 'selected' : '' }}>Current Month</option>
+                                <option value="last_30_days" {{ ($date_filter ?? '') == 'last_30_days' ? 'selected' : '' }}>Last 30 Days</option>
+                                <option value="custom" {{ ($date_filter ?? '') == 'custom' ? 'selected' : '' }}>Custom Range</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3" id="start_date_group" style="display: {{ ($date_filter ?? '') == 'custom' ? 'block' : 'none' }};">
+                            <label for="start_date" class="form-label">From Date</label>
+                            <input type="date" class="form-control" name="start_date" id="start_date" value="{{ $start_date ?? '' }}">
+                        </div>
+                        <div class="col-md-3" id="end_date_group" style="display: {{ ($date_filter ?? '') == 'custom' ? 'block' : 'none' }};">
+                            <label for="end_date" class="form-label">To Date</label>
+                            <input type="date" class="form-control" name="end_date" id="end_date" value="{{ $end_date ?? '' }}">
+                        </div>
+                        <div class="col-md-3">
+                            <button type="submit" class="btn btn-primary"><i class="ri-search-line mr-1"></i> Filter</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm ml-2" onclick="printLedgerFullWidth()"><i class="ri-printer-line mr-1"></i> Print</button>
+                            <a href="{{ route('customers.ledgerPdf', ['customer' => $customer->id, 'date_filter' => $date_filter ?? '', 'start_date' => $start_date ?? '', 'end_date' => $end_date ?? '']) }}" class="btn btn-outline-danger btn-sm ml-2" target="_blank"><i class="ri-file-pdf-line mr-1"></i> PDF</a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
     </div>
 
     <!-- Printable content (summary + table) for popup -->
@@ -107,40 +116,60 @@
     @endphp
     <div id="ledgerPrintContent">
     <div class="row mb-3 ledger-summary-row">
-        <div class="col-md-3">
-            <div class="card border shadow-none">
-                <div class="card-body py-3">
-                    <div class="text-muted small">Opening Balance</div>
-                    <div class="text-right font-weight-bold mt-1 {{ $showAdvance($opening_balance ?? 0) ? 'text-danger' : '' }}" style="font-size: 1.1rem;">
-                        {{ $fmtAmt($opening_balance ?? 0) }}
-                        @if($showAdvance($opening_balance ?? 0)) <span class="small">(Advance)</span> @endif
+        <div class="col-md-3 mb-3 mb-md-0">
+            <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="icon iq-icon-box-2 bg-secondary-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
+                        <i class="ri-wallet-line text-secondary" style="font-size: 1.75rem;"></i>
+                    </div>
+                    <div class="flex-grow-1 min-w-0">
+                        <p class="text-muted mb-0 small font-weight-500">Opening Balance</p>
+                        <h4 class="mb-0 font-weight-bold {{ $showAdvance($opening_balance ?? 0) ? 'text-danger' : 'text-dark' }}">
+                            {{ $fmtAmt($opening_balance ?? 0) }}
+                            @if($showAdvance($opening_balance ?? 0)) <span class="small">(Advance)</span> @endif
+                        </h4>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card border shadow-none">
-                <div class="card-body py-3">
-                    <div class="text-muted small">Total Debits</div>
-                    <div class="text-right">{{ $fmtAmt($total_debits ?? 0) }}</div>
+        <div class="col-md-3 mb-3 mb-md-0">
+            <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="icon iq-icon-box-2 bg-danger-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
+                        <i class="ri-arrow-up-circle-line text-danger" style="font-size: 1.75rem;"></i>
+                    </div>
+                    <div class="flex-grow-1 min-w-0">
+                        <p class="text-muted mb-0 small font-weight-500">Total Debits</p>
+                        <h4 class="mb-0 font-weight-bold text-dark">{{ $fmtAmt($total_debits ?? 0) }}</h4>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card border shadow-none">
-                <div class="card-body py-3">
-                    <div class="text-muted small">Total Credits</div>
-                    <div class="text-right">{{ $fmtAmt($total_credits ?? 0) }}</div>
+        <div class="col-md-3 mb-3 mb-md-0">
+            <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="icon iq-icon-box-2 bg-success-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
+                        <i class="ri-arrow-down-circle-line text-success" style="font-size: 1.75rem;"></i>
+                    </div>
+                    <div class="flex-grow-1 min-w-0">
+                        <p class="text-muted mb-0 small font-weight-500">Total Credits</p>
+                        <h4 class="mb-0 font-weight-bold text-dark">{{ $fmtAmt($total_credits ?? 0) }}</h4>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card border shadow-none">
-                <div class="card-body py-3">
-                    <div class="text-muted small">Closing Balance</div>
-                    <div class="text-right font-weight-bold {{ $showAdvance($closing_balance ?? 0) ? 'text-danger' : '' }}">
-                        {{ $fmtAmt($closing_balance ?? 0) }}
-                        @if($showAdvance($closing_balance ?? 0)) <span class="small">(Advance)</span> @endif
+        <div class="col-md-3 mb-3 mb-md-0">
+            <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="icon iq-icon-box-2 bg-primary-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
+                        <i class="ri-bank-card-line text-primary" style="font-size: 1.75rem;"></i>
+                    </div>
+                    <div class="flex-grow-1 min-w-0">
+                        <p class="text-muted mb-0 small font-weight-500">Closing Balance</p>
+                        <h4 class="mb-0 font-weight-bold {{ $showAdvance($closing_balance ?? 0) ? 'text-danger' : 'text-dark' }}">
+                            {{ $fmtAmt($closing_balance ?? 0) }}
+                            @if($showAdvance($closing_balance ?? 0)) <span class="small">(Advance)</span> @endif
+                        </h4>
                     </div>
                 </div>
             </div>
@@ -454,13 +483,25 @@ function closeModal(modalEl) {
 /* Ledger table full width */
 #ledgerTable { width: 100%; }
 @media print {
-    .btn, #dateFilterForm, .border.rounded.p-3 { display: none !important; }
+    .btn, #dateFilterForm, .report-filter-card, .d-print-none { display: none !important; }
     /* Centered heading and customer info (show only in print) */
     .ledger-print-header { display: block !important; margin-bottom: 1rem !important; }
     .ledger-screen-header { display: none !important; }
     /* Keep 4 summary boxes in one row */
     .ledger-summary-row { display: flex !important; flex-wrap: nowrap !important; }
     .ledger-summary-row > [class*="col-"] { flex: 0 0 25% !important; max-width: 25% !important; }
+    /* KPI cards: force visible borders and backgrounds in print */
+    .ledger-summary-row .sales-report-kpi, .ledger-summary-row .sales-report-kpi.card {
+        border: 1px solid #dee2e6 !important;
+        box-shadow: none !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    .ledger-summary-row .sales-report-kpi .card-body,
+    .ledger-summary-row .sales-report-kpi .iq-icon-box-2 {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
     /* Full width for print - entire page content full-bleed */
     html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
     body .wrapper { width: 100vw !important; max-width: none !important; padding: 0 !important; margin: 0 !important; }
