@@ -34,6 +34,10 @@ class AccountTransaction extends Model
     public const SOURCE_EXPENSE = 'expense';
     public const SOURCE_TRANSFER = 'transfer';
     public const SOURCE_ADJUSTMENT = 'adjustment';
+    /** Customer opening balance (one active row per customer). */
+    public const SOURCE_CUSTOMER_OPENING = 'customer_opening';
+    /** Supplier opening balance (one active row per supplier). */
+    public const SOURCE_SUPPLIER_OPENING = 'supplier_opening';
 
     protected $fillable = [
         'shop_id',

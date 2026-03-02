@@ -114,6 +114,25 @@
                                 </div>
                                 @enderror
                             </div>
+                            <div class="form-group col-md-6">
+                                <label for="opening_balance">Opening Balance</label>
+                                <input type="number" step="0.01" class="form-control @error('opening_balance') is-invalid @enderror" id="opening_balance" name="opening_balance" value="{{ old('opening_balance', 0) }}" placeholder="0 = none; positive = customer owes; negative = advance">
+                                @error('opening_balance')
+                                <div class="invalid-feedback">
+                                    {{ $message }}
+                                </div>
+                                @enderror
+                                <small class="text-muted">Positive = customer owes you. Negative = advance (customer credit).</small>
+                            </div>
+                            <div class="form-group col-md-6">
+                                <label for="opening_balance_date">Opening Balance Date</label>
+                                <input type="datetime-local" class="form-control @error('opening_balance_date') is-invalid @enderror" id="opening_balance_date" name="opening_balance_date" value="{{ old('opening_balance_date') }}">
+                                @error('opening_balance_date')
+                                <div class="invalid-feedback">
+                                    {{ $message }}
+                                </div>
+                                @enderror
+                            </div>
                             {{-- Bank Name field removed from UI - may be needed in future --}}
                             {{-- <div class="form-group col-md-6">
                                 <label for="bank_name">Bank Name</label>

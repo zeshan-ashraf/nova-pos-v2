@@ -29,6 +29,8 @@ class Customer extends Model
         'credit_limit',
         'credit_amount',
         'credit_days',
+        'opening_balance',
+        'opening_balance_date',
         'is_system',
         'is_walkin',
     ];
@@ -47,6 +49,8 @@ class Customer extends Model
     protected $casts = [
         'is_system' => 'boolean',
         'is_walkin' => 'boolean',
+        'opening_balance' => 'decimal:2',
+        'opening_balance_date' => 'datetime',
     ];
 
     public function scopeFilter($query, array $filters)

@@ -199,15 +199,48 @@ class FinancialReportController extends Controller
         // 2) Gross Profit = Total Sales - COGS
         $grossProfit = $totalSales - $cogs;
 
-        // 3) Total Operating Expenses (account_transactions)
+        // 3) Operating Expenses from account_transactions: grouped by expense category, with individual lines
         $expensesQuery = AccountTransaction::query()
-            ->where('source_type', AccountTransaction::SOURCE_EXPENSE)
-            ->where('direction', AccountTransaction::DIRECTION_DEBIT);
-        $this->applyShopFilter($expensesQuery, $shopFilter['shop_ids']);
-        if (($dateRange['date_filter'] ?? '') !== 'all') {
-            $expensesQuery->whereBetween('transaction_date', [$start, $end]);
+            ->leftJoin('activities', function ($join) {
+                $join->on('account_transactions.source_id', '=', 'activities.id')
+                    ->whereNull('activities.deleted_at');
+            })
+            ->leftJoin('expenses', 'activities.expense_id', '=', 'expenses.id')
+            ->where('account_transactions.source_type', AccountTransaction::SOURCE_EXPENSE)
+            ->where('account_transactions.direction', AccountTransaction::DIRECTION_DEBIT)
+            ->whereNull('account_transactions.deleted_at');
+        $this->applyShopFilter($expensesQuery, $shopFilter['shop_ids'], 'account_transactions.shop_id');
+        $expensesQuery->whereBetween('account_transactions.transaction_date', [$start, $end]);
+        $expenseRows = $expensesQuery
+            ->select(
+                'account_transactions.id',
+                'account_transactions.transaction_date',
+                'account_transactions.description',
+                'account_transactions.amount',
+                DB::raw("COALESCE(expenses.expense_title, 'Uncategorized') as category_name")
+            )
+            ->orderBy('category_name')
+            ->orderBy('account_transactions.transaction_date')
+            ->orderBy('account_transactions.id')
+            ->get();
+
+        // Group by category (alphabetical), build per-category totals and line items
+        $expensesByCategory = collect();
+        foreach ($expenseRows->groupBy('category_name') as $catName => $rows) {
+            $total = (float) $rows->sum('amount');
+            $lines = $rows->map(fn ($r) => [
+                'date' => $r->transaction_date?->format('Y-m-d') ?? '',
+                'description' => $r->description ?? '—',
+                'amount' => (float) $r->amount,
+            ])->values()->all();
+            $expensesByCategory->push([
+                'name' => $catName,
+                'total' => $total,
+                'lines' => $lines,
+            ]);
         }
-        $expenses = (float) $expensesQuery->sum('amount');
+        $expensesByCategory = $expensesByCategory->sortBy('name')->values();
+        $expenses = (float) $expenseRows->sum('amount');
 
         // 4) Net Profit = Gross Profit - Operating Expenses (discounts not shown on P&L)
         $netProfit = $grossProfit - $expenses;
@@ -215,14 +248,15 @@ class FinancialReportController extends Controller
         $profitMargin = $revenue > 0 ? (($netProfit / $revenue) * 100) : 0;
 
         return view('reports.financial.profit-loss', [
-            'dateRange'    => $dateRange,
-            'shopFilter'   => $shopFilter,
-            'revenue'      => $revenue,
-            'cogs'         => $cogs,
-            'expenses'     => $expenses,
-            'grossProfit'  => $grossProfit,
-            'netProfit'    => $netProfit,
-            'profitMargin' => $profitMargin,
+            'dateRange'          => $dateRange,
+            'shopFilter'         => $shopFilter,
+            'revenue'            => $revenue,
+            'cogs'               => $cogs,
+            'expenses'           => $expenses,
+            'expensesByCategory' => $expensesByCategory,
+            'grossProfit'        => $grossProfit,
+            'netProfit'          => $netProfit,
+            'profitMargin'       => $profitMargin,
         ]);
     }
 

@@ -98,7 +98,26 @@
 
                         {{-- Operating Expenses --}}
                         <tr><td colspan="2" class="pt-4"><strong>Operating Expenses</strong></td></tr>
-                        <tr><td class="pl-indent">Total Operating Expenses</td><td class="pl-amount text-right">{{ $fmt($expenses) }}</td></tr>
+                        @foreach($expensesByCategory ?? [] as $catIndex => $category)
+                        <tr class="pl-category-row" data-category-id="pl-cat-{{ $catIndex }}">
+                            <td class="pl-indent">
+                                <span class="pl-expand-toggle cursor-pointer" data-target="pl-cat-{{ $catIndex }}" role="button" tabindex="0" aria-expanded="false" title="Click to expand/collapse">
+                                    <i class="fas fa-chevron-right pl-chevron text-muted small"></i>
+                                    {{ $category['name'] }}
+                                </span>
+                            </td>
+                            <td class="pl-amount text-right">{{ $fmt($category['total']) }}</td>
+                        </tr>
+                        @foreach($category['lines'] ?? [] as $line)
+                        <tr class="pl-expense-detail pl-detail-pl-cat-{{ $catIndex }}" style="display: none;">
+                            <td class="pl-detail-indent">{{ $line['date'] }} — {{ $line['description'] }}</td>
+                            <td class="pl-amount text-right">{{ $fmt($line['amount']) }}</td>
+                        </tr>
+                        @endforeach
+                        @endforeach
+                        @if(empty($expensesByCategory) || count($expensesByCategory) === 0)
+                        <tr><td class="pl-indent text-muted">No expenses in period</td><td class="pl-amount text-right">{{ $fmt(0) }}</td></tr>
+                        @endif
                         <tr><td colspan="2" class="pl-rule border-top pt-2 pb-1"></td></tr>
                         <tr><td class="pl-indent"><strong>Total Operating Expenses</strong></td><td class="pl-amount text-right"><strong>{{ $fmt($expenses) }}</strong></td></tr>
 
@@ -125,12 +144,19 @@
 .pl-table td.pl-amount { width: 140px; }
 .pl-table strong { font-size: 13px; }
 .pl-indent { padding-left: 24px !important; }
+.pl-detail-indent { padding-left: 40px !important; font-size: 14px; color: #555; }
 .pl-major { padding-left: 0; }
+.cursor-pointer { cursor: pointer; }
+.pl-expand-toggle:hover { color: #333; }
+.pl-chevron { transition: transform 0.2s; display: inline-block; width: 12px; margin-right: 4px; }
+.pl-expand-toggle.expanded .pl-chevron { transform: rotate(90deg); }
 .pl-amount { white-space: nowrap; font-variant-numeric: tabular-nums; min-width: 120px; }
 .pl-rule { border-top-color: #ddd !important; }
 .pl-net { font-size: 18px; padding-top: 4px; }
 .pl-net-amount { font-size: 18px; }
 @media print {
+    /* When printing: show all expense detail rows (category breakdown + individual lines) */
+    .pl-expense-detail { display: table-row !important; }
     /* Full width: remove layout padding and use full page */
     body, .wrapper, .content-page, .container-fluid, .reports-profit-loss .row, .reports-profit-loss .col-lg-12 { width: 100% !important; max-width: 100% !important; padding-left: 0 !important; padding-right: 0 !important; margin: 0 !important; }
     .content-page { padding-top: 0 !important; }
@@ -153,5 +179,21 @@ function toggleCustomDates() {
     document.getElementById('start_date_group').style.display = f === 'custom' ? 'block' : 'none';
     document.getElementById('end_date_group').style.display = f === 'custom' ? 'block' : 'none';
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.pl-expand-toggle').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var target = this.getAttribute('data-target');
+            var rows = document.querySelectorAll('.pl-detail-' + target);
+            var expanded = this.getAttribute('aria-expanded') === 'true';
+            rows.forEach(function(r) { r.style.display = expanded ? 'none' : 'table-row'; });
+            this.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+            this.classList.toggle('expanded', !expanded);
+        });
+        btn.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.click(); }
+        });
+    });
+});
 </script>
 @endsection

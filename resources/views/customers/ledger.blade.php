@@ -111,7 +111,7 @@
             <div class="card border shadow-none">
                 <div class="card-body py-3">
                     <div class="text-muted small">Opening Balance</div>
-                    <div class="text-right font-weight-bold {{ $showAdvance($opening_balance ?? 0) ? 'text-danger' : '' }}">
+                    <div class="text-right font-weight-bold mt-1 {{ $showAdvance($opening_balance ?? 0) ? 'text-danger' : '' }}" style="font-size: 1.1rem;">
                         {{ $fmtAmt($opening_balance ?? 0) }}
                         @if($showAdvance($opening_balance ?? 0)) <span class="small">(Advance)</span> @endif
                     </div>
@@ -183,7 +183,9 @@
                         <tr>
                             <td>{{ $txn['date'] }}</td>
                             <td>
-                                @if(!empty($txn['order_id']))
+                                @if(!empty($txn['is_opening']))
+                                    Opening Balance
+                                @elseif(!empty($txn['order_id']))
                                     Sale
                                 @elseif(!empty($txn['payment_transaction_id']))
                                     Payment

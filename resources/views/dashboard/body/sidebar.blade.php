@@ -38,263 +38,6 @@
                 </li>
                 @endif
 
-                <hr>
-
-                @if (auth()->user()->can('orders.menu'))
-                <li>
-                    <a href="#orders" class="collapsed" data-toggle="collapse" aria-expanded="false">
-                        <i class="fas fa-shopping-basket"></i>
-                        <span class="ml-3">Orders</span>
-                        <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="10 15 15 20 20 15"></polyline><path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
-                        </svg>
-                    </a>
-                    <ul id="orders" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
-                        <li class="{{ Request::is('orders/all*') ? 'active' : '' }}">
-                            <a href="{{ route('order.index') }}">
-                                <i class="fas fa-arrow-right"></i><span>Orders</span>
-                            </a>
-                        </li>
-                        <li class="{{ Request::is('orders/pending*') ? 'active' : '' }}">
-                            <a href="{{ route('order.pendingOrders') }}">
-                                <i class="fas fa-arrow-right"></i><span>Pending Orders</span>
-                            </a>
-                        </li>
-                        <li class="{{ Request::is('orders/complete*') ? 'active' : '' }}">
-                            <a href="{{ route('order.completeOrders') }}">
-                                <i class="fas fa-arrow-right"></i><span>Complete Orders</span>
-                            </a>
-                        </li>
-                        <li class="{{ Request::is('pending/due*') ? 'active' : '' }}">
-                            <a href="{{ route('order.pendingDue') }}">
-                                <i class="fas fa-arrow-right"></i><span>Pending Due</span>
-                            </a>
-                        </li>
-                        <li class="{{ Request::is(['stock*']) ? 'active' : '' }}">
-                            <a href="{{ route('order.stockManage') }}">
-                                <i class="fas fa-arrow-right"></i><span>Stock Management</span>
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-                @endif
-
-                @if (auth()->user()->can('sale-returns.menu'))
-                <li class="{{ Request::is('sale-returns*') ? 'active' : '' }}">
-                    <a href="{{ route('sale-returns.index') }}" class="svg-icon">
-                        <i class="fas fa-undo-alt"></i>
-                        <span class="ml-3">Sale Returns</span>
-                    </a>
-                </li>
-                @endif
-
-                @if (auth()->user()->can('purchases.menu'))
-                <li>
-                    <a href="#purchases" class="collapsed" data-toggle="collapse" aria-expanded="false">
-                        <i class="fas fa-shopping-cart"></i>
-                        <span class="ml-3">Purchases</span>
-                        <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="10 15 15 20 20 15"></polyline><path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
-                        </svg>
-                    </a>
-                    <ul id="purchases" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
-                        <li class="{{ Request::is('purchases') && !Request::is('purchases/pending') && !Request::is('purchases/complete') && !Request::is('purchases/create') ? 'active' : '' }}">
-                            <a href="{{ route('purchases.index') }}">
-                                <i class="fas fa-arrow-right"></i><span>All Purchases</span>
-                            </a>
-                        </li>
-                        <li class="{{ Request::is('purchases/pending*') ? 'active' : '' }}">
-                            <a href="{{ route('purchases.pending') }}">
-                                <i class="fas fa-arrow-right"></i><span>Pending Purchases</span>
-                            </a>
-                        </li>
-                        <li class="{{ Request::is('purchases/complete*') ? 'active' : '' }}">
-                            <a href="{{ route('purchases.complete') }}">
-                                <i class="fas fa-arrow-right"></i><span>Complete Purchases</span>
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-                @endif
-
-                @if (auth()->user()->can('product.menu'))
-                <li>
-                    <a href="#products" class="collapsed" data-toggle="collapse" aria-expanded="false">
-                        <i class="fas fa-boxes"></i>
-                        <span class="ml-3">Products</span>
-                        <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="10 15 15 20 20 15"></polyline><path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
-                        </svg>
-                    </a>
-                    <ul id="products" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
-                        <li class="{{ Request::is(['products']) ? 'active' : '' }}">
-                            <a href="{{ route('products.index') }}">
-                                <i class="fas fa-arrow-right"></i><span>Products</span>
-                            </a>
-                        </li>
-                        <li class="{{ Request::is(['products/create']) ? 'active' : '' }}">
-                            <a href="{{ route('products.create') }}">
-                                <i class="fas fa-arrow-right"></i><span>Add Product</span>
-                            </a>
-                        </li>
-                        <li class="{{ Request::is(['categories*']) ? 'active' : '' }}">
-                            <a href="{{ route('categories.index') }}">
-                                <i class="fas fa-arrow-right"></i><span>Categories</span>
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-                @endif
-                <hr>
-
-                @if (auth()->user()->can('employee.menu'))
-                <li class="{{ Request::is('employees*') ? 'active' : '' }}">
-                    <a href="{{ route('employees.index') }}" class="svg-icon">
-                        <i class="fas fa-users"></i>
-                        <span class="ml-3">Employees</span>
-                    </a>
-                </li>
-                @endif
-
-                @if (auth()->user()->can('customer.menu'))
-                <li class="{{ Request::is('customers*') ? 'active' : '' }}">
-                    <a href="{{ route('customers.index') }}" class="svg-icon">
-                        <i class="fas fa-users"></i>
-                        <span class="ml-3">Customers</span>
-                    </a>
-                </li>
-                @endif
-
-                @if (auth()->user()->can('supplier.menu'))
-                <li class="{{ Request::is('suppliers*') ? 'active' : '' }}">
-                    <a href="{{ route('suppliers.index') }}" class="svg-icon">
-                        <i class="fas fa-users"></i>
-                        <span class="ml-3">Suppliers</span>
-                    </a>
-                </li>
-                @endif
-
-                @if (auth()->user()->can('customer_payment.menu') || auth()->user()->can('supplier_payment.menu'))
-                <li>
-                    <a href="#payments" class="collapsed" data-toggle="collapse" aria-expanded="false">
-                        <i class="fas fa-exchange-alt"></i>
-                        <span class="ml-3">Payments</span>
-                        <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="10 15 15 20 20 15"></polyline><path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
-                        </svg>
-                    </a>
-                    <ul id="payments" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
-                        @if (auth()->user()->can('customer_payment.menu'))
-                        <li class="{{ Request::is('customer-payments*') ? 'active' : '' }}">
-                            <a href="{{ route('customer-payments.create') }}">
-                                <i class="fas fa-arrow-right"></i><span>Customer Payment</span>
-                            </a>
-                        </li>
-                        @endif
-                        @if (auth()->user()->can('supplier_payment.menu'))
-                        <li class="{{ Request::is('supplier-payments*') ? 'active' : '' }}">
-                            <a href="{{ route('supplier-payments.create') }}">
-                                <i class="fas fa-arrow-right"></i><span>Supplier Payment</span>
-                            </a>
-                        </li>
-                        @endif
-                    </ul>
-                </li>
-                @endif
-
-                @if (auth()->user()->can('expense.menu'))
-                <li>
-                    <a href="#expenses" class="collapsed" data-toggle="collapse" aria-expanded="false">
-                        <i class="fas fa-boxes"></i>
-                        <span class="ml-3">Expenses</span>
-                        <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="10 15 15 20 20 15"></polyline><path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
-                        </svg>
-                    </a>
-                    <ul id="expenses" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
-                        <li class="{{ Request::is(['expenses']) && !Request::is('expenses/create') ? 'active' : '' }}">
-                            <a href="{{ route('expenses.index') }}">
-                                <i class="fas fa-arrow-right"></i><span>Expenses</span>
-                            </a>
-                        </li>
-                        <li class="{{ Request::is(['expenses/create']) ? 'active' : '' }}">
-                            <a href="{{ route('expenses.create') }}">
-                                <i class="fas fa-arrow-right"></i><span>Add Expense</span>
-                            </a>
-                        </li>
-                        @if (auth()->user()->can('expense-categories.menu'))
-                        <li class="{{ Request::is('expense-categories*') ? 'active' : '' }}">
-                            <a href="{{ route('expense-categories.index') }}">
-                                <i class="fas fa-arrow-right"></i><span>Expense Categories</span>
-                            </a>
-                        </li>
-                        @endif
-                    </ul>
-                </li>
-                @endif
-
-                @if (auth()->user()->can('salary.menu'))
-                <li>
-                    <a href="#advance-salary" class="collapsed" data-toggle="collapse" aria-expanded="false">
-                    <i class="fas fa-cash-register"></i>
-                        <span class="ml-3">Salary</span>
-                        <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="10 15 15 20 20 15"></polyline><path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
-                        </svg>
-                    </a>
-                    <ul id="advance-salary" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
-
-                        <li class="{{ Request::is(['advance-salary', 'advance-salary/*/edit']) ? 'active' : '' }}">
-                            <a href="{{ route('advance-salary.index') }}">
-                                <i class="fas fa-arrow-right"></i><span>All Advance Salary</span>
-                            </a>
-                        </li>
-                        <li class="{{ Request::is('advance-salary/create*') ? 'active' : '' }}">
-                            <a href="{{ route('advance-salary.create') }}">
-                                <i class="fas fa-arrow-right"></i><span>Create Advance Salary</span>
-                            </a>
-                        </li>
-                        <li class="{{ Request::is('pay-salary') ? 'active' : '' }}">
-                            <a href="{{ route('pay-salary.index') }}">
-                                <i class="fas fa-arrow-right"></i><span>Pay Salary</span>
-                            </a>
-                        </li>
-                        <li class="{{ Request::is('pay-salary/history*') ? 'active' : '' }}">
-                            <a href="{{ route('pay-salary.payHistory') }}">
-                                <i class="fas fa-arrow-right"></i><span>History Pay Salary</span>
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-                @endif
-
-                @if (auth()->user()->can('attendence.menu'))
-                <li>
-                    <a href="#attendence" class="collapsed" data-toggle="collapse" aria-expanded="false">
-                        <i class="fas fa-calendar-day"></i>
-                        <span class="ml-3">Attendence</span>
-                        <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="10 15 15 20 20 15"></polyline><path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
-                        </svg>
-                    </a>
-                    <ul id="attendence" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
-
-                        <li class="{{ Request::is(['employee/attendence']) ? 'active' : '' }}">
-                            <a href="{{ route('attendence.index') }}">
-                                <i class="fas fa-arrow-right"></i><span>All Attedence</span>
-                            </a>
-                        </li>
-                        <li class="{{ Request::is('employee/attendence/*') ? 'active' : '' }}">
-                            <a href="{{ route('attendence.create') }}">
-                                <i class="fas fa-arrow-right"></i><span>Create Attendence</span>
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-                @endif
-
-                <hr>
-
                 @if (auth()->user()->can('reports.menu'))
                 <li>
                     <a href="#reports" class="collapsed" data-toggle="collapse" aria-expanded="false">
@@ -619,6 +362,262 @@
                             </ul>
                         </li>
                         @endif
+                    </ul>
+                </li>
+                @endif
+
+                <hr>
+
+                @if (auth()->user()->can('orders.menu'))
+                <li>
+                    <a href="#orders" class="collapsed" data-toggle="collapse" aria-expanded="false">
+                        <i class="fas fa-shopping-basket"></i>
+                        <span class="ml-3">Orders</span>
+                        <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="10 15 15 20 20 15"></polyline><path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
+                        </svg>
+                    </a>
+                    <ul id="orders" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
+                        <li class="{{ Request::is('orders/all*') ? 'active' : '' }}">
+                            <a href="{{ route('order.index') }}">
+                                <i class="fas fa-arrow-right"></i><span>All Orders</span>
+                            </a>
+                        </li>
+                       
+                        <li class="{{ Request::is('orders/complete*') ? 'active' : '' }}">
+                            <a href="{{ route('order.completeOrders') }}">
+                                <i class="fas fa-arrow-right"></i><span>Complete Orders</span>
+                            </a>
+                        </li>
+                        <!--<li class="{{ Request::is('pending/due*') ? 'active' : '' }}">
+                            <a href="{{ route('order.pendingDue') }}">
+                                <i class="fas fa-arrow-right"></i><span>Pending Due</span>
+                            </a>
+                        </li>
+                        <li class="{{ Request::is('orders/pending*') ? 'active' : '' }}">
+                            <a href="{{ route('order.pendingOrders') }}">
+                                <i class="fas fa-arrow-right"></i><span>Pending Orders</span>
+                            </a>
+                        </li>
+                        <li class="{{ Request::is(['stock*']) ? 'active' : '' }}">
+                            <a href="{{ route('order.stockManage') }}">
+                                <i class="fas fa-arrow-right"></i><span>Stock Management</span>
+                            </a>
+                        </li>-->
+                    </ul>
+                </li>
+                @endif
+
+                @if (auth()->user()->can('sale-returns.menu'))
+                <li class="{{ Request::is('sale-returns*') ? 'active' : '' }}">
+                    <a href="{{ route('sale-returns.index') }}" class="svg-icon">
+                        <i class="fas fa-undo-alt"></i>
+                        <span class="ml-3">Sale Returns</span>
+                    </a>
+                </li>
+                @endif
+
+                @if (auth()->user()->can('purchases.menu'))
+                <li>
+                    <a href="#purchases" class="collapsed" data-toggle="collapse" aria-expanded="false">
+                        <i class="fas fa-shopping-cart"></i>
+                        <span class="ml-3">Purchases</span>
+                        <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="10 15 15 20 20 15"></polyline><path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
+                        </svg>
+                    </a>
+                    <ul id="purchases" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
+                        <li class="{{ Request::is('purchases') && !Request::is('purchases/pending') && !Request::is('purchases/complete') && !Request::is('purchases/create') ? 'active' : '' }}">
+                            <a href="{{ route('purchases.index') }}">
+                                <i class="fas fa-arrow-right"></i><span>All Purchases</span>
+                            </a>
+                        </li>
+                        <li class="{{ Request::is('purchases/pending*') ? 'active' : '' }}">
+                            <a href="{{ route('purchases.pending') }}">
+                                <i class="fas fa-arrow-right"></i><span>Pending Purchases</span>
+                            </a>
+                        </li>
+                        <li class="{{ Request::is('purchases/complete*') ? 'active' : '' }}">
+                            <a href="{{ route('purchases.complete') }}">
+                                <i class="fas fa-arrow-right"></i><span>Complete Purchases</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                @endif
+
+                @if (auth()->user()->can('product.menu'))
+                <li>
+                    <a href="#products" class="collapsed" data-toggle="collapse" aria-expanded="false">
+                        <i class="fas fa-boxes"></i>
+                        <span class="ml-3">Products</span>
+                        <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="10 15 15 20 20 15"></polyline><path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
+                        </svg>
+                    </a>
+                    <ul id="products" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
+                        <li class="{{ Request::is(['products']) ? 'active' : '' }}">
+                            <a href="{{ route('products.index') }}">
+                                <i class="fas fa-arrow-right"></i><span>Products</span>
+                            </a>
+                        </li>
+                        <li class="{{ Request::is(['products/create']) ? 'active' : '' }}">
+                            <a href="{{ route('products.create') }}">
+                                <i class="fas fa-arrow-right"></i><span>Add Product</span>
+                            </a>
+                        </li>
+                        <li class="{{ Request::is(['categories*']) ? 'active' : '' }}">
+                            <a href="{{ route('categories.index') }}">
+                                <i class="fas fa-arrow-right"></i><span>Categories</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                @endif
+                <hr>
+
+                @if (auth()->user()->can('employee.menu'))
+                <li class="{{ Request::is('employees*') ? 'active' : '' }}">
+                    <a href="{{ route('employees.index') }}" class="svg-icon">
+                        <i class="fas fa-users"></i>
+                        <span class="ml-3">Employees</span>
+                    </a>
+                </li>
+                @endif
+
+                @if (auth()->user()->can('customer.menu'))
+                <li class="{{ Request::is('customers*') ? 'active' : '' }}">
+                    <a href="{{ route('customers.index') }}" class="svg-icon">
+                        <i class="fas fa-users"></i>
+                        <span class="ml-3">Customers</span>
+                    </a>
+                </li>
+                @endif
+
+                @if (auth()->user()->can('supplier.menu'))
+                <li class="{{ Request::is('suppliers*') ? 'active' : '' }}">
+                    <a href="{{ route('suppliers.index') }}" class="svg-icon">
+                        <i class="fas fa-users"></i>
+                        <span class="ml-3">Suppliers</span>
+                    </a>
+                </li>
+                @endif
+
+                @if (auth()->user()->can('customer_payment.menu') || auth()->user()->can('supplier_payment.menu'))
+                <li>
+                    <a href="#payments" class="collapsed" data-toggle="collapse" aria-expanded="false">
+                        <i class="fas fa-exchange-alt"></i>
+                        <span class="ml-3">Payments</span>
+                        <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="10 15 15 20 20 15"></polyline><path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
+                        </svg>
+                    </a>
+                    <ul id="payments" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
+                        @if (auth()->user()->can('customer_payment.menu'))
+                        <li class="{{ Request::is('customer-payments*') ? 'active' : '' }}">
+                            <a href="{{ route('customer-payments.create') }}">
+                                <i class="fas fa-arrow-right"></i><span>Customer Payment</span>
+                            </a>
+                        </li>
+                        @endif
+                        @if (auth()->user()->can('supplier_payment.menu'))
+                        <li class="{{ Request::is('supplier-payments*') ? 'active' : '' }}">
+                            <a href="{{ route('supplier-payments.create') }}">
+                                <i class="fas fa-arrow-right"></i><span>Supplier Payment</span>
+                            </a>
+                        </li>
+                        @endif
+                    </ul>
+                </li>
+                @endif
+
+                @if (auth()->user()->can('expense.menu'))
+                <li>
+                    <a href="#expenses" class="collapsed" data-toggle="collapse" aria-expanded="false">
+                        <i class="fas fa-boxes"></i>
+                        <span class="ml-3">Expenses</span>
+                        <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="10 15 15 20 20 15"></polyline><path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
+                        </svg>
+                    </a>
+                    <ul id="expenses" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
+                        <li class="{{ Request::is(['expenses']) && !Request::is('expenses/create') ? 'active' : '' }}">
+                            <a href="{{ route('expenses.index') }}">
+                                <i class="fas fa-arrow-right"></i><span>Expenses</span>
+                            </a>
+                        </li>
+                        <li class="{{ Request::is(['expenses/create']) ? 'active' : '' }}">
+                            <a href="{{ route('expenses.create') }}">
+                                <i class="fas fa-arrow-right"></i><span>Add Expense</span>
+                            </a>
+                        </li>
+                        @if (auth()->user()->can('expense-categories.menu'))
+                        <li class="{{ Request::is('expense-categories*') ? 'active' : '' }}">
+                            <a href="{{ route('expense-categories.index') }}">
+                                <i class="fas fa-arrow-right"></i><span>Expense Categories</span>
+                            </a>
+                        </li>
+                        @endif
+                    </ul>
+                </li>
+                @endif
+
+                @if (auth()->user()->can('salary.menu'))
+                <li>
+                    <a href="#advance-salary" class="collapsed" data-toggle="collapse" aria-expanded="false">
+                    <i class="fas fa-cash-register"></i>
+                        <span class="ml-3">Salary</span>
+                        <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="10 15 15 20 20 15"></polyline><path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
+                        </svg>
+                    </a>
+                    <ul id="advance-salary" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
+
+                        <li class="{{ Request::is(['advance-salary', 'advance-salary/*/edit']) ? 'active' : '' }}">
+                            <a href="{{ route('advance-salary.index') }}">
+                                <i class="fas fa-arrow-right"></i><span>All Advance Salary</span>
+                            </a>
+                        </li>
+                        <li class="{{ Request::is('advance-salary/create*') ? 'active' : '' }}">
+                            <a href="{{ route('advance-salary.create') }}">
+                                <i class="fas fa-arrow-right"></i><span>Create Advance Salary</span>
+                            </a>
+                        </li>
+                        <li class="{{ Request::is('pay-salary') ? 'active' : '' }}">
+                            <a href="{{ route('pay-salary.index') }}">
+                                <i class="fas fa-arrow-right"></i><span>Pay Salary</span>
+                            </a>
+                        </li>
+                        <li class="{{ Request::is('pay-salary/history*') ? 'active' : '' }}">
+                            <a href="{{ route('pay-salary.payHistory') }}">
+                                <i class="fas fa-arrow-right"></i><span>History Pay Salary</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                @endif
+
+                @if (auth()->user()->can('attendence.menu'))
+                <li>
+                    <a href="#attendence" class="collapsed" data-toggle="collapse" aria-expanded="false">
+                        <i class="fas fa-calendar-day"></i>
+                        <span class="ml-3">Attendence</span>
+                        <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="10 15 15 20 20 15"></polyline><path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
+                        </svg>
+                    </a>
+                    <ul id="attendence" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
+
+                        <li class="{{ Request::is(['employee/attendence']) ? 'active' : '' }}">
+                            <a href="{{ route('attendence.index') }}">
+                                <i class="fas fa-arrow-right"></i><span>All Attedence</span>
+                            </a>
+                        </li>
+                        <li class="{{ Request::is('employee/attendence/*') ? 'active' : '' }}">
+                            <a href="{{ route('attendence.create') }}">
+                                <i class="fas fa-arrow-right"></i><span>Create Attendence</span>
+                            </a>
+                        </li>
                     </ul>
                 </li>
                 @endif

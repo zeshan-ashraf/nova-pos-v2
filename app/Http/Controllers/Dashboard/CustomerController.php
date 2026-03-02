@@ -6,6 +6,7 @@ use App\Models\AccountTransaction;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\PaymentLog;
+use App\Services\CustomerOpeningBalanceService;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Intervention\Image\Facades\Image;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Redirect;
 use App\Support\ActiveShop;
 use Carbon\Carbon;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
 
@@ -53,23 +55,19 @@ class CustomerController extends Controller
     {
         $rules = [
             'photo' => 'image|file|max:1024',
-            // 'name' => 'required|string|max:50', // Removed from UI - will be set from shopname
-            // 'email' => 'required|email|max:50|unique:customers,email', // Removed from validation - may be needed in future
             'phone' => 'required|string|max:15|unique:customers,phone',
             'shopname' => 'required|string|max:50',
             'account_holder' => 'max:50',
-            // 'account_number' => 'max:25', // Removed from UI - may be needed in future
-            // 'bank_name' => 'max:25', // Removed from UI - may be needed in future
-            // 'bank_branch' => 'max:50', // Removed from UI - may be needed in future
-            // 'city' => 'required|string|max:50', // Removed from UI - may be needed in future
             'address' => 'required|string|max:100',
             'credit_limit' => 'required|numeric|min:0',
             'credit_amount' => 'nullable|numeric|min:0',
             'credit_days' => 'required|integer|min:0',
+            'opening_balance' => 'nullable|numeric',
+            'opening_balance_date' => 'nullable|date',
         ];
 
         $validatedData = $request->validate($rules);
-        
+
         // Copy shopname to name field for backward compatibility
         $validatedData['name'] = $validatedData['shopname'];
 
@@ -77,7 +75,11 @@ class CustomerController extends Controller
         $validatedData['credit_amount'] = $request->input('credit_amount', 0);
         $validatedData['credit_limit'] = $request->input('credit_limit', 0);
         $validatedData['credit_days'] = $request->input('credit_days', 0);
-        
+        $validatedData['opening_balance'] = (float) ($request->input('opening_balance') ?? 0);
+        $validatedData['opening_balance_date'] = $request->filled('opening_balance_date')
+            ? Carbon::parse($request->input('opening_balance_date'))
+            : null;
+
         // Set email to null if not provided or empty
         $validatedData['email'] = $request->filled('email') && !empty($request->email) ? $request->email : null;
 
@@ -93,6 +95,16 @@ class CustomerController extends Controller
         }
 
         $customer = Customer::create($validatedData);
+
+        // If opening balance is set, post to ledger and sync credit_amount (source of truth)
+        if ($customer->shop_id && abs($validatedData['opening_balance']) > 0.001) {
+            app(CustomerOpeningBalanceService::class)->postOpeningBalance(
+                $customer,
+                $validatedData['opening_balance'],
+                $validatedData['opening_balance_date'] ?? $customer->created_at
+            );
+            $customer->refresh();
+        }
 
         // If AJAX request, return JSON response
         if ($request->ajax()) {
@@ -199,34 +211,33 @@ class CustomerController extends Controller
     public function update(Request $request, Customer $customer)
     {
         $this->ensureShopAccess($customer);
-        
+
         $rules = [
             'photo' => 'image|file|max:1024',
-            // 'name' => 'required|string|max:50', // Removed from UI - will be set from shopname
-            // 'email' => 'required|email|max:50|unique:customers,email,'.$customer->id, // Removed from validation - may be needed in future
             'phone' => 'required|string|max:15|unique:customers,phone,'.$customer->id,
             'shopname' => 'required|string|max:50',
             'account_holder' => 'max:50',
-            // 'account_number' => 'max:25', // Removed from UI - may be needed in future
-            // 'bank_name' => 'max:25', // Removed from UI - may be needed in future
-            // 'bank_branch' => 'max:50', // Removed from UI - may be needed in future
-            // 'city' => 'required|string|max:50', // Removed from UI - may be needed in future
             'address' => 'required|string|max:100',
             'credit_limit' => 'required|numeric|min:0',
             'credit_amount' => 'nullable|numeric|min:0',
             'credit_days' => 'required|integer|min:0',
+            'opening_balance' => 'nullable|numeric',
+            'opening_balance_date' => 'nullable|date',
         ];
 
         $validatedData = $request->validate($rules);
-        
+
         // Copy shopname to name field for backward compatibility
         $validatedData['name'] = $validatedData['shopname'];
 
         // Default numeric credit fields when missing
-        $validatedData['credit_amount'] = $request->input('credit_amount', 0);
         $validatedData['credit_limit'] = $request->input('credit_limit', 0);
         $validatedData['credit_days'] = $request->input('credit_days', 0);
-        
+        $openingBalance = (float) ($request->input('opening_balance') ?? 0);
+        $openingBalanceDate = $request->filled('opening_balance_date')
+            ? Carbon::parse($request->input('opening_balance_date'))
+            : null;
+
         // Set email to null if not provided or empty
         $validatedData['email'] = $request->filled('email') && !empty($request->email) ? $request->email : null;
 
@@ -237,10 +248,7 @@ class CustomerController extends Controller
             $fileName = hexdec(uniqid()).'.'.$file->getClientOriginalExtension();
             $path = 'public/customers/';
 
-            /**
-             * Delete photo if exists.
-             */
-            if($customer->photo){
+            if ($customer->photo) {
                 Storage::delete($path . $customer->photo);
             }
 
@@ -248,7 +256,18 @@ class CustomerController extends Controller
             $validatedData['photo'] = $fileName;
         }
 
-        Customer::where('id', $customer->id)->update($validatedData);
+        // Update non-ledger fields first (credit_amount is synced from ledger below)
+        $updateData = Arr::except($validatedData, ['credit_amount', 'opening_balance', 'opening_balance_date']);
+        Customer::where('id', $customer->id)->update($updateData);
+
+        // Opening balance: replace ledger entry and sync credit_amount (one active customer_opening per customer)
+        if ($customer->shop_id !== null) {
+            app(CustomerOpeningBalanceService::class)->updateOpeningBalance(
+                $customer->fresh(),
+                $openingBalance,
+                $openingBalanceDate
+            );
+        }
 
         return Redirect::route('customers.index')->with('success', 'Customer has been updated!');
     }
@@ -349,10 +368,10 @@ class CustomerController extends Controller
                 ->where('shop_id', $shopId);
         };
 
-        // Opening balance: only when date filter is not "all"
-        $openingBalance = 0.0;
+        // Calculated opening balance for running balance (sum of all entries before period start)
+        $calculatedOpeningBalance = 0.0;
         if ($dateFilter !== 'all' && $fromDateTime) {
-            $openingBalance = (float) (clone $baseQuery())
+            $calculatedOpeningBalance = (float) (clone $baseQuery())
                 ->where('transaction_date', '<', $fromDateTime)
                 ->selectRaw("SUM(CASE WHEN direction = ? THEN amount WHEN direction = ? THEN -amount ELSE 0 END) as bal", [
                     AccountTransaction::DIRECTION_DEBIT,
@@ -375,18 +394,26 @@ class CustomerController extends Controller
         }
         $totalCredits = (float) $creditsQuery->sum('amount');
 
-        // Closing balance
-        $closingBalance = $dateFilter === 'all'
-            ? ($totalDebits - $totalCredits)
-            : ($openingBalance + $totalDebits - $totalCredits);
-
-        // Ledger rows: same date filter (all = no date range; else between from_date and to_date)
+        // Ledger rows: period rows + always include customer_opening entry for this customer
         $rowsQuery = $baseQuery();
         if ($dateFilter !== 'all' && $fromDateTime && $toDateTime) {
             $rowsQuery->whereBetween('transaction_date', [$fromDateTime, $toDateTime]);
         }
         $rows = $rowsQuery->orderBy('transaction_date')->orderBy('id')
             ->get(['id', 'source_type', 'source_id', 'direction', 'amount', 'transaction_date', 'description']);
+
+        // Always include the customer_opening entry so it appears in the ledger table
+        $openingEntryIds = $rows->pluck('id')->all();
+        $openingRows = AccountTransaction::query()
+            ->where('account_type', AccountTransaction::ACCOUNT_TYPE_CUSTOMER)
+            ->where('account_ref_id', $customerId)
+            ->where('shop_id', $shopId)
+            ->where('source_type', AccountTransaction::SOURCE_CUSTOMER_OPENING)
+            ->get(['id', 'source_type', 'source_id', 'direction', 'amount', 'transaction_date', 'description']);
+        $openingRows = $openingRows->filter(fn ($r) => !in_array($r->id, $openingEntryIds, true));
+        if ($openingRows->isNotEmpty()) {
+            $rows = $rows->merge($openingRows)->sortBy('transaction_date')->sortBy('id')->values();
+        }
 
         // Resolve invoice numbers for sale entries (one query)
         $saleSourceIds = $rows->where('source_type', AccountTransaction::SOURCE_SALE)->pluck('source_id')->unique()->filter()->values()->all();
@@ -396,17 +423,27 @@ class CustomerController extends Controller
         }
 
         $transactions = [];
-        $runningBalance = $openingBalance;
+        $runningBalance = $calculatedOpeningBalance;
 
         foreach ($rows as $r) {
             $debit = $r->direction === AccountTransaction::DIRECTION_DEBIT ? (float) $r->amount : 0.0;
             $credit = $r->direction === AccountTransaction::DIRECTION_CREDIT ? (float) $r->amount : 0.0;
-            $runningBalance += $debit - $credit;
+
+            // Injected opening row (before period): already in calculatedOpeningBalance, don't add again
+            $isInjectedOpening = $dateFilter !== 'all' && $fromDateTime && $r->source_type === AccountTransaction::SOURCE_CUSTOMER_OPENING && $r->transaction_date < $fromDateTime;
+            if ($isInjectedOpening) {
+                $rowBalance = $calculatedOpeningBalance;
+            } else {
+                $runningBalance += $debit - $credit;
+                $rowBalance = $runningBalance;
+            }
 
             if ($r->source_type === AccountTransaction::SOURCE_SALE) {
                 $reference = $invoiceNos[$r->source_id] ?? ('#' . $r->source_id);
             } elseif ($r->source_type === AccountTransaction::SOURCE_CUSTOMER_PAYMENT) {
                 $reference = 'Payment';
+            } elseif ($r->source_type === AccountTransaction::SOURCE_CUSTOMER_OPENING) {
+                $reference = 'Opening Balance';
             } else {
                 $reference = $r->description ?? '—';
             }
@@ -417,15 +454,22 @@ class CustomerController extends Controller
                 'description' => $r->description ?? '—',
                 'debit' => $debit,
                 'credit' => $credit,
-                'balance' => $runningBalance,
+                'balance' => $rowBalance,
                 'order_id' => $r->source_type === AccountTransaction::SOURCE_SALE ? (int) $r->source_id : null,
                 'payment_transaction_id' => $r->source_type === AccountTransaction::SOURCE_CUSTOMER_PAYMENT ? (int) $r->id : null,
+                'is_opening' => $r->source_type === AccountTransaction::SOURCE_CUSTOMER_OPENING,
             ];
         }
 
+        // Closing balance = final running balance (so footer and box match last row)
+        $closingBalance = $runningBalance;
+
+        // Opening balance box: always show customer's opening_balance from customers table
+        $openingBalanceDisplay = (float) ($customer->opening_balance ?? 0);
+
         return [
             'transactions' => $transactions,
-            'opening_balance' => $openingBalance,
+            'opening_balance' => $openingBalanceDisplay,
             'total_debits' => $totalDebits,
             'total_credits' => $totalCredits,
             'closing_balance' => $closingBalance,
