@@ -209,7 +209,7 @@
                             </a>
                             <ul id="reports-inventory" class="iq-submenu collapse" data-parent="#reports" style="">
                                 @if (auth()->user()->can('reports.stock'))
-                                <li class="{{ Request::is('reports/inventory/stock*') ? 'active' : '' }}">
+                                <li class="{{ Request::is('reports/inventory/stock') ? 'active' : '' }}">
                                     <a href="{{ route('reports.inventory.stock') }}">
                                         <i class="fas fa-circle" style="font-size: 6px; vertical-align: middle;"></i><span>Stock Report</span>
                                     </a>

@@ -1,5 +1,37 @@
 @extends('dashboard.body.main')
 
+@section('specificpagestyles')
+<style>
+    @media print {
+        @page { margin: 8mm; size: auto; }
+        html, body { width: 100% !important; margin: 0 !important; padding: 0 !important; }
+        .iq-sidebar, .iq-top-navbar, .iq-footer,
+        .report-filter-card, .d-print-none { display: none !important; }
+        .wrapper { display: block !important; width: 100% !important; }
+        .content-page { padding: 0 !important; margin: 0 !important; width: 100% !important; max-width: none !important; }
+        body, .wrapper { padding: 0 !important; margin: 0 !important; }
+        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .container-fluid { width: 100% !important; max-width: none !important; padding-left: 0 !important; padding-right: 0 !important; }
+        .container-fluid .row { margin-left: 0 !important; margin-right: 0 !important; width: 100% !important; }
+        .container-fluid .row .col-lg-12 { padding-left: 0 !important; padding-right: 0 !important; max-width: none !important; }
+        .sales-kpi-row-1 { display: flex !important; flex-wrap: nowrap !important; break-inside: avoid; }
+        .sales-kpi-row-1 .col-md-4 { flex: 0 0 33.333333% !important; max-width: 33.333333% !important; padding: 0 6px !important; }
+        .sales-report-kpi, .sales-report-kpi.card { border: 1px solid #dee2e6 !important; box-shadow: none !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .sales-report-kpi .card-body, .sales-report-kpi .iq-icon-box-2 { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .card { border: 1px solid #dee2e6 !important; box-shadow: none !important; }
+        .card-header.bg-primary { background: #0d6efd !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .sales-orders-table-wrap { width: 100% !important; max-width: none !important; margin-left: 0 !important; margin-right: 0 !important; padding-left: 0 !important; padding-right: 0 !important; box-sizing: border-box !important; }
+        .sales-orders-table-wrap .card { width: 100% !important; max-width: none !important; }
+        .sales-orders-table-wrap .card-body { padding: 8px !important; width: 100% !important; }
+        .sales-orders-table-wrap .table-responsive { width: 100% !important; max-width: none !important; overflow: visible !important; display: block !important; }
+        #revenueReportTable { width: 100% !important; min-width: 100% !important; max-width: 100% !important; table-layout: fixed !important; box-sizing: border-box !important; display: table !important; }
+        #revenueReportTable th, #revenueReportTable td { border: 1px solid #dee2e6 !important; box-sizing: border-box !important; }
+        #revenueReportTable th:nth-child(1), #revenueReportTable td:nth-child(1) { width: 35% !important; }
+        #revenueReportTable th:nth-child(2), #revenueReportTable td:nth-child(2) { width: 65% !important; }
+    }
+</style>
+@endsection
+
 @section('container')
 <div class="container-fluid">
     <div class="row">
@@ -9,15 +41,18 @@
                     <h4 class="mb-3">Revenue Report</h4>
                     <p class="mb-0 text-muted">Money earned from sales (invoiced). Revenue ≠ cash flow.</p>
                 </div>
-                <div>
+                <div class="d-print-none">
                     <a href="{{ route('reports.index') }}" class="btn btn-secondary"><i class="ri-arrow-left-line mr-1"></i> Back to Reports</a>
                 </div>
             </div>
         </div>
 
-        <div class="col-lg-12 mb-3">
-            <div class="card">
-                <div class="card-body">
+        <div class="col-lg-12 mb-3 d-print-none">
+            <div class="card report-filter-card border-primary shadow-sm">
+                <div class="card-header border-0 py-2">
+                    <h6 class="mb-0 text-primary"><i class="ri-filter-3-line mr-1"></i> Filters</h6>
+                </div>
+                <div class="card-body pt-0">
                     <form action="{{ route('reports.financial.revenue') }}" method="GET">
                         <div class="row align-items-end">
                             <div class="col-md-3">
@@ -55,7 +90,7 @@
                             @endif
                             <div class="col-md-3">
                                 <button type="submit" class="btn btn-primary"><i class="ri-search-line mr-1"></i> Filter</button>
-                                <button type="button" class="btn btn-info ml-2" onclick="window.print()"><i class="ri-printer-line mr-1"></i> Print</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm ml-2" onclick="window.print()"><i class="ri-printer-line mr-1"></i> Print</button>
                             </div>
                         </div>
                     </form>
@@ -64,20 +99,29 @@
         </div>
 
         <div class="col-lg-12 mb-3">
-            <div class="card">
-                <div class="card-body">
-                    <p class="text-muted mb-1">Total Revenue (Gross)</p>
-                    <h4 class="mb-0">{{ number_format($totalRevenue ?? 0, 2) }}</h4>
+            <div class="row sales-kpi-row-1">
+                <div class="col-md-4">
+            <div class="card card-block card-stretch shadow-sm sales-report-kpi h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="icon iq-icon-box-2 bg-success-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
+                        <i class="ri-money-dollar-circle-line text-success" style="font-size: 1.75rem;"></i>
+                    </div>
+                    <div class="flex-grow-1 min-w-0">
+                        <p class="text-muted mb-0 small font-weight-500">Total Revenue (Gross)</p>
+                        <h4 class="mb-0 font-weight-bold text-dark">{{ number_format($totalRevenue ?? 0, 2) }}</h4>
+                    </div>
+                </div>
+            </div>
                 </div>
             </div>
         </div>
 
-        <div class="col-lg-12">
+        <div class="col-lg-12 sales-orders-table-wrap">
             <div class="card">
-                <div class="card-header"><h5 class="mb-0">Revenue by Date</h5></div>
+                <div class="card-header bg-primary text-white d-flex align-items-center"><h5 class="mb-0">Revenue by Date</h5></div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-striped">
+                        <table class="table table-striped" id="revenueReportTable">
                             <thead>
                                 <tr>
                                     <th>Date</th>

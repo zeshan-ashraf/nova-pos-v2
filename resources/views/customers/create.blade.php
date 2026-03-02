@@ -97,13 +97,14 @@
                                 @enderror
                             </div>
                             <div class="form-group col-md-6">
-                                <label for="credit_amount">Credit Amount</label>
-                                <input type="number" step="0.01" min="0" class="form-control @error('credit_amount') is-invalid @enderror" id="credit_amount" name="credit_amount" value="{{ old('credit_amount', 0) }}">
+                                <label for="credit_amount">Balance</label>
+                                <input type="number" step="0.01" min="0" class="form-control @error('credit_amount') is-invalid @enderror" id="credit_amount" name="credit_amount" value="{{ old('credit_amount', 0) }}" readonly disabled>
                                 @error('credit_amount')
                                 <div class="invalid-feedback">
                                     {{ $message }}
                                 </div>
                                 @enderror
+                                <small class="text-muted">Read-only; synced from ledger.</small>
                             </div>
                             <div class="form-group col-md-6">
                                 <label for="credit_days">Credit Days <span class="text-danger">*</span></label>

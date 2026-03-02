@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Dashboard\Traits\ReportTrait;
+use App\Models\AccountTransaction;
 use App\Models\Order;
 use App\Models\OrderDetails;
 use App\Models\Customer;
@@ -40,8 +41,15 @@ class SalesReportController extends Controller
         // Get summary data
         $totalOrders = (clone $ordersQuery)->count();
         $totalRevenue = (clone $ordersQuery)->sum('total');
-        $totalPaid = (clone $ordersQuery)->sum('pay');
-        $totalDue = (clone $ordersQuery)->sum('due');
+        // Total Paid = payment receipts within date filter (cash/bank debits from sales + customer payments)
+        $totalPaidQuery = AccountTransaction::query()
+            ->whereIn('account_type', [AccountTransaction::ACCOUNT_TYPE_CASH, AccountTransaction::ACCOUNT_TYPE_BANK])
+            ->where('direction', AccountTransaction::DIRECTION_DEBIT)
+            ->whereIn('source_type', [AccountTransaction::SOURCE_SALE, AccountTransaction::SOURCE_CUSTOMER_PAYMENT])
+            ->whereBetween('transaction_date', [$dateRange['start_datetime'], $dateRange['end_datetime']]);
+        $this->applyShopFilter($totalPaidQuery, $shopFilter['shop_ids']);
+        $totalPaid = (float) $totalPaidQuery->sum('amount');
+        $totalDue = max(0, $totalRevenue - $totalPaid);
         $totalVat = (clone $ordersQuery)->sum('vat');
         $totalDiscount = (clone $ordersQuery)->sum('invoice_discount');
         $avgOrderValue = $totalOrders > 0 ? $totalRevenue / $totalOrders : 0;
@@ -104,23 +112,56 @@ class SalesReportController extends Controller
 
         $this->applyShopFilter($ordersQuery, $shopFilter['shop_ids']);
 
-        // Daily breakdown (chronological: oldest first)
-        $dailyBreakdown = (clone $ordersQuery)
+        // Orders grouped by date (for total, due, count)
+        $ordersByDate = (clone $ordersQuery)
             ->select(
                 DB::raw('DATE(order_date) as date'),
                 DB::raw('SUM(total) as total'),
-                DB::raw('SUM(pay) as paid'),
                 DB::raw('SUM(due) as due'),
                 DB::raw('COUNT(*) as count')
             )
             ->groupBy(DB::raw('DATE(order_date)'))
             ->orderBy('date')
-            ->get();
+            ->get()
+            ->keyBy('date');
 
-        // Summary
+        // Payments by date (cash/bank debits from sales + customer payments within date filter)
+        $paymentsByDateQuery = AccountTransaction::query()
+            ->whereIn('account_type', [AccountTransaction::ACCOUNT_TYPE_CASH, AccountTransaction::ACCOUNT_TYPE_BANK])
+            ->where('direction', AccountTransaction::DIRECTION_DEBIT)
+            ->whereIn('source_type', [AccountTransaction::SOURCE_SALE, AccountTransaction::SOURCE_CUSTOMER_PAYMENT])
+            ->whereBetween('transaction_date', [$dateRange['start_datetime'], $dateRange['end_datetime']]);
+        $this->applyShopFilter($paymentsByDateQuery, $shopFilter['shop_ids']);
+        $paymentsByDate = $paymentsByDateQuery
+            ->select(DB::raw('DATE(transaction_date) as date'), DB::raw('SUM(amount) as paid'))
+            ->groupBy(DB::raw('DATE(transaction_date)'))
+            ->pluck('paid', 'date');
+
+        // Merge: daily breakdown with paid from payment transactions; due = total - paid per day
+        $allDates = $ordersByDate->keys()->merge($paymentsByDate->keys())->unique()->sort()->values();
+        $dailyBreakdown = $allDates->map(function ($date) use ($ordersByDate, $paymentsByDate) {
+            $orderRow = $ordersByDate->get($date);
+            $total = $orderRow ? (float) $orderRow->total : 0;
+            $paid = (float) ($paymentsByDate[$date] ?? 0);
+            return (object) [
+                'date' => $date,
+                'total' => $total,
+                'paid' => $paid,
+                'due' => max(0, $total - $paid),
+                'count' => $orderRow ? (int) $orderRow->count : 0,
+            ];
+        });
+
+        // Summary: totalDue = totalRevenue - totalPaid
         $totalRevenue = (clone $ordersQuery)->sum('total');
-        $totalPaid = (clone $ordersQuery)->sum('pay');
-        $totalDue = (clone $ordersQuery)->sum('due');
+        $totalPaidQuery = AccountTransaction::query()
+            ->whereIn('account_type', [AccountTransaction::ACCOUNT_TYPE_CASH, AccountTransaction::ACCOUNT_TYPE_BANK])
+            ->where('direction', AccountTransaction::DIRECTION_DEBIT)
+            ->whereIn('source_type', [AccountTransaction::SOURCE_SALE, AccountTransaction::SOURCE_CUSTOMER_PAYMENT])
+            ->whereBetween('transaction_date', [$dateRange['start_datetime'], $dateRange['end_datetime']]);
+        $this->applyShopFilter($totalPaidQuery, $shopFilter['shop_ids']);
+        $totalPaid = (float) $totalPaidQuery->sum('amount');
+        $totalDue = max(0, $totalRevenue - $totalPaid);
         $totalOrders = (clone $ordersQuery)->count();
 
         // Paginated orders (chronological: oldest first)
@@ -184,8 +225,15 @@ class SalesReportController extends Controller
         
         $totalCustomers = $selectedCustomerId ? 1 : (clone $ordersQuery)->distinct('customer_id')->count('customer_id');
         $totalRevenue = $summaryQuery->sum('total');
-        $totalPaid = (clone $summaryQuery)->sum('pay');
-        $totalDue = (clone $summaryQuery)->sum('due');
+        // Total Paid = payment receipts within date filter (cash/bank debits from sales + customer payments)
+        $totalPaidQuery = AccountTransaction::query()
+            ->whereIn('account_type', [AccountTransaction::ACCOUNT_TYPE_CASH, AccountTransaction::ACCOUNT_TYPE_BANK])
+            ->where('direction', AccountTransaction::DIRECTION_DEBIT)
+            ->whereIn('source_type', [AccountTransaction::SOURCE_SALE, AccountTransaction::SOURCE_CUSTOMER_PAYMENT])
+            ->whereBetween('transaction_date', [$dateRange['start_datetime'], $dateRange['end_datetime']]);
+        $this->applyShopFilter($totalPaidQuery, $shopFilter['shop_ids']);
+        $totalPaid = (float) $totalPaidQuery->sum('amount');
+        $totalDue = max(0, $totalRevenue - $totalPaid);
 
         // Get selected customer for display
         $selectedCustomer = null;

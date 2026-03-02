@@ -1,5 +1,58 @@
 @extends('dashboard.body.main')
 
+@section('specificpagestyles')
+<style>
+    @media print {
+        @page { margin: 8mm; size: auto; }
+        .iq-sidebar, .iq-top-navbar, .iq-footer,
+        .report-filter-card, .d-print-none { display: none !important; }
+        .wrapper { display: block !important; }
+        .content-page { padding: 0 !important; margin: 0 !important; width: 100% !important; max-width: none !important; }
+        body, .wrapper { padding: 0 !important; margin: 0 !important; }
+        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .container-fluid { width: 100% !important; max-width: none !important; padding-left: 8px !important; padding-right: 8px !important; }
+        /* KPI Row 1: 4 boxes */
+        .sales-kpi-row-1 { display: flex !important; flex-wrap: nowrap !important; break-inside: avoid; }
+        .sales-kpi-row-1 .col-md-3 { flex: 0 0 25% !important; max-width: 25% !important; padding: 0 6px !important; }
+        .sales-report-kpi, .sales-report-kpi.card { border: 1px solid #dee2e6 !important; box-shadow: none !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .sales-report-kpi .card-body, .sales-report-kpi .iq-icon-box-2 { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .card { border: 1px solid #dee2e6 !important; box-shadow: none !important; }
+        .card-header.bg-primary { background: #0d6efd !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .card-header .form-control, .card-header form { display: none !important; }
+        .card-body > .mt-3 { display: none !important; }
+        /* Daily Breakdown table */
+        .daily-breakdown-wrap { width: 100vw !important; max-width: 100vw !important; position: relative !important; left: 50% !important; margin-left: -50vw !important; padding-left: 4px !important; padding-right: 4px !important; box-sizing: border-box !important; }
+        .daily-breakdown-wrap .card { width: 100% !important; max-width: none !important; }
+        .daily-breakdown-wrap .card-body { padding: 4px !important; width: 100% !important; }
+        .daily-breakdown-wrap .table-responsive { width: 100% !important; max-width: none !important; overflow: visible !important; }
+        #dailyBreakdownTable { width: 100% !important; min-width: 100% !important; max-width: 100% !important; table-layout: fixed !important; box-sizing: border-box !important; }
+        #dailyBreakdownTable th, #dailyBreakdownTable td { border: 1px solid #dee2e6 !important; box-sizing: border-box !important; }
+        #dailyBreakdownTable th:nth-child(1), #dailyBreakdownTable td:nth-child(1) { width: 20% !important; }
+        #dailyBreakdownTable th:nth-child(2), #dailyBreakdownTable td:nth-child(2) { width: 15% !important; }
+        #dailyBreakdownTable th:nth-child(3), #dailyBreakdownTable td:nth-child(3) { width: 25% !important; }
+        #dailyBreakdownTable th:nth-child(4), #dailyBreakdownTable td:nth-child(4) { width: 20% !important; }
+        #dailyBreakdownTable th:nth-child(5), #dailyBreakdownTable td:nth-child(5) { width: 20% !important; }
+        /* Orders table */
+        .sales-orders-table-wrap { width: 100vw !important; max-width: 100vw !important; position: relative !important; left: 50% !important; margin-left: -50vw !important; padding-left: 4px !important; padding-right: 4px !important; box-sizing: border-box !important; }
+        .sales-orders-table-wrap .card { width: 100% !important; max-width: none !important; }
+        .sales-orders-table-wrap .card-body { padding: 4px !important; width: 100% !important; }
+        .sales-orders-table-wrap .table-responsive { width: 100% !important; max-width: none !important; overflow: visible !important; }
+        #dailyOrdersTable { width: 100% !important; min-width: 100% !important; max-width: 100% !important; table-layout: fixed !important; box-sizing: border-box !important; }
+        #dailyOrdersTable th, #dailyOrdersTable td { border: 1px solid #dee2e6 !important; box-sizing: border-box !important; }
+        #dailyOrdersTable th:nth-child(1), #dailyOrdersTable td:nth-child(1) { width: 5% !important; }
+        #dailyOrdersTable th:nth-child(2), #dailyOrdersTable td:nth-child(2) { width: 10% !important; }
+        #dailyOrdersTable th:nth-child(3), #dailyOrdersTable td:nth-child(3) { width: 18% !important; }
+        #dailyOrdersTable th:nth-child(4), #dailyOrdersTable td:nth-child(4) { width: 10% !important; }
+        #dailyOrdersTable th:nth-child(5), #dailyOrdersTable td:nth-child(5) { width: 10% !important; }
+        #dailyOrdersTable th:nth-child(6), #dailyOrdersTable td:nth-child(6) { width: 10% !important; }
+        #dailyOrdersTable th:nth-child(7), #dailyOrdersTable td:nth-child(7) { width: 10% !important; }
+        #dailyOrdersTable th:nth-child(8), #dailyOrdersTable td:nth-child(8) { width: 14% !important; }
+        #dailyOrdersTable th:nth-child(9), #dailyOrdersTable td:nth-child(9) { width: 13% !important; }
+        .badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+</style>
+@endsection
+
 @section('container')
 <div class="container-fluid">
     <div class="row">
@@ -8,7 +61,7 @@
                 <div>
                     <h4 class="mb-3">Daily Sales Report</h4>
                 </div>
-                <div>
+                <div class="d-print-none">
                     <a href="{{ route('reports.index') }}" class="btn btn-secondary">
                         <i class="ri-arrow-left-line mr-1"></i> Back to Reports
                     </a>
@@ -17,9 +70,12 @@
         </div>
 
         <!-- Filter Section -->
-        <div class="col-lg-12 mb-3">
-            <div class="card">
-                <div class="card-body">
+        <div class="col-lg-12 mb-3 d-print-none">
+            <div class="card report-filter-card border-primary shadow-sm">
+                <div class="card-header border-0 py-2">
+                    <h6 class="mb-0 text-primary"><i class="ri-filter-3-line mr-1"></i> Filters</h6>
+                </div>
+                <div class="card-body pt-0">
                     <form action="{{ route('reports.sales.daily') }}" method="GET" id="filterForm">
                         <div class="row align-items-end">
                             <div class="col-md-3">
@@ -61,9 +117,7 @@
                                 <button type="submit" class="btn btn-primary">
                                     <i class="ri-search-line mr-1"></i> Filter
                                 </button>
-                                <button type="button" class="btn btn-info ml-2" onclick="window.print()">
-                                    <i class="ri-printer-line mr-1"></i> Print
-                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm ml-2" onclick="window.print()"><i class="ri-printer-line mr-1"></i> Print</button>
                             </div>
                         </div>
                     </form>
@@ -71,38 +125,58 @@
             </div>
         </div>
 
-        <!-- KPI Cards -->
+        <!-- KPI Cards Row 1 -->
         <div class="col-lg-12 mb-3">
-            <div class="row">
-                <div class="col-md-3">
-                    <div class="card">
-                        <div class="card-body">
-                            <p class="text-muted mb-1">Total Orders</p>
-                            <h4 class="mb-0">{{ number_format($totalOrders, 0) }}</h4>
+            <div class="row sales-kpi-row-1">
+                <div class="col-md-3 mb-3 mb-md-0">
+                    <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
+                        <div class="card-body d-flex align-items-center">
+                            <div class="icon iq-icon-box-2 bg-primary-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
+                                <i class="ri-shopping-bag-line text-primary" style="font-size: 1.75rem;"></i>
+                            </div>
+                            <div class="flex-grow-1 min-w-0">
+                                <p class="text-muted mb-0 small font-weight-500">Total Orders</p>
+                                <h4 class="mb-0 font-weight-bold text-dark">{{ number_format($totalOrders, 0) }}</h4>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card">
-                        <div class="card-body">
-                            <p class="text-muted mb-1">Total Revenue</p>
-                            <h4 class="mb-0">{{ number_format($totalRevenue, 2) }}</h4>
+                <div class="col-md-3 mb-3 mb-md-0">
+                    <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
+                        <div class="card-body d-flex align-items-center">
+                            <div class="icon iq-icon-box-2 bg-success-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
+                                <i class="ri-money-dollar-circle-line text-success" style="font-size: 1.75rem;"></i>
+                            </div>
+                            <div class="flex-grow-1 min-w-0">
+                                <p class="text-muted mb-0 small font-weight-500">Total Revenue</p>
+                                <h4 class="mb-0 font-weight-bold text-dark">{{ number_format($totalRevenue, 2) }}</h4>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card">
-                        <div class="card-body">
-                            <p class="text-muted mb-1">Total Paid</p>
-                            <h4 class="mb-0">{{ number_format($totalPaid, 2) }}</h4>
+                <div class="col-md-3 mb-3 mb-md-0">
+                    <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
+                        <div class="card-body d-flex align-items-center">
+                            <div class="icon iq-icon-box-2 bg-info-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
+                                <i class="ri-wallet-3-line text-info" style="font-size: 1.75rem;"></i>
+                            </div>
+                            <div class="flex-grow-1 min-w-0">
+                                <p class="text-muted mb-0 small font-weight-500">Total Paid</p>
+                                <h4 class="mb-0 font-weight-bold text-dark">{{ number_format($totalPaid, 2) }}</h4>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card">
-                        <div class="card-body">
-                            <p class="text-muted mb-1">Total Due</p>
-                            <h4 class="mb-0">{{ number_format($totalDue, 2) }}</h4>
+                <div class="col-md-3 mb-3 mb-md-0">
+                    <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
+                        <div class="card-body d-flex align-items-center">
+                            <div class="icon iq-icon-box-2 bg-danger-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
+                                <i class="ri-bill-line text-danger" style="font-size: 1.75rem;"></i>
+                            </div>
+                            <div class="flex-grow-1 min-w-0">
+                                <p class="text-muted mb-0 small font-weight-500">Total Due</p>
+                                <h4 class="mb-0 font-weight-bold text-dark">{{ number_format($totalDue, 2) }}</h4>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -110,14 +184,14 @@
         </div>
 
         <!-- Daily Breakdown Table -->
-        <div class="col-lg-12 mb-3">
+        <div class="col-lg-12 mb-3 daily-breakdown-wrap">
             <div class="card">
-                <div class="card-header">
+                <div class="card-header bg-primary text-white d-flex align-items-center">
                     <h5 class="mb-0">Daily Breakdown</h5>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-striped">
+                        <table class="table table-striped" id="dailyBreakdownTable">
                             <thead>
                                 <tr>
                                     <th>Date</th>
@@ -149,9 +223,9 @@
         </div>
 
         <!-- Orders Table -->
-        <div class="col-lg-12">
+        <div class="col-lg-12 sales-orders-table-wrap">
             <div class="card">
-                <div class="card-header d-flex justify-content-between">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">Orders List</h5>
                     <div>
                         <form action="{{ route('reports.sales.daily') }}" method="GET" class="d-inline">
@@ -172,7 +246,7 @@
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-striped">
+                        <table class="table table-striped" id="dailyOrdersTable">
                             <thead>
                                 <tr>
                                     <th>No.</th>

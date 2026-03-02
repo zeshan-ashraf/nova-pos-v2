@@ -1,0 +1,60 @@
+---
+description: Fix table full-width in print view for reports and ledgers
+alwaysApply: true
+---
+
+# Fix Table Width in Print View
+
+When the user asks to fix table width in print view (or similar), apply this solution:
+
+## 1. Wrap the table in a full-bleed container
+
+Add a wrapper class (e.g. `sales-orders-table-wrap`) around the element containing the table:
+```html
+<div class="col-lg-12 sales-orders-table-wrap">
+    <div class="card">
+        ...
+        <div class="table-responsive">
+            <table id="salesOrdersTable" class="table ...">
+```
+
+## 2. Add print CSS (inside @media print)
+
+```css
+@page { margin: 8mm; size: auto; }
+
+/* Table full width - full-bleed + explicit column widths */
+.sales-orders-table-wrap {
+    width: 100vw !important; max-width: 100vw !important;
+    position: relative !important; left: 50% !important; margin-left: -50vw !important;
+    padding-left: 4px !important; padding-right: 4px !important;
+    box-sizing: border-box !important;
+}
+.sales-orders-table-wrap .card { width: 100% !important; max-width: none !important; }
+.sales-orders-table-wrap .card-body { padding: 4px !important; width: 100% !important; }
+.sales-orders-table-wrap .table-responsive {
+    width: 100% !important; max-width: none !important; overflow: visible !important;
+}
+#salesOrdersTable {
+    width: 100% !important; min-width: 100% !important; max-width: 100% !important;
+    table-layout: fixed !important; box-sizing: border-box !important;
+}
+#salesOrdersTable th, #salesOrdersTable td {
+    border: 1px solid #dee2e6 !important; box-sizing: border-box !important;
+}
+/* Explicit column widths - adjust nth-child and % per table (must total 100%) */
+#salesOrdersTable th:nth-child(1), #salesOrdersTable td:nth-child(1) { width: 5% !important; }
+#salesOrdersTable th:nth-child(2), #salesOrdersTable td:nth-child(2) { width: 10% !important; }
+/* ... continue for each column ... */
+```
+
+## 3. Adjust column widths per table
+
+Use `th:nth-child(n)` and `td:nth-child(n)` with percentage widths that sum to 100%. Match the table ID in the CSS to the table's `id` attribute.
+
+## Key points
+
+- **Full-bleed trick**: `left: 50%; margin-left: -50vw` makes the wrapper span full viewport width.
+- **table-layout: fixed** + explicit column widths ensure columns stretch to fill the table.
+- **@page { margin: 8mm }** reduces default print margins.
+- Reuse the same pattern for any report/ledger table needing full-width print.

@@ -12,6 +12,14 @@
                     </button>
                 </div>
             @endif
+            @if (session()->has('error'))
+                <div class="alert text-white bg-danger" role="alert">
+                    <div class="iq-alert-text">{{ session('error') }}</div>
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <i class="ri-close-line"></i>
+                    </button>
+                </div>
+            @endif
             <div class="d-flex flex-wrap align-items-center justify-content-between mb-4">
                 <div>
                     <h4 class="mb-3">Customer List</h4>
@@ -85,16 +93,12 @@
                                         href="{{ route('customers.show', $customer->id) }}"><i class="ri-eye-line mr-0"></i>
                                     </a>
                                     <a class="badge bg-success mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Edit"
-                                        href="{{ route('customers.edit', $customer->id) }}""><i class="ri-pencil-line mr-0"></i>
+                                        href="{{ route('customers.edit', $customer->id) }}"><i class="ri-pencil-line mr-0"></i>
                                     </a>
                                     <a class="badge badge-warning mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Ledger"
                                         href="{{ route('customers.ledger', $customer) }}"><i class="ri-file-list-line mr-0"></i>
                                     </a>
-                                    <form action="{{ route('customers.destroy', $customer->id) }}" method="POST" style="margin-bottom: 5px">
-                                        @method('delete')
-                                        @csrf
-                                        <button type="submit" class="badge bg-warning mr-2 border-none" onclick="return confirm('Are you sure you want to delete this record?')" data-toggle="tooltip" data-placement="top" title="" data-original-title="Delete"><i class="ri-delete-bin-line mr-0"></i></button>
-                                    </form>
+                                    <button type="button" class="badge bg-warning mr-2 border-none btn-delete-customer" data-customer-id="{{ $customer->id }}" data-customer-name="{{ $customer->name }}" data-toggle="tooltip" data-placement="top" title="" data-original-title="Delete"><i class="ri-delete-bin-line mr-0"></i></button>
                                 </div>
                             </td>
                         </tr>
@@ -108,4 +112,75 @@
     <!-- Page end  -->
 </div>
 
+<input type="hidden" id="customer-csrf-token" value="{{ csrf_token() }}">
+{{-- Delete Error Modal --}}
+<div class="modal fade" id="customerDeleteErrorModal" tabindex="-1" role="dialog" aria-labelledby="customerDeleteErrorModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="customerDeleteErrorModalLabel">
+                    <i class="ri-error-warning-line mr-2"></i> Cannot Delete Customer
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0" id="customerDeleteErrorMessage">Customer cannot be deleted because it has some record histories (orders or payments).</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@endsection
+
+@section('specificpagescripts')
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.btn-delete-customer').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var customerId = this.getAttribute('data-customer-id');
+            var customerName = this.getAttribute('data-customer-name');
+
+            if (!confirm('Are you sure you want to delete ' + (customerName || 'this customer') + '?')) {
+                return;
+            }
+
+            var csrfToken = (document.querySelector('meta[name="csrf-token"]') && document.querySelector('meta[name="csrf-token"]').getAttribute('content')) || document.getElementById('customer-csrf-token').value;
+            fetch('{{ url("customers") }}/' + customerId, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(function(response) {
+                return response.json().then(function(data) {
+                    return { ok: response.ok, data: data };
+                }).catch(function() {
+                    return { ok: false, data: { message: 'Customer cannot be deleted because it has some record histories (orders or payments).' } };
+                });
+            })
+            .then(function(result) {
+                if (result.ok && result.data.success) {
+                    window.location.href = result.data.redirect || '{{ route("customers.index") }}';
+                } else {
+                    var msg = result.data.message || 'Customer cannot be deleted because it has some record histories (orders or payments).';
+                    document.getElementById('customerDeleteErrorMessage').textContent = msg;
+                    $('#customerDeleteErrorModal').modal('show');
+                }
+            })
+            .catch(function(err) {
+                document.getElementById('customerDeleteErrorMessage').textContent = 'Customer cannot be deleted because it has some record histories (orders or payments).';
+                $('#customerDeleteErrorModal').modal('show');
+            });
+        });
+    });
+});
+</script>
 @endsection

@@ -16,8 +16,11 @@
         </div>
 
         <div class="col-lg-12 mb-3">
-            <div class="card">
-                <div class="card-body">
+            <div class="card report-filter-card border-primary shadow-sm">
+                <div class="card-header border-0 py-2">
+                    <h6 class="mb-0 text-primary"><i class="ri-filter-3-line mr-1"></i> Filters</h6>
+                </div>
+                <div class="card-body pt-0">
                     <form id="stockValuationFilterForm" action="{{ route('reports.inventory.stock-valuation') }}" method="GET">
                         <div class="row align-items-end mb-3">
                             @if(auth()->user()->shop_id == null)
@@ -97,7 +100,7 @@
 
         <div class="col-lg-12">
             <div class="card">
-                <div class="card-header"><h5 class="mb-0">Valuation by Product</h5></div>
+                <div class="card-header bg-primary text-white d-flex align-items-center"><h5 class="mb-0">Valuation by Product</h5></div>
                 <div class="card-body">
                     <div id="loading" class="text-center py-4 text-muted">Loading…</div>
                     <div id="error" class="alert alert-danger" style="display: none;"></div>

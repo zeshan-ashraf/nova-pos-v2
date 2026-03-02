@@ -8,7 +8,7 @@
                 <div>
                     <h4 class="mb-3">Product Sales Report</h4>
                 </div>
-                <div>
+                <div class="d-print-none">
                     <a href="{{ route('reports.index') }}" class="btn btn-secondary">
                         <i class="ri-arrow-left-line mr-1"></i> Back to Reports
                     </a>
@@ -17,9 +17,12 @@
         </div>
 
         <!-- Filter Section -->
-        <div class="col-lg-12 mb-3">
-            <div class="card">
-                <div class="card-body">
+        <div class="col-lg-12 mb-3 d-print-none">
+            <div class="card report-filter-card border-primary shadow-sm">
+                <div class="card-header border-0 py-2">
+                    <h6 class="mb-0 text-primary"><i class="ri-filter-3-line mr-1"></i> Filters</h6>
+                </div>
+                <div class="card-body pt-0">
                     <form action="{{ route('reports.sales.product') }}" method="GET" id="filterForm">
                         <div class="row align-items-end">
                             <div class="col-md-3">
@@ -58,8 +61,9 @@
                             </div>
                             @endif
                             <div class="col-md-3">
-                                <label for="product_id" class="form-label">Product <span class="text-danger">*</span></label>
-                                <select class="form-control" name="product_id" id="product_id" required>
+                                <label for="product_id" class="form-label">Product</label>
+                                <select class="form-control" name="product_id" id="product_id">
+                                    <option value="" {{ !$selectedProductId ? 'selected' : '' }}>All Products</option>
                                     @if($selectedProductId && $selectedProduct)
                                     <option value="{{ $selectedProduct->id }}" selected>
                                         {{ $selectedProduct->product_name }}
@@ -72,9 +76,7 @@
                                 <button type="submit" class="btn btn-primary">
                                     <i class="ri-search-line mr-1"></i> Filter
                                 </button>
-                                <button type="button" class="btn btn-info ml-2" onclick="window.print()">
-                                    <i class="ri-printer-line mr-1"></i> Print
-                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm ml-2" onclick="window.print()"><i class="ri-printer-line mr-1"></i> Print</button>
                             </div>
                         </div>
                     </form>
@@ -82,30 +84,45 @@
             </div>
         </div>
 
-        <!-- KPI Cards -->
+        <!-- KPI Cards Row 1 -->
         <div class="col-lg-12 mb-3">
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-body">
-                            <p class="text-muted mb-1">Total Products</p>
-                            <h4 class="mb-0">{{ number_format($totalProducts, 0) }}</h4>
+            <div class="row sales-kpi-row-1">
+                <div class="col-md-4 mb-3 mb-md-0">
+                    <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
+                        <div class="card-body d-flex align-items-center">
+                            <div class="icon iq-icon-box-2 bg-primary-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
+                                <i class="ri-barcode-box-line text-primary" style="font-size: 1.75rem;"></i>
+                            </div>
+                            <div class="flex-grow-1 min-w-0">
+                                <p class="text-muted mb-0 small font-weight-500">Total Products</p>
+                                <h4 class="mb-0 font-weight-bold text-dark">{{ number_format($totalProducts, 0) }}</h4>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-body">
-                            <p class="text-muted mb-1">Total Quantity Sold</p>
-                            <h4 class="mb-0">{{ number_format($totalQuantity, 0) }}</h4>
+                <div class="col-md-4 mb-3 mb-md-0">
+                    <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
+                        <div class="card-body d-flex align-items-center">
+                            <div class="icon iq-icon-box-2 bg-info-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
+                                <i class="ri-stack-line text-info" style="font-size: 1.75rem;"></i>
+                            </div>
+                            <div class="flex-grow-1 min-w-0">
+                                <p class="text-muted mb-0 small font-weight-500">Total Quantity Sold</p>
+                                <h4 class="mb-0 font-weight-bold text-dark">{{ number_format($totalQuantity, 0) }}</h4>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-body">
-                            <p class="text-muted mb-1">Total Revenue</p>
-                            <h4 class="mb-0">{{ number_format($totalRevenue, 2) }}</h4>
+                <div class="col-md-4 mb-3 mb-md-0">
+                    <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
+                        <div class="card-body d-flex align-items-center">
+                            <div class="icon iq-icon-box-2 bg-success-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
+                                <i class="ri-money-dollar-circle-line text-success" style="font-size: 1.75rem;"></i>
+                            </div>
+                            <div class="flex-grow-1 min-w-0">
+                                <p class="text-muted mb-0 small font-weight-500">Total Revenue</p>
+                                <h4 class="mb-0 font-weight-bold text-dark">{{ number_format($totalRevenue, 2) }}</h4>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -113,9 +130,9 @@
         </div>
 
         <!-- Product Sales Table -->
-        <div class="col-lg-12">
+        <div class="col-lg-12 sales-orders-table-wrap">
             <div class="card">
-                <div class="card-header d-flex justify-content-between">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">Product Sales Summary</h5>
                     <div>
                         <form action="{{ route('reports.sales.product') }}" method="GET" class="d-inline">
@@ -139,7 +156,7 @@
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-striped">
+                        <table class="table table-striped" id="productSalesTable">
                             <thead>
                                 <tr>
                                     <th>No.</th>
@@ -203,6 +220,40 @@
 <!-- Select2 CSS -->
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+<style>
+    @media print {
+        @page { margin: 8mm; size: auto; }
+        .iq-sidebar, .iq-top-navbar, .iq-footer,
+        .report-filter-card, .d-print-none { display: none !important; }
+        .wrapper { display: block !important; }
+        .content-page { padding: 0 !important; margin: 0 !important; width: 100% !important; max-width: none !important; }
+        body, .wrapper { padding: 0 !important; margin: 0 !important; }
+        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .container-fluid { width: 100% !important; max-width: none !important; padding-left: 8px !important; padding-right: 8px !important; }
+        .sales-kpi-row-1 { display: flex !important; flex-wrap: nowrap !important; break-inside: avoid; }
+        .sales-kpi-row-1 .col-md-4 { flex: 0 0 33.333333% !important; max-width: 33.333333% !important; padding: 0 6px !important; }
+        .sales-report-kpi, .sales-report-kpi.card { border: 1px solid #dee2e6 !important; box-shadow: none !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .sales-report-kpi .card-body, .sales-report-kpi .iq-icon-box-2 { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .card { border: 1px solid #dee2e6 !important; box-shadow: none !important; }
+        .card-header.bg-primary { background: #0d6efd !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .card-header .form-control, .card-header form { display: none !important; }
+        .card-body > .mt-3 { display: none !important; }
+        .sales-orders-table-wrap { width: 100vw !important; max-width: 100vw !important; position: relative !important; left: 50% !important; margin-left: -50vw !important; padding-left: 4px !important; padding-right: 4px !important; box-sizing: border-box !important; }
+        .sales-orders-table-wrap .card { width: 100% !important; max-width: none !important; }
+        .sales-orders-table-wrap .card-body { padding: 4px !important; width: 100% !important; }
+        .sales-orders-table-wrap .table-responsive { width: 100% !important; max-width: none !important; overflow: visible !important; }
+        #productSalesTable { width: 100% !important; min-width: 100% !important; max-width: 100% !important; table-layout: fixed !important; box-sizing: border-box !important; }
+        #productSalesTable th, #productSalesTable td { border: 1px solid #dee2e6 !important; box-sizing: border-box !important; }
+        #productSalesTable th:nth-child(1), #productSalesTable td:nth-child(1) { width: 5% !important; }
+        #productSalesTable th:nth-child(2), #productSalesTable td:nth-child(2) { width: 22% !important; }
+        #productSalesTable th:nth-child(3), #productSalesTable td:nth-child(3) { width: 12% !important; }
+        #productSalesTable th:nth-child(4), #productSalesTable td:nth-child(4) { width: 15% !important; }
+        #productSalesTable th:nth-child(5), #productSalesTable td:nth-child(5) { width: 12% !important; }
+        #productSalesTable th:nth-child(6), #productSalesTable td:nth-child(6) { width: 14% !important; }
+        #productSalesTable th:nth-child(7), #productSalesTable td:nth-child(7) { width: 10% !important; }
+        #productSalesTable th:nth-child(8), #productSalesTable td:nth-child(8) { width: 10% !important; }
+    }
+</style>
 @endsection
 
 @section('specificpagescripts')
@@ -260,11 +311,9 @@ $(document).ready(function() {
         }, 100);
     });
 
-    // Auto-submit form when product is selected
+    // Auto-submit form when product selection changes (including clear)
     $('#product_id').on('change', function() {
-        if ($(this).val()) {
-            $('#filterForm').submit();
-        }
+        $('#filterForm').submit();
     });
 });
 

@@ -16,8 +16,11 @@
         </div>
 
         <div class="col-lg-12 mb-3">
-            <div class="card">
-                <div class="card-body">
+            <div class="card report-filter-card border-primary shadow-sm">
+                <div class="card-header border-0 py-2">
+                    <h6 class="mb-0 text-primary"><i class="ri-filter-3-line mr-1"></i> Filters</h6>
+                </div>
+                <div class="card-body pt-0">
                     <form action="{{ route('reports.inventory.expired-products') }}" method="GET">
                         <div class="row align-items-end">
                             @if(auth()->user()->shop_id == null)
@@ -42,7 +45,7 @@
                             </div>
                             <div class="col-md-3">
                                 <button type="submit" class="btn btn-primary"><i class="ri-search-line mr-1"></i> Filter</button>
-                                <button type="button" class="btn btn-info ml-2" onclick="window.print()"><i class="ri-printer-line mr-1"></i> Print</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm ml-2" onclick="window.print()"><i class="ri-printer-line mr-1"></i> Print</button>
                             </div>
                         </div>
                     </form>
@@ -51,17 +54,26 @@
         </div>
 
         <div class="col-lg-12 mb-3">
-            <div class="card">
-                <div class="card-body">
-                    <p class="text-muted mb-1">Total expired products</p>
-                    <h4 class="mb-0">{{ number_format($totalCount ?? 0, 0) }}</h4>
+            <div class="row">
+                <div class="col-md-4 col-lg-3">
+                    <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi border-danger h-100">
+                        <div class="card-body d-flex align-items-center">
+                            <div class="icon iq-icon-box-2 bg-danger-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
+                                <i class="ri-calendar-event-line text-danger" style="font-size: 1.75rem;"></i>
+                            </div>
+                            <div class="flex-grow-1 min-w-0">
+                                <p class="text-muted mb-0 small font-weight-500">Total Expired Products</p>
+                                <h4 class="mb-0 font-weight-bold text-dark">{{ number_format($totalCount ?? 0, 0) }}</h4>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
         <div class="col-lg-12">
             <div class="card">
-                <div class="card-header"><h5 class="mb-0">Expired Products</h5></div>
+                <div class="card-header bg-primary text-white d-flex align-items-center"><h5 class="mb-0">Expired Products</h5></div>
                 <div class="card-body">
                     <div class="table-responsive">
                         <table class="table table-striped table-sm">

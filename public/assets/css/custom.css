@@ -1,5 +1,10 @@
 /* Custom General CSS - Applied to all pages except login and dashboard */
 
+/* Card body padding */
+.card-body {
+    padding: 10px;
+}
+
 /* Form Control Font Size */
 .form-control {
     font-size: 11px !important;
@@ -218,3 +223,41 @@ body {
 .iq-sidebar-menu .iq-menu li a[aria-expanded="true"] .iq-arrow-right.arrow-active {
     color: #ff7e41 !important;
 }
+
+/* Sales report KPI boxes - shared across summary, daily, customer, product, stock reports */
+.sales-report-kpi {
+    transition: transform 0.2s ease, border-color 0.2s ease;
+    border-radius: 12px;
+    border: 1px solid #DCDFE8;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.12), 0 2px 4px -1px rgba(0, 0, 0, 0.08) !important;
+}
+.sales-report-kpi:hover {
+    transform: translateY(-2px);
+    border-color: var(--iq-primary, #32BDEA);
+}
+.sales-report-kpi .iq-icon-box-2 {
+    border-radius: 12px;
+    transition: transform 0.2s ease;
+}
+.sales-report-kpi:hover .iq-icon-box-2 {
+    transform: scale(1.05);
+}
+
+/* Report filter box - prominent styling */
+.report-filter-card {
+    border-left-width: 4px !important;
+    background: linear-gradient(to right, rgba(50, 189, 234, 0.04), transparent);
+}
+
+.card .card-header {
+    background: transparent;
+    border-radius: 5px;
+    padding: 5px 20px;
+    margin-bottom: 0;
+    -ms-flex-align: center !important;
+    align-items: center !important;
+    border: 0;
+    border-bottom: 1px solid #DCDFE8;
+}
+
+.font-weight-500 { font-weight: 500; }

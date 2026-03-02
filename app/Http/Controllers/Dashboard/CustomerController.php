@@ -274,19 +274,55 @@ class CustomerController extends Controller
 
     /**
      * Remove the specified resource from storage.
+     * Customer cannot be deleted if they have any orders or payments.
+     * Opening balance entries are ignored for the check and soft-deleted with the customer.
      */
-    public function destroy(Customer $customer)
+    public function destroy(Request $request, Customer $customer)
     {
         $this->ensureShopAccess($customer);
-        
+
+        // Block deletion only if customer has orders or payments (ignore opening balance)
+        $hasOrders = Order::where('customer_id', $customer->id)->exists();
+        $hasPayments = AccountTransaction::where('account_type', AccountTransaction::ACCOUNT_TYPE_CUSTOMER)
+            ->where('account_ref_id', $customer->id)
+            ->where('source_type', AccountTransaction::SOURCE_CUSTOMER_PAYMENT)
+            ->exists();
+
+        if ($hasOrders || $hasPayments) {
+            $message = 'Customer cannot be deleted because it has some record histories (orders or payments).';
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                ], 422);
+            }
+
+            return Redirect::route('customers.index')->with('error', $message);
+        }
+
+        // Soft-delete opening balance entries for this customer
+        AccountTransaction::where('account_type', AccountTransaction::ACCOUNT_TYPE_CUSTOMER)
+            ->where('account_ref_id', $customer->id)
+            ->where('source_type', AccountTransaction::SOURCE_CUSTOMER_OPENING)
+            ->delete();
+
         /**
          * Delete photo if exists.
          */
-        if($customer->photo){
+        if ($customer->photo) {
             Storage::delete('public/customers/' . $customer->photo);
         }
 
         Customer::destroy($customer->id);
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Customer has been deleted!',
+                'redirect' => route('customers.index'),
+            ]);
+        }
 
         return Redirect::route('customers.index')->with('success', 'Customer has been deleted!');
     }

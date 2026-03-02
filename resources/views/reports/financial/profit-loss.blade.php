@@ -32,7 +32,11 @@
         </div>
 
         <div class="col-lg-12 mb-4">
-            <div class="border rounded p-3 bg-white">
+            <div class="card report-filter-card border-primary shadow-sm">
+                <div class="card-header border-0 py-2">
+                    <h6 class="mb-0 text-primary"><i class="ri-filter-3-line mr-1"></i> Filters</h6>
+                </div>
+                <div class="card-body pt-0">
                 <form action="{{ route('reports.financial.profit-loss') }}" method="GET">
                     <div class="row align-items-end">
                         <div class="col-md-3">
@@ -69,15 +73,21 @@
                         </div>
                         @endif
                         <div class="col-md-3">
-                            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm ml-2" onclick="window.print()">Print</button>
+                            <button type="submit" class="btn btn-primary btn-sm"><i class="ri-search-line mr-1"></i> Filter</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm ml-2" onclick="window.print()"><i class="ri-printer-line mr-1"></i> Print</button>
                         </div>
                     </div>
                 </form>
+                </div>
             </div>
         </div>
 
         <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white d-flex align-items-center">
+                    <h5 class="mb-0">Profit & Loss Statement</h5>
+                </div>
+                <div class="card-body">
             <div class="pl-statement bg-white border rounded p-4">
                 <table class="pl-table table table-borderless mb-0">
                     <tbody>
@@ -128,6 +138,8 @@
                 </table>
                 <p class="mb-0 mt-3 small text-muted">Profit Margin: {{ number_format($profitMargin ?? 0, 2) }}%</p>
             </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -161,7 +173,7 @@
     body, .wrapper, .content-page, .container-fluid, .reports-profit-loss .row, .reports-profit-loss .col-lg-12 { width: 100% !important; max-width: 100% !important; padding-left: 0 !important; padding-right: 0 !important; margin: 0 !important; }
     .content-page { padding-top: 0 !important; }
     /* Hide non-print UI */
-    .iq-sidebar, .iq-top-navbar, .btn, .border.rounded.p-3, form.border.rounded, #date_filter, #start_date_group, #end_date_group, .pl-report-header .btn { display: none !important; }
+    .iq-sidebar, .iq-top-navbar, .btn, .report-filter-card, #date_filter, #start_date_group, #end_date_group, .pl-report-header .btn { display: none !important; }
     /* Report header: center title and date, title 2px bigger */
     .pl-report-header { display: block !important; text-align: center !important; margin-bottom: 1rem !important; }
     .pl-report-title { font-size: calc(1em + 2px) !important; text-align: center !important; margin: 0 auto 0.25rem !important; }

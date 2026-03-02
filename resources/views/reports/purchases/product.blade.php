@@ -18,7 +18,7 @@
 
         <!-- Filter Section -->
         <div class="col-lg-12 mb-3">
-            <div class="card">
+            <div class="card report-filter-card">
                 <div class="card-body">
                     <form action="{{ route('reports.purchases.product') }}" method="GET" id="filterForm">
                         <div class="row align-items-end">
