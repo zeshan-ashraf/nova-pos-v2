@@ -118,13 +118,13 @@
     <div class="row mb-3 ledger-summary-row">
         <div class="col-md-3 mb-3 mb-md-0">
             <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
-                <div class="card-body d-flex align-items-center">
+                <div class="card-body d-flex align-items-center ledger-kpi-body" style="height: 50px;">
                     <div class="icon iq-icon-box-2 bg-secondary-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
                         <i class="ri-wallet-line text-secondary" style="font-size: 1.75rem;"></i>
                     </div>
                     <div class="flex-grow-1 min-w-0">
-                        <p class="text-muted mb-0 small font-weight-500">Opening Balance</p>
-                        <h4 class="mb-0 font-weight-bold {{ $showAdvance($opening_balance ?? 0) ? 'text-danger' : 'text-dark' }}">
+                        <p class="text-muted mb-0 small font-weight-500 ledger-kpi-label" style="margin: 0;">Opening Balance</p>
+                        <h4 class="mb-0 font-weight-bold ledger-kpi-value {{ $showAdvance($opening_balance ?? 0) ? 'text-danger' : 'text-dark' }}" style="margin: 5px;">
                             {{ $fmtAmt($opening_balance ?? 0) }}
                             @if($showAdvance($opening_balance ?? 0)) <span class="small">(Advance)</span> @endif
                         </h4>
@@ -134,39 +134,39 @@
         </div>
         <div class="col-md-3 mb-3 mb-md-0">
             <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
-                <div class="card-body d-flex align-items-center">
+                <div class="card-body d-flex align-items-center ledger-kpi-body" style="height: 50px;">
                     <div class="icon iq-icon-box-2 bg-danger-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
                         <i class="ri-arrow-up-circle-line text-danger" style="font-size: 1.75rem;"></i>
                     </div>
                     <div class="flex-grow-1 min-w-0">
-                        <p class="text-muted mb-0 small font-weight-500">Total Debits</p>
-                        <h4 class="mb-0 font-weight-bold text-dark">{{ $fmtAmt($total_debits ?? 0) }}</h4>
+                        <p class="text-muted mb-0 small font-weight-500 ledger-kpi-label" style="margin: 0;">Total Debits</p>
+                        <h4 class="mb-0 font-weight-bold ledger-kpi-value text-dark" style="margin: 5px;">{{ $fmtAmt($total_debits ?? 0) }}</h4>
                     </div>
                 </div>
             </div>
         </div>
         <div class="col-md-3 mb-3 mb-md-0">
             <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
-                <div class="card-body d-flex align-items-center">
+                <div class="card-body d-flex align-items-center ledger-kpi-body" style="height: 50px;">
                     <div class="icon iq-icon-box-2 bg-success-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
                         <i class="ri-arrow-down-circle-line text-success" style="font-size: 1.75rem;"></i>
                     </div>
                     <div class="flex-grow-1 min-w-0">
-                        <p class="text-muted mb-0 small font-weight-500">Total Credits</p>
-                        <h4 class="mb-0 font-weight-bold text-dark">{{ $fmtAmt($total_credits ?? 0) }}</h4>
+                        <p class="text-muted mb-0 small font-weight-500 ledger-kpi-label" style="margin: 0;">Total Credits</p>
+                        <h4 class="mb-0 font-weight-bold ledger-kpi-value text-dark" style="margin: 5px;">{{ $fmtAmt($total_credits ?? 0) }}</h4>
                     </div>
                 </div>
             </div>
         </div>
         <div class="col-md-3 mb-3 mb-md-0">
             <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
-                <div class="card-body d-flex align-items-center">
+                <div class="card-body d-flex align-items-center ledger-kpi-body" style="height: 50px;">
                     <div class="icon iq-icon-box-2 bg-primary-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
                         <i class="ri-bank-card-line text-primary" style="font-size: 1.75rem;"></i>
                     </div>
                     <div class="flex-grow-1 min-w-0">
-                        <p class="text-muted mb-0 small font-weight-500">Closing Balance</p>
-                        <h4 class="mb-0 font-weight-bold {{ $showAdvance($closing_balance ?? 0) ? 'text-danger' : 'text-dark' }}">
+                        <p class="text-muted mb-0 small font-weight-500 ledger-kpi-label" style="margin: 0;">Closing Balance</p>
+                        <h4 class="mb-0 font-weight-bold ledger-kpi-value {{ $showAdvance($closing_balance ?? 0) ? 'text-danger' : 'text-dark' }}" style="margin: 5px;">
                             {{ $fmtAmt($closing_balance ?? 0) }}
                             @if($showAdvance($closing_balance ?? 0)) <span class="small">(Advance)</span> @endif
                         </h4>
@@ -188,13 +188,13 @@
         <div class="table-responsive">
             <table class="table table-sm mb-0" id="ledgerTable">
                 <colgroup>
-                    <col class="ledger-col-date">
-                    <col class="ledger-col-type">
-                    <col class="ledger-col-ref">
+                    <col class="ledger-col-date" style="width: 75px;">
+                    <col class="ledger-col-type" style="width: 65px;">
+                    <col class="ledger-col-ref" style="width: 95px;">
                     <col class="ledger-col-desc">
-                    <col class="ledger-col-debit">
-                    <col class="ledger-col-credit">
-                    <col class="ledger-col-balance">
+                    <col class="ledger-col-debit" style="width: 100px;">
+                    <col class="ledger-col-credit" style="width: 100px;">
+                    <col class="ledger-col-balance" style="width: 100px;">
                 </colgroup>
                 <thead class="thead-light">
                     <tr>
@@ -310,13 +310,16 @@ function printLedgerFullWidth() {
     }
     var contentEl = document.getElementById('ledgerPrintContent');
     var content = contentEl ? contentEl.innerHTML : '';
-    var styles = '*,*:before,*:after{box-sizing:border-box;}body{margin:0;padding:12px;font-family:Arial,sans-serif;font-size:14px;width:100%;max-width:100%;}' +
+    var styles = '*,*:before,*:after{box-sizing:border-box;}body{margin:0;padding:12px;font-family:Arial,sans-serif;font-size:11px;width:100%;max-width:100%;}' +
         '.print-header{text-align:center;margin-bottom:16px;}.print-header h4{margin:0 0 6px 0;font-size:1.25rem;}.print-header h2{margin:0 0 4px 0;font-size:1.5rem;}.print-header p{margin:0;color:#6c757d;}' +
-        '.row{display:flex;flex-wrap:nowrap;margin-bottom:12px;}.row .col-md-3{flex:0 0 25%;max-width:25%;padding:0 6px;}' +
-        '.card{border:1px solid #dee2e6;border-radius:4px;}.card-body{padding:12px;}.text-right{text-align:right;}.font-weight-bold{font-weight:700;}.text-muted{color:#6c757d;}.text-danger{color:#dc3545;}.small{font-size:0.875em;}' +
+        '.ledger-summary-row{display:flex;flex-wrap:nowrap;margin-bottom:12px;}.ledger-summary-row .col-md-3{flex:0 0 25%;max-width:25%;padding:0 6px;}' +
+        '.card{border:1px solid #dee2e6;border-radius:4px;}.card-body{padding:0 12px;}.ledger-kpi-body{height:50px!important;display:flex!important;align-items:center!important;}.ledger-kpi-label{margin:0!important;}.ledger-kpi-value{margin:5px!important;}' +
+        '.text-right{text-align:right;}.font-weight-bold{font-weight:700;}.text-muted{color:#6c757d;}.text-danger{color:#dc3545;}.small{font-size:0.875em;}' +
         '.table-wrap{width:100%;overflow:visible;margin-top:12px;}.ledger-table-wrapper,.table-responsive{width:100%!important;max-width:100%!important;}' +
-        'table{width:100%!important;min-width:100%!important;border-collapse:collapse;table-layout:fixed;}th,td{border:1px solid #dee2e6;padding:8px;text-align:left;}th{background:#f8f9fa;font-weight:600;}tfoot td{font-weight:700;}' +
-        '@media print{body{padding:6px;width:100%;}.table-wrap,.ledger-table-wrapper,.table-responsive,table{width:100%!important;max-width:100%!important;}@page{margin:0;size:auto;}body{margin:0!important;}}';
+        '#ledgerTable{width:100%!important;border-collapse:collapse;table-layout:fixed;}th,td{border:1px solid #dee2e6;padding:8px;text-align:left;}th{background:#f8f9fa;font-weight:600;}tfoot td{font-weight:700;}' +
+        '#ledgerTable th:nth-child(1),#ledgerTable td:nth-child(1){width:75px;min-width:75px;}#ledgerTable th:nth-child(2),#ledgerTable td:nth-child(2){width:65px;min-width:65px;}#ledgerTable th:nth-child(3),#ledgerTable td:nth-child(3){width:95px;min-width:95px;}' +
+        '#ledgerTable th:nth-child(5),#ledgerTable td:nth-child(5){width:100px;min-width:100px;}#ledgerTable th:nth-child(6),#ledgerTable td:nth-child(6){width:100px;min-width:100px;}#ledgerTable th:nth-child(7),#ledgerTable td:nth-child(7){width:100px;min-width:100px;}' +
+        '@media print{body{padding:6px;width:100%;}.table-wrap,.ledger-table-wrapper,.table-responsive,#ledgerTable{width:100%!important;}@page{margin:8mm;size:auto;}body{margin:0!important;}}';
     var headerHtml = '<div class="print-header"><h4>' + (title || 'Customer Ledger') + '</h4><h2>' + customerName + '</h2><p>' + phone + '</p></div>';
     var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title></title><style>' + styles + '</style></head><body>' + headerHtml + '<div class="table-wrap">' + content + '</div></body></html>';
     var w = window.open('', '_blank', 'width=900,height=700,scrollbars=yes');
@@ -483,6 +486,9 @@ function closeModal(modalEl) {
 /* Ledger table full width */
 #ledgerTable { width: 100%; }
 @media print {
+    @page { margin: 8mm; size: auto; }
+    /* Hide layout chrome + filter/buttons */
+    .iq-sidebar, .iq-top-navbar, .iq-footer,
     .btn, #dateFilterForm, .report-filter-card, .d-print-none { display: none !important; }
     /* Centered heading and customer info (show only in print) */
     .ledger-print-header { display: block !important; margin-bottom: 1rem !important; }
@@ -509,18 +515,22 @@ function closeModal(modalEl) {
     .customer-ledger-page.container-fluid { width: 100% !important; max-width: none !important; padding-left: 0 !important; padding-right: 0 !important; }
     .customer-ledger-page .row { width: 100% !important; max-width: none !important; margin-left: 0 !important; margin-right: 0 !important; }
     .customer-ledger-page .row > [class*="col-"] { width: 100% !important; max-width: none !important; padding-left: 0 !important; padding-right: 0 !important; }
+    .customer-ledger-page .ledger-summary-row > [class*="col-"] { flex: 0 0 25% !important; max-width: 25% !important; width: auto !important; padding: 0 6px !important; }
     /* Full-bleed table: force table area to full page width */
     .ledger-table-wrapper { width: 100vw !important; max-width: 100vw !important; position: relative !important; left: 50% !important; margin-left: -50vw !important; padding-left: 10px !important; padding-right: 10px !important; box-sizing: border-box !important; }
     .ledger-table-wrapper .table-responsive { width: 100% !important; max-width: none !important; overflow: visible !important; }
     #ledgerTable { width: 100% !important; min-width: 100% !important; table-layout: fixed !important; box-sizing: border-box !important; }
-    /* Column widths so table fills full width in print (percentages of table) */
-    #ledgerTable .ledger-col-date { width: 12%; }
-    #ledgerTable .ledger-col-type { width: 10%; }
-    #ledgerTable .ledger-col-ref { width: 16%; }
-    #ledgerTable .ledger-col-desc { width: 28%; }
-    #ledgerTable .ledger-col-debit { width: 12%; }
-    #ledgerTable .ledger-col-credit { width: 12%; }
-    #ledgerTable .ledger-col-balance { width: 10%; }
+    /* Column widths (pixel, match screen) */
+    #ledgerTable th:nth-child(1), #ledgerTable td:nth-child(1) { width: 75px; min-width: 75px; }
+    #ledgerTable th:nth-child(2), #ledgerTable td:nth-child(2) { width: 65px; min-width: 65px; }
+    #ledgerTable th:nth-child(3), #ledgerTable td:nth-child(3) { width: 95px; min-width: 95px; }
+    #ledgerTable th:nth-child(5), #ledgerTable td:nth-child(5) { width: 100px; min-width: 100px; }
+    #ledgerTable th:nth-child(6), #ledgerTable td:nth-child(6) { width: 100px; min-width: 100px; }
+    #ledgerTable th:nth-child(7), #ledgerTable td:nth-child(7) { width: 100px; min-width: 100px; }
+    /* Summary box height and spacing in print */
+    .ledger-summary-row .card-body.ledger-kpi-body { height: 50px !important; }
+    .ledger-summary-row .ledger-kpi-label { margin: 0 !important; }
+    .ledger-summary-row .ledger-kpi-value { margin: 5px !important; }
 }
 </style>
 @endsection

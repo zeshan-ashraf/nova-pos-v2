@@ -225,13 +225,25 @@ class SalesReportController extends Controller
         
         $totalCustomers = $selectedCustomerId ? 1 : (clone $ordersQuery)->distinct('customer_id')->count('customer_id');
         $totalRevenue = $summaryQuery->sum('total');
-        // Total Paid = payment receipts within date filter (cash/bank debits from sales + customer payments)
-        $totalPaidQuery = AccountTransaction::query()
-            ->whereIn('account_type', [AccountTransaction::ACCOUNT_TYPE_CASH, AccountTransaction::ACCOUNT_TYPE_BANK])
-            ->where('direction', AccountTransaction::DIRECTION_DEBIT)
-            ->whereIn('source_type', [AccountTransaction::SOURCE_SALE, AccountTransaction::SOURCE_CUSTOMER_PAYMENT])
-            ->whereBetween('transaction_date', [$dateRange['start_datetime'], $dateRange['end_datetime']]);
-        $this->applyShopFilter($totalPaidQuery, $shopFilter['shop_ids']);
+        // Total Paid:
+        // - When no customer is selected: payment receipts within date filter (cash/bank debits from sales + customer payments)
+        // - When a customer is selected: customer-account credits for that customer (sale + customer_payment) in date range
+        if ($selectedCustomerId) {
+            $totalPaidQuery = AccountTransaction::query()
+                ->where('account_type', AccountTransaction::ACCOUNT_TYPE_CUSTOMER)
+                ->where('account_ref_id', $selectedCustomerId)
+                ->where('direction', AccountTransaction::DIRECTION_CREDIT)
+                ->whereIn('source_type', [AccountTransaction::SOURCE_SALE, AccountTransaction::SOURCE_CUSTOMER_PAYMENT])
+                ->whereBetween('transaction_date', [$dateRange['start_datetime'], $dateRange['end_datetime']]);
+            $this->applyShopFilter($totalPaidQuery, $shopFilter['shop_ids']);
+        } else {
+            $totalPaidQuery = AccountTransaction::query()
+                ->whereIn('account_type', [AccountTransaction::ACCOUNT_TYPE_CASH, AccountTransaction::ACCOUNT_TYPE_BANK])
+                ->where('direction', AccountTransaction::DIRECTION_DEBIT)
+                ->whereIn('source_type', [AccountTransaction::SOURCE_SALE, AccountTransaction::SOURCE_CUSTOMER_PAYMENT])
+                ->whereBetween('transaction_date', [$dateRange['start_datetime'], $dateRange['end_datetime']]);
+            $this->applyShopFilter($totalPaidQuery, $shopFilter['shop_ids']);
+        }
         $totalPaid = (float) $totalPaidQuery->sum('amount');
         $totalDue = max(0, $totalRevenue - $totalPaid);
 

@@ -389,7 +389,7 @@
                                 <i class="fas fa-arrow-right"></i><span>Complete Orders</span>
                             </a>
                         </li>
-                        <!--<li class="{{ Request::is('pending/due*') ? 'active' : '' }}">
+                        <!--http://nova-pos.test/reports/sales/customer?date_filter=last_month&start_date=2026-02-01&end_date=2026-02-28&customer_id=13<li class="{{ Request::is('pending/due*') ? 'active' : '' }}">
                             <a href="{{ route('order.pendingDue') }}">
                                 <i class="fas fa-arrow-right"></i><span>Pending Due</span>
                             </a>

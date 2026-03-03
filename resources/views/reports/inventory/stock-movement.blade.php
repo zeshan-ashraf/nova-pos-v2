@@ -71,8 +71,8 @@
                                     <option value="theft">Theft</option>
                                 </select>
                             </div>
-                            <div class="col-md-2">
-                                <label for="product_id" class="form-label">Product</label>
+                            <div class="col-md-4 col-lg-4">
+                                <label for="product_id" class="form-label">Product <span class="text-muted font-weight-normal">(Type to search products in your shop)</span></label>
                                 <select class="form-control" name="product_id" id="product_id" style="width: 100%;">
                                     @if(isset($selectedProductId) && $selectedProduct)
                                     <option value="{{ $selectedProduct->id }}" selected>
@@ -81,7 +81,6 @@
                                     </option>
                                     @endif
                                 </select>
-                                <small class="text-muted">Type to search products in your shop</small>
                             </div>
                             <div class="col-md-2">
                                 <label for="per_page" class="form-label">Per page</label>
@@ -152,7 +151,8 @@
     function formatDate(iso) {
         if (!iso) return '–';
         const d = new Date(iso);
-        return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+        // Date only, no time
+        return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' });
     }
 
     function renderTable(data) {
