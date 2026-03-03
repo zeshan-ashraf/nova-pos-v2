@@ -110,6 +110,8 @@ class InventoryReportController extends Controller
                 'product_id'     => $request->input('product_id'),
                 'movement_type'  => $request->input('movement_type'),
                 'user_id'        => $request->input('user_id'),
+                'sort'           => $request->input('sort', 'id'),
+                'order'          => $request->input('order', 'desc'),
             ];
             if ($authUser->shop_id) {
                 $filters['shop_id'] = $authUser->shop_id;

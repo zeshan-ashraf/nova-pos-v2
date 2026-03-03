@@ -36,6 +36,14 @@ class StockMovementReportService
         $page = max(1, $page);
         $offset = ($page - 1) * $perPage;
 
+        $sort = $filters['sort'] ?? 'id';
+        $order = strtolower($filters['order'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+        $allowedSort = ['id', 'date', 'product_name', 'product_code'];
+        if (!in_array($sort, $allowedSort, true)) {
+            $sort = 'id';
+        }
+        $orderByClause = $this->buildOrderBy($sort, $order);
+
         $bindings = [];
         $where = $this->buildWhere($filters, $bindings, 'sl');
 
@@ -50,7 +58,7 @@ class StockMovementReportService
                 sl.shop_id,
                 p.product_name,
                 p.product_code,
-                sl.created_at AS date,
+                COALESCE(sl.adjustment_date, sl.created_at) AS date,
                 sl.direction,
                 sl.source_type AS movement_type,
                 sl.source_id,
@@ -71,7 +79,7 @@ class StockMovementReportService
             LEFT JOIN purchases ref_p ON sl.source_type = 'purchase' AND sl.source_id = ref_p.id
             LEFT JOIN orders ref_o ON sl.source_type = 'sale' AND sl.source_id = ref_o.id
             WHERE {$where}
-            ORDER BY sl.created_at DESC, sl.id DESC
+            ORDER BY {$orderByClause}
             LIMIT ? OFFSET ?
         ";
 
@@ -80,7 +88,7 @@ class StockMovementReportService
             $rows = DB::select($dataSql, array_merge($bindings, [$perPage, $offset]));
         } catch (QueryException $e) {
             // Fallback when window functions are not supported (older MySQL/MariaDB).
-            $rows = $this->getRowsWithoutWindow($where, $bindings, $perPage, $offset);
+            $rows = $this->getRowsWithoutWindow($where, $bindings, $perPage, $offset, $orderByClause);
         }
 
         $data = [];
@@ -117,10 +125,25 @@ class StockMovementReportService
     }
 
     /**
+     * Build ORDER BY clause for sort column and direction (no user input in values).
+     */
+    private function buildOrderBy(string $sort, string $order): string
+    {
+        $dir = strtoupper($order) === 'ASC' ? 'ASC' : 'DESC';
+        $column = match ($sort) {
+            'date' => 'COALESCE(sl.adjustment_date, sl.created_at)',
+            'product_name' => 'p.product_name',
+            'product_code' => 'p.product_code',
+            default => 'sl.id',
+        };
+        return "{$column} {$dir}, sl.id {$dir}";
+    }
+
+    /**
      * Fallback when window functions are not available.
      * NOTE: Balance is computed within the returned page only (sufficient for basic visibility).
      */
-    private function getRowsWithoutWindow(string $where, array $bindings, int $perPage, int $offset): array
+    private function getRowsWithoutWindow(string $where, array $bindings, int $perPage, int $offset, string $orderByClause = 'sl.id DESC, sl.id DESC'): array
     {
         $sql = "
             SELECT
@@ -129,7 +152,7 @@ class StockMovementReportService
                 sl.shop_id,
                 p.product_name,
                 p.product_code,
-                sl.created_at AS date,
+                COALESCE(sl.adjustment_date, sl.created_at) AS date,
                 sl.direction,
                 sl.source_type AS movement_type,
                 sl.source_id,
@@ -143,7 +166,7 @@ class StockMovementReportService
             LEFT JOIN purchases ref_p ON sl.source_type = 'purchase' AND sl.source_id = ref_p.id
             LEFT JOIN orders ref_o ON sl.source_type = 'sale' AND sl.source_id = ref_o.id
             WHERE {$where}
-            ORDER BY sl.created_at DESC, sl.id DESC
+            ORDER BY {$orderByClause}
             LIMIT ? OFFSET ?
         ";
         $rows = DB::select($sql, array_merge($bindings, [$perPage, $offset]));

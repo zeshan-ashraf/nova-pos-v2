@@ -113,14 +113,14 @@ class OrderController extends Controller
             });
         }
 
-        // Apply shop filtering
+        // Apply shop filtering (qualify column so it's unambiguous when sort joins customers)
         if ($authUser->shop_id) {
-            $ordersQuery->whereIn('shop_id', $visibleShopIds);
+            $ordersQuery->whereIn('orders.shop_id', $visibleShopIds);
         } else {
             $ordersQuery->where(function ($query) use ($visibleShopIds) {
-                $query->whereNull('shop_id');
+                $query->whereNull('orders.shop_id');
                 if ($visibleShopIds->isNotEmpty()) {
-                    $query->orWhereIn('shop_id', $visibleShopIds);
+                    $query->orWhereIn('orders.shop_id', $visibleShopIds);
                 }
             });
         }

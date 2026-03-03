@@ -230,11 +230,11 @@
                                 </li>
                                 @endif
                                 @if (auth()->user()->can('reports.expired-products'))
-                                <li class="{{ Request::is('reports/inventory/expired-products*') ? 'active' : '' }}">
+                                <!--<li class="{{ Request::is('reports/inventory/expired-products*') ? 'active' : '' }}">
                                     <a href="{{ route('reports.inventory.expired-products') }}">
                                         <i class="fas fa-circle" style="font-size: 6px; vertical-align: middle;"></i><span>Expired Products</span>
                                     </a>
-                                </li>
+                                </li>-->
                                 @endif
                             </ul>
                         </li>

@@ -95,6 +95,8 @@
                                 <button type="submit" class="btn btn-primary"><i class="ri-search-line mr-1"></i> Filter</button>
                             </div>
                         </div>
+                        <input type="hidden" name="sort" id="sortParam" value="{{ request('sort', 'id') }}">
+                        <input type="hidden" name="order" id="orderParam" value="{{ request('order', 'desc') }}">
                     </form>
                 </div>
             </div>
@@ -110,9 +112,9 @@
                         <table class="table table-striped table-sm">
                             <thead>
                                 <tr>
-                                    <th>Date</th>
-                                    <th>Product</th>
-                                    <th>Code</th>
+                                    <th><a href="#" class="sortable-col text-decoration-none text-primary" data-sort="date" title="Sort by Date">Date <i class="sort-arrow ml-1"></i></a></th>
+                                    <th><a href="#" class="sortable-col text-decoration-none text-primary" data-sort="product_name" title="Sort by Product">Product <i class="sort-arrow ml-1"></i></a></th>
+                                    <th><a href="#" class="sortable-col text-decoration-none text-primary" data-sort="product_code" title="Sort by Code">Code <i class="sort-arrow ml-1"></i></a></th>
                                     <th>Reference</th>
                                     <th>Type</th>
                                     <th class="text-right">Qty IN</th>
@@ -146,6 +148,38 @@
         params.set('format', 'json');
         if (page) params.set('page', page);
         return params.toString();
+    }
+
+    function updateSortArrows() {
+        var sort = document.getElementById('sortParam').value;
+        var order = document.getElementById('orderParam').value;
+        document.querySelectorAll('.sortable-col .sort-arrow').forEach(function(i) {
+            i.className = 'sort-arrow ml-1';
+            i.setAttribute('class', 'sort-arrow ml-1');
+        });
+        document.querySelectorAll('.sortable-col').forEach(function(a) {
+            if (a.getAttribute('data-sort') === sort) {
+                var arrow = a.querySelector('.sort-arrow');
+                if (arrow) {
+                    arrow.className = 'sort-arrow ml-1 ri-arrow-' + (order === 'asc' ? 'up' : 'down') + '-line';
+                }
+            }
+        });
+    }
+
+    function setSort(col) {
+        var sortEl = document.getElementById('sortParam');
+        var orderEl = document.getElementById('orderParam');
+        var currentSort = sortEl.value;
+        var currentOrder = orderEl.value;
+        if (currentSort === col) {
+            orderEl.value = currentOrder === 'asc' ? 'desc' : 'asc';
+        } else {
+            sortEl.value = col;
+            orderEl.value = (col === 'id' || col === 'date') ? 'desc' : 'asc';
+        }
+        updateSortArrows();
+        loadReport(1);
     }
 
     function formatDate(iso) {
@@ -213,6 +247,7 @@
                 loading.style.display = 'none';
                 renderTable(res);
                 if (res.meta) renderPagination(res.meta);
+                updateSortArrows();
                 tableWrap.style.display = 'block';
             })
             .catch(function(err) {
@@ -235,7 +270,15 @@
     }
     window.toggleCustomDates = toggleCustomDates;
 
+    document.querySelectorAll('.sortable-col').forEach(function(a) {
+        a.addEventListener('click', function(e) {
+            e.preventDefault();
+            setSort(a.getAttribute('data-sort'));
+        });
+    });
+
     loadReport(1);
+    updateSortArrows();
 })();
 </script>
 @endsection
