@@ -62,14 +62,25 @@ class StockService
     /**
      * Record sale (stock out). Blocks if insufficient stock.
      * $price = selling price (stored in stock_logs.price); $costPerUnit = cost at time of sale (stored in stock_logs.cost_per_unit).
+     * $saleDate (optional) sets stock_logs.adjustment_date for COGS/valuation (Y-m-d or Carbon/DateTime).
      */
-    public function sellStock(Product $product, int $qty, float $price, int $orderId, ?float $costPerUnit = null): StockLog
-    {
+    public function sellStock(
+        Product $product,
+        int $qty,
+        float $price,
+        int $orderId,
+        ?float $costPerUnit = null,
+        $saleDate = null
+    ): StockLog {
         $this->validator->validateOutOperation($product, $qty, 'sale', (string) $orderId);
 
         $cost = $costPerUnit !== null ? $costPerUnit : (float) ($product->buying_price ?? 0);
 
-        return $this->insertAndUpdate($product, $qty, 'out', 'sale', (string) $orderId, $price, null, null, null, $cost);
+        $adjustmentDate = $saleDate
+            ? (\is_string($saleDate) ? $saleDate : \Illuminate\Support\Carbon::parse($saleDate)->toDateString())
+            : null;
+
+        return $this->insertAndUpdate($product, $qty, 'out', 'sale', (string) $orderId, $price, null, null, $adjustmentDate, $cost);
     }
 
     /**
@@ -135,6 +146,35 @@ class StockService
 
         $price = $isLossOut ? (float) ($product->buying_price ?? 0) : 0;
         return $this->insertAndUpdate($product, $qty, $direction, $sourceType, null, $price, null, $reason, $adjustmentDate);
+    }
+
+    /**
+     * Record stock for a sale return (stock in, source_type = sale_return).
+     * $returnDate (optional) sets stock_logs.adjustment_date (Y-m-d or Carbon/DateTime).
+     */
+    public function saleReturnStock(
+        Product $product,
+        int $qty,
+        int $returnId,
+        $returnDate = null
+    ): StockLog {
+        $this->validator->validateInOperation($qty, 'sale_return', (string) $returnId, null);
+
+        $adjustmentDate = $returnDate
+            ? (\is_string($returnDate) ? $returnDate : \Illuminate\Support\Carbon::parse($returnDate)->toDateString())
+            : null;
+
+        return $this->insertAndUpdate(
+            $product,
+            $qty,
+            'in',
+            'sale_return',
+            (string) $returnId,
+            0.0,
+            null,
+            null,
+            $adjustmentDate
+        );
     }
 
     /**

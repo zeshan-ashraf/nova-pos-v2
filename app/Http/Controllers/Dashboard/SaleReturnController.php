@@ -17,9 +17,13 @@ use Illuminate\Support\Carbon;
 use Haruncpi\LaravelIdGenerator\IdGenerator;
 use App\Support\ActiveShop;
 use App\Services\CustomerCreditService;
+use App\Services\Stock\StockService;
 
 class SaleReturnController extends Controller
 {
+    public function __construct(
+        private StockService $stockService
+    ) {}
     /**
      * Display a listing of sale returns.
      */
@@ -325,9 +329,13 @@ class SaleReturnController extends Controller
 
                     SaleReturnDetail::create($returnDetailData);
 
-                    // Increase stock
-                    Product::where('id', $product['product_id'])
-                        ->update(['product_store' => DB::raw('product_store + ' . $product['quantity'])]);
+                    // Increase stock via ledger-safe stock service (stock_logs, product_store in sync)
+                    $this->stockService->saleReturnStock(
+                        $productModel,
+                        (int) $product['quantity'],
+                        $saleReturn->id,
+                        $saleReturn->return_date
+                    );
                 }
 
                 // 3. Adjust order paid amount and create refund
@@ -413,18 +421,8 @@ class SaleReturnController extends Controller
 
         try {
             DB::transaction(function () use ($saleReturn, $customer, $order, $creditService) {
-                // 1. Reverse stock for all return details (decrease stock back)
-                foreach ($saleReturn->returnDetails as $returnDetail) {
-                    $product = $returnDetail->product;
-                    
-                    if (!$product) {
-                        throw new \Exception("Product with ID {$returnDetail->product_id} not found. Cannot reverse stock.");
-                    }
-
-                    // Decrease stock (reverse the increase from return)
-                    Product::where('id', $returnDetail->product_id)
-                        ->update(['product_store' => DB::raw('product_store - ' . $returnDetail->quantity)]);
-                }
+                // 1. Reverse stock for this sale return via stock_logs (append-only reversal)
+                $this->stockService->reverseStock('sale_return', $saleReturn->id);
 
                 // 2. Reverse order paid/due adjustments
                 $returnAmount = $saleReturn->total;

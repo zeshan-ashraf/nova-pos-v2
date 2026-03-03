@@ -1466,7 +1466,8 @@ class OrderController extends Controller
                             (int) $product['quantity'],
                             (float) ($product['unit_price'] ?? $productModel->selling_price ?? 0),
                             $order_id,
-                            (float) ($productModel->buying_price ?? 0)
+                            (float) ($productModel->buying_price ?? 0),
+                            $order->order_date
                         );
                     }
                 });
