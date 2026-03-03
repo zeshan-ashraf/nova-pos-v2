@@ -1,5 +1,78 @@
 @extends('dashboard.body.main')
 
+@section('specificpagestyles')
+<style>
+/* Profit & Loss report — screen layout unchanged */
+.reports-profit-loss .pl-statement { width: 100%; max-width: 100%; }
+.reports-profit-loss .pl-table { width: 100%; max-width: 100%; font-size: 15px; color: #333; table-layout: fixed; }
+.reports-profit-loss .pl-table td { vertical-align: middle; padding: 6px 8px; line-height: 1.4; }
+.reports-profit-loss .pl-table td:first-child { width: 1%; white-space: normal; }
+.reports-profit-loss .pl-table td.pl-amount { width: 140px; }
+.reports-profit-loss .pl-table strong { font-size: 13px; }
+.reports-profit-loss .pl-table td.pl-section-heading {
+    padding-left: 0 !important;
+    font-size: 15px;
+    font-weight: 600;
+    color: #1f2937;
+    border-bottom: 1px solid #e5e7eb;
+    padding-top: 12px !important;
+    padding-bottom: 6px !important;
+}
+.reports-profit-loss .pl-table td.pl-indent { padding-left: 24px !important; }
+.reports-profit-loss .pl-table td.pl-expense-category {
+    padding-left: 50px !important;
+    font-weight: 500;
+    color: #374151;
+}
+.reports-profit-loss .pl-table td.pl-expense-detail-label {
+    padding-left: 100px !important;
+    font-size: 13px;
+    color: #6b7280;
+}
+.reports-profit-loss .pl-table td.pl-major { padding-left: 0 !important; }
+.reports-profit-loss .cursor-pointer { cursor: pointer; }
+.reports-profit-loss .pl-expand-toggle:hover { color: #111; }
+.reports-profit-loss .pl-chevron { transition: transform 0.2s; display: inline-block; width: 12px; margin-right: 6px; }
+.reports-profit-loss .pl-expand-toggle.expanded .pl-chevron { transform: rotate(90deg); }
+.reports-profit-loss .pl-category-row:hover td { background-color: #f8fafc; }
+.reports-profit-loss .pl-amount { white-space: nowrap; font-variant-numeric: tabular-nums; min-width: 120px; padding-right: 10px; }
+.reports-profit-loss .pl-rule { border-top-color: #e5e7eb !important; }
+.reports-profit-loss .pl-net { font-size: 17px; padding-top: 6px !important; padding-left: 0 !important; }
+.reports-profit-loss .pl-net-amount { font-size: 17px; }
+@media print {
+        /* Same pattern as cash-flow, revenue, supplier ledger: full-width print (see docs/REPORT_PRINT_FULL_WIDTH.md) */
+        @page { margin: 8mm; size: auto; }
+        html, body { width: 100% !important; margin: 0 !important; padding: 0 !important; }
+        .iq-sidebar, .iq-top-navbar, .iq-footer,
+        .report-filter-card, .d-print-none, .btn, .pl-report-header .btn { display: none !important; }
+        .wrapper { display: block !important; width: 100% !important; }
+        .content-page { padding: 0 !important; margin: 0 !important; width: 100% !important; max-width: none !important; }
+        body, .wrapper { padding: 0 !important; margin: 0 !important; }
+        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .container-fluid { width: 100% !important; max-width: none !important; padding-left: 0 !important; padding-right: 0 !important; }
+        .container-fluid .row { margin-left: 0 !important; margin-right: 0 !important; width: 100% !important; }
+        .container-fluid .row .col-lg-12 { padding-left: 0 !important; padding-right: 0 !important; max-width: none !important; }
+        .reports-profit-loss .card { width: 100% !important; max-width: none !important; border: 1px solid #dee2e6 !important; box-shadow: none !important; }
+        .reports-profit-loss .card-body { width: 100% !important; max-width: none !important; padding: 8px !important; box-sizing: border-box !important; }
+        .reports-profit-loss .pl-statement { width: 100% !important; max-width: none !important; border: none !important; padding: 0 !important; box-sizing: border-box !important; display: block !important; }
+        .reports-profit-loss .pl-table { width: 100% !important; min-width: 100% !important; max-width: 100% !important; table-layout: fixed !important; box-sizing: border-box !important; display: table !important; }
+        .reports-profit-loss .pl-expense-detail { display: table-row !important; }
+        .reports-profit-loss .pl-table td:first-child { width: auto !important; min-width: 55% !important; }
+        .reports-profit-loss .pl-table td.pl-expense-detail-label,
+        .reports-profit-loss .pl-table .pl-expense-detail td:first-child {
+            white-space: nowrap !important;
+            word-break: keep-all !important;
+            overflow-wrap: normal !important;
+        }
+        /* Section labels: Revenue, Cost of Goods Sold, Gross Profit, Operating Expenses, Net Profit — 5px padding-left on print */
+        .reports-profit-loss .pl-table td.pl-section-heading { padding-left: 5px !important; }
+        .reports-profit-loss .pl-table td.pl-major { padding-left: 5px !important; }
+        .reports-profit-loss .pl-table td.pl-net { padding-left: 5px !important; }
+        .pl-report-header { display: block !important; text-align: center !important; margin-bottom: 1rem !important; }
+    }
+</style>
+@endsection
+
 @section('container')
 @php
     $fmt = function ($n) {
@@ -92,14 +165,14 @@
                 <table class="pl-table table table-borderless mb-0">
                     <tbody>
                         {{-- Revenue --}}
-                        <tr><td colspan="2" class="pt-3"><strong>Revenue</strong></td></tr>
+                        <tr><td colspan="2" class="pt-3 pl-section-heading"><strong>Revenue</strong></td></tr>
                         <tr><td class="pl-indent">Sales Revenue</td><td class="pl-amount text-right">{{ $fmt($revenue) }}</td></tr>
                         <tr><td class="pl-indent">Sales Returns</td><td class="pl-amount text-right">{{ $fmt(0) }}</td></tr>
                         <tr><td colspan="2" class="pl-rule border-top pt-2 pb-1"></td></tr>
                         <tr><td class="pl-indent"><strong>Net Revenue</strong></td><td class="pl-amount text-right"><strong>{{ $fmt($netRevenue) }}</strong></td></tr>
 
                         {{-- Cost of Goods Sold (from order_details.cost_per_unit only) --}}
-                        <tr><td colspan="2" class="pt-4"><strong>Cost of Goods Sold</strong></td></tr>
+                        <tr><td colspan="2" class="pt-4 pl-section-heading"><strong>Cost of Goods Sold</strong></td></tr>
                         <tr><td class="pl-indent">Cost of Goods Sold</td><td class="pl-amount text-right"><strong>{{ $fmt($cogs) }}</strong></td></tr>
 
                         {{-- Gross Profit --}}
@@ -107,10 +180,10 @@
                         <tr><td class="pl-major"><strong>Gross Profit</strong></td><td class="pl-amount text-right"><strong>{{ $fmt($grossProfit) }}</strong></td></tr>
 
                         {{-- Operating Expenses --}}
-                        <tr><td colspan="2" class="pt-4"><strong>Operating Expenses</strong></td></tr>
+                        <tr><td colspan="2" class="pt-4 pl-section-heading"><strong>Operating Expenses</strong></td></tr>
                         @foreach($expensesByCategory ?? [] as $catIndex => $category)
                         <tr class="pl-category-row" data-category-id="pl-cat-{{ $catIndex }}">
-                            <td class="pl-indent">
+                            <td class="pl-expense-category">
                                 <span class="pl-expand-toggle cursor-pointer" data-target="pl-cat-{{ $catIndex }}" role="button" tabindex="0" aria-expanded="false" title="Click to expand/collapse">
                                     <i class="fas fa-chevron-right pl-chevron text-muted small"></i>
                                     {{ $category['name'] }}
@@ -120,7 +193,7 @@
                         </tr>
                         @foreach($category['lines'] ?? [] as $line)
                         <tr class="pl-expense-detail pl-detail-pl-cat-{{ $catIndex }}" style="display: none;">
-                            <td class="pl-detail-indent">{{ $line['date'] }} — {{ $line['description'] }}</td>
+                            <td class="pl-expense-detail-label">{{ $line['date'] }} — {{ $line['description'] }}</td>
                             <td class="pl-amount text-right">{{ $fmt($line['amount']) }}</td>
                         </tr>
                         @endforeach
@@ -136,7 +209,7 @@
                         <tr><td class="pl-net"><strong>Net Profit</strong></td><td class="pl-amount pl-net-amount text-right"><strong>{{ $fmt($netProfit) }}</strong></td></tr>
                     </tbody>
                 </table>
-                <p class="mb-0 mt-3 small text-muted">Profit Margin: {{ number_format($profitMargin ?? 0, 2) }}%</p>
+                <p class="mb-0 mt-3 small text-muted text-right">Profit Margin: {{ number_format($profitMargin ?? 0, 2) }}%</p>
             </div>
                 </div>
             </div>
@@ -144,47 +217,6 @@
     </div>
 </div>
 
-<style>
-/* Full width for report content */
-.reports-profit-loss.container-fluid { max-width: 100%; }
-.reports-profit-loss .row { max-width: 100%; }
-.reports-profit-loss .col-lg-12 { max-width: 100%; }
-.pl-statement { width: 100%; max-width: 100%; }
-.pl-table { width: 100%; max-width: 100%; font-size: 16px; color: #333; table-layout: fixed; }
-.pl-table td { vertical-align: middle; padding: 2px 0; line-height: 18px; }
-.pl-table td:first-child { width: 1%; white-space: normal; }
-.pl-table td.pl-amount { width: 140px; }
-.pl-table strong { font-size: 13px; }
-.pl-indent { padding-left: 24px !important; }
-.pl-detail-indent { padding-left: 40px !important; font-size: 14px; color: #555; }
-.pl-major { padding-left: 0; }
-.cursor-pointer { cursor: pointer; }
-.pl-expand-toggle:hover { color: #333; }
-.pl-chevron { transition: transform 0.2s; display: inline-block; width: 12px; margin-right: 4px; }
-.pl-expand-toggle.expanded .pl-chevron { transform: rotate(90deg); }
-.pl-amount { white-space: nowrap; font-variant-numeric: tabular-nums; min-width: 120px; }
-.pl-rule { border-top-color: #ddd !important; }
-.pl-net { font-size: 18px; padding-top: 4px; }
-.pl-net-amount { font-size: 18px; }
-@media print {
-    /* When printing: show all expense detail rows (category breakdown + individual lines) */
-    .pl-expense-detail { display: table-row !important; }
-    /* Full width: remove layout padding and use full page */
-    body, .wrapper, .content-page, .container-fluid, .reports-profit-loss .row, .reports-profit-loss .col-lg-12 { width: 100% !important; max-width: 100% !important; padding-left: 0 !important; padding-right: 0 !important; margin: 0 !important; }
-    .content-page { padding-top: 0 !important; }
-    /* Hide non-print UI */
-    .iq-sidebar, .iq-top-navbar, .btn, .report-filter-card, #date_filter, #start_date_group, #end_date_group, .pl-report-header .btn { display: none !important; }
-    /* Report header: center title and date, title 2px bigger */
-    .pl-report-header { display: block !important; text-align: center !important; margin-bottom: 1rem !important; }
-    .pl-report-title { font-size: calc(1em + 2px) !important; text-align: center !important; margin: 0 auto 0.25rem !important; }
-    .pl-report-period { text-align: center !important; margin: 0 !important; }
-    /* Statement and table full width */
-    .pl-statement { width: 100% !important; max-width: 100% !important; border: none !important; box-shadow: none !important; padding: 0 !important; }
-    .pl-table { width: 100% !important; max-width: 100% !important; table-layout: fixed !important; }
-    /* Clean print colors */
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-}
-</style>
 <script>
 function toggleCustomDates() {
     var f = document.getElementById('date_filter').value;

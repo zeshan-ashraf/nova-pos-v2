@@ -120,3 +120,20 @@ Operating Expenses remain from `account_transactions` (expense debits) with the 
 - `app/Http/Controllers/Dashboard/FinancialReportController.php`: `profitLoss()`, `profitLossLineDetail()`; removed StockLog; COGS/Sales/Discounts from order_details/orders; date on `orders.created_at`.
 - `resources/views/reports/financial/profit-loss.blade.php`: Discounts section (Invoice + Line Item), use of `invoiceDiscounts`, `lineItemDiscounts`, `totalDiscounts`; Net Profit reflects new formula.
 - `docs/COGS_AUDIT.md`: Can be updated to state COGS is now from order_details only (no stock_logs).
+
+---
+
+## 9. Print layout (full width)
+
+**Scope:** Print only. Screen layout is unchanged.
+
+**Goal:** When the user prints the P&L report, the table and statement use the full width of the printed page.
+
+**Solution:** Use the shared report print pattern. See **`docs/REPORT_PRINT_FULL_WIDTH.md`** for the full solution (same as Cash Flow, Revenue, Sales reports). In `profit-loss.blade.php` the `@media print` block uses:
+
+- `@page { margin: 8mm; size: auto; }`
+- `html, body`, `.wrapper`, `.content-page` with `max-width: none` (not `100%`)
+- `.container-fluid` and `.container-fluid .row`, `.col-lg-12` with `max-width: none` and zero padding/margin
+- `.reports-profit-loss .card`, `.card-body`, `.pl-statement` with `max-width: none`
+- `.reports-profit-loss .pl-table` with `width: 100%`, `min-width: 100%`, `max-width: 100%`, `table-layout: fixed`, `box-sizing: border-box`, `display: table`
+- Expense detail lines: `min-width: 55%`, `white-space: nowrap`, `word-break: keep-all` so e.g. "2026-02-23 — Expense: #152" stays on one line.
