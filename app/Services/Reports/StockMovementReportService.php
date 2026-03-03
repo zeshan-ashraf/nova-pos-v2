@@ -169,12 +169,14 @@ class StockMovementReportService
     {
         $conditions = ['1 = 1', "{$alias}.deleted_at IS NULL"];
 
+        // Date filter now applies on adjustment_date (backfilled for sale/purchase),
+        // so movement reports align with business dates instead of raw created_at.
         if (!empty($filters['from_date'])) {
-            $conditions[] = "{$alias}.created_at >= ?";
+            $conditions[] = "{$alias}.adjustment_date >= ?";
             $bindings[] = Carbon::parse($filters['from_date'])->startOfDay()->toDateTimeString();
         }
         if (!empty($filters['to_date'])) {
-            $conditions[] = "{$alias}.created_at <= ?";
+            $conditions[] = "{$alias}.adjustment_date <= ?";
             $bindings[] = Carbon::parse($filters['to_date'])->endOfDay()->toDateTimeString();
         }
         if (isset($filters['product_id']) && $filters['product_id'] !== '' && $filters['product_id'] !== null) {
