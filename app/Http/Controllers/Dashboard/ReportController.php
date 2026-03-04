@@ -3,11 +3,16 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Dashboard\Traits\ReportTrait;
+use App\Models\AccountTransaction;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 
 class ReportController extends Controller
 {
+    use ReportTrait;
     /**
      * Display the reports index page.
      */
@@ -270,6 +275,63 @@ class ReportController extends Controller
 
         return view('reports.index', [
             'categories' => $availableCategories,
+        ]);
+    }
+
+    /**
+     * Simple Cash Flow Report.
+     * Data: account_transactions (cash/bank only).
+     * Inflow = debit, Outflow = credit. Group by date, account_type, account_ref_id.
+     * Route: GET /reports/cash-flow
+     */
+    public function cashFlow(Request $request)
+    {
+        $authUser = auth()->user();
+        $shopFilter = $this->getShopFilter($request, $authUser);
+
+        // Date range: date_from, date_to (optional). Default: current month.
+        $dateFrom = $request->input('date_from', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $dateTo = $request->input('date_to', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        $startDatetime = Carbon::parse($dateFrom)->startOfDay();
+        $endDatetime = Carbon::parse($dateTo)->endOfDay();
+
+        $query = AccountTransaction::query()
+            ->leftJoin('bank_shop', 'bank_shop.id', '=', 'account_transactions.account_ref_id')
+            ->leftJoin('banks', 'banks.id', '=', 'bank_shop.bank_id')
+            ->whereIn('account_transactions.account_type', [
+                AccountTransaction::ACCOUNT_TYPE_CASH,
+                AccountTransaction::ACCOUNT_TYPE_BANK,
+            ])
+            ->whereBetween('account_transactions.transaction_date', [$startDatetime, $endDatetime]);
+
+        $this->applyShopFilter($query, $shopFilter['shop_ids'], 'account_transactions.shop_id');
+
+        $rows = $query
+            ->select(
+                DB::raw('DATE(account_transactions.transaction_date) as transaction_date'),
+                'account_transactions.account_type',
+                'account_transactions.account_ref_id',
+                DB::raw('MAX(banks.name) as bank_name'),
+                DB::raw("SUM(CASE WHEN account_transactions.direction = 'debit' THEN account_transactions.amount ELSE 0 END) as inflow"),
+                DB::raw("SUM(CASE WHEN account_transactions.direction = 'credit' THEN account_transactions.amount ELSE 0 END) as outflow")
+            )
+            ->groupBy(DB::raw('DATE(account_transactions.transaction_date)'), 'account_transactions.account_type', 'account_transactions.account_ref_id')
+            ->orderBy('transaction_date', 'asc')
+            ->get();
+
+        // Account label: Cash or bank name
+        $rows->transform(function ($row) {
+            $row->account_name = $row->account_type === AccountTransaction::ACCOUNT_TYPE_CASH
+                ? 'Cash'
+                : ($row->bank_name ?? 'Unknown Bank');
+            return $row;
+        });
+
+        return view('reports.cash-flow', [
+            'rows' => $rows,
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+            'shopFilter' => $shopFilter,
         ]);
     }
 }

@@ -87,7 +87,7 @@
         <!-- KPI Cards Row 1 -->
         <div class="col-lg-12 mb-3">
             <div class="row sales-kpi-row-1">
-                <div class="col-md-4 mb-3 mb-md-0">
+                <div class="col-md-3 mb-3 mb-md-0">
                     <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
                         <div class="card-body d-flex align-items-center">
                             <div class="icon iq-icon-box-2 bg-primary-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
@@ -100,7 +100,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-4 mb-3 mb-md-0">
+                <div class="col-md-3 mb-3 mb-md-0">
                     <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
                         <div class="card-body d-flex align-items-center">
                             <div class="icon iq-icon-box-2 bg-info-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
@@ -113,7 +113,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-4 mb-3 mb-md-0">
+                <div class="col-md-3 mb-3 mb-md-0">
                     <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
                         <div class="card-body d-flex align-items-center">
                             <div class="icon iq-icon-box-2 bg-success-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
@@ -122,6 +122,19 @@
                             <div class="flex-grow-1 min-w-0">
                                 <p class="text-muted mb-0 small font-weight-500">Total Revenue</p>
                                 <h4 class="mb-0 font-weight-bold text-dark">{{ number_format($totalRevenue, 2) }}</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3 mb-md-0">
+                    <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
+                        <div class="card-body d-flex align-items-center">
+                            <div class="icon iq-icon-box-2 bg-warning-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
+                                <i class="ri-line-chart-line text-warning" style="font-size: 1.75rem;"></i>
+                            </div>
+                            <div class="flex-grow-1 min-w-0">
+                                <p class="text-muted mb-0 small font-weight-500">Total Profit</p>
+                                <h4 class="mb-0 font-weight-bold text-dark">{{ number_format($totalProfit ?? 0, 2) }}</h4>
                             </div>
                         </div>
                     </div>
@@ -165,6 +178,8 @@
                                     <th>Shop</th>
                                     <th>Total Quantity</th>
                                     <th>Total Revenue</th>
+                                    <th>Cost</th>
+                                    <th>Profit</th>
                                     <th>Order Count</th>
                                     <th>Avg. Price</th>
                                 </tr>
@@ -176,6 +191,8 @@
                                     $avgPrice = $productSale->total_quantity > 0 
                                         ? $productSale->total_revenue / $productSale->total_quantity 
                                         : 0;
+                                    $totalCost = (float) ($productSale->total_cost ?? 0);
+                                    $profit = (float) ($productSale->total_revenue ?? 0) - $totalCost;
                                     // Get shop from product
                                     $shopName = 'N/A';
                                     if ($product && $product->shop) {
@@ -194,12 +211,14 @@
                                     <td>{{ $shopName }}</td>
                                     <td>{{ number_format($productSale->total_quantity, 0) }}</td>
                                     <td>{{ number_format($productSale->total_revenue, 2) }}</td>
+                                    <td>{{ number_format($totalCost, 2) }}</td>
+                                    <td>{{ number_format($profit, 2) }}</td>
                                     <td>{{ $productSale->order_count }}</td>
                                     <td>{{ number_format($avgPrice, 2) }}</td>
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="8" class="text-center">No product sales data found for the selected period.</td>
+                                    <td colspan="10" class="text-center">No product sales data found for the selected period.</td>
                                 </tr>
                                 @endforelse
                             </tbody>
@@ -231,7 +250,7 @@
         body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .container-fluid { width: 100% !important; max-width: none !important; padding-left: 8px !important; padding-right: 8px !important; }
         .sales-kpi-row-1 { display: flex !important; flex-wrap: nowrap !important; break-inside: avoid; }
-        .sales-kpi-row-1 .col-md-4 { flex: 0 0 33.333333% !important; max-width: 33.333333% !important; padding: 0 6px !important; }
+        .sales-kpi-row-1 .col-md-3 { flex: 0 0 25% !important; max-width: 25% !important; padding: 0 6px !important; }
         .sales-report-kpi, .sales-report-kpi.card { border: 1px solid #dee2e6 !important; box-shadow: none !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .sales-report-kpi .card-body, .sales-report-kpi .iq-icon-box-2 { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .card { border: 1px solid #dee2e6 !important; box-shadow: none !important; }
@@ -244,14 +263,16 @@
         .sales-orders-table-wrap .table-responsive { width: 100% !important; max-width: none !important; overflow: visible !important; }
         #productSalesTable { width: 100% !important; min-width: 100% !important; max-width: 100% !important; table-layout: fixed !important; box-sizing: border-box !important; }
         #productSalesTable th, #productSalesTable td { border: 1px solid #dee2e6 !important; box-sizing: border-box !important; }
-        #productSalesTable th:nth-child(1), #productSalesTable td:nth-child(1) { width: 5% !important; }
-        #productSalesTable th:nth-child(2), #productSalesTable td:nth-child(2) { width: 22% !important; }
-        #productSalesTable th:nth-child(3), #productSalesTable td:nth-child(3) { width: 12% !important; }
-        #productSalesTable th:nth-child(4), #productSalesTable td:nth-child(4) { width: 15% !important; }
-        #productSalesTable th:nth-child(5), #productSalesTable td:nth-child(5) { width: 12% !important; }
-        #productSalesTable th:nth-child(6), #productSalesTable td:nth-child(6) { width: 14% !important; }
+        #productSalesTable th:nth-child(1), #productSalesTable td:nth-child(1) { width: 4% !important; }
+        #productSalesTable th:nth-child(2), #productSalesTable td:nth-child(2) { width: 18% !important; }
+        #productSalesTable th:nth-child(3), #productSalesTable td:nth-child(3) { width: 10% !important; }
+        #productSalesTable th:nth-child(4), #productSalesTable td:nth-child(4) { width: 12% !important; }
+        #productSalesTable th:nth-child(5), #productSalesTable td:nth-child(5) { width: 8% !important; }
+        #productSalesTable th:nth-child(6), #productSalesTable td:nth-child(6) { width: 12% !important; }
         #productSalesTable th:nth-child(7), #productSalesTable td:nth-child(7) { width: 10% !important; }
         #productSalesTable th:nth-child(8), #productSalesTable td:nth-child(8) { width: 10% !important; }
+        #productSalesTable th:nth-child(9), #productSalesTable td:nth-child(9) { width: 8% !important; }
+        #productSalesTable th:nth-child(10), #productSalesTable td:nth-child(10) { width: 8% !important; }
     }
 </style>
 @endsection

@@ -60,4 +60,10 @@ class AccountTransaction extends Model
     {
         return $this->belongsTo(Shop::class);
     }
+
+    /** When account_type is customer, account_ref_id is the customer id. */
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'account_ref_id');
+    }
 }

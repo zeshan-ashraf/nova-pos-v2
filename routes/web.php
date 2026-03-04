@@ -327,6 +327,7 @@ Route::middleware(['permission:reports.menu'])->group(function () {
         Route::get('/reports/financial/revenue', [FinancialReportController::class, 'revenue'])->name('reports.financial.revenue');
         Route::get('/reports/financial/expense', [FinancialReportController::class, 'expense'])->name('reports.financial.expense');
         Route::get('/reports/financial/cash-flow', [FinancialReportController::class, 'cashFlow'])->name('reports.financial.cash-flow');
+        Route::get('/reports/cash-flow', [ReportController::class, 'cashFlow'])->name('reports.cash-flow');
     });
     
     // Credit Reports

@@ -97,10 +97,9 @@ class FinancialReportController extends Controller
     /**
      * REPORT 3: Cash Flow Report
      * URL: /reports/financial/cash-flow
-     * Definition: Actual money movement. Ledger only; no unpaid sales/purchases.
-     * Business rule for UI: credit => INFLOW (money received), debit => OUTFLOW (money spent).
-     * Opening balance (source_type=opening) appears as inflow when stored as credit; excluded from P&L.
-     * Source: account_transactions only. shop_id filter applied everywhere.
+     * Definition: Actual money movement for cash/bank only. deleted_at IS NULL via SoftDeletes.
+     * Business rule for UI: debit => INFLOW, credit => OUTFLOW (for account_type cash/bank only).
+     * Source: account_transactions only. shop_id and date range filter applied.
      */
     public function cashFlow(Request $request)
     {
@@ -108,18 +107,18 @@ class FinancialReportController extends Controller
         $dateRange = $this->getDateRange($request);
         $shopFilter = $this->getShopFilter($request, $authUser);
 
-        // Cash flow: only cash and bank movements; customer/supplier ledger entries must NOT affect
+        // Cash flow: only cash and bank; no source_type used for inflow/outflow
         $baseQuery = AccountTransaction::query()
             ->whereBetween('transaction_date', [$dateRange['start_datetime'], $dateRange['end_datetime']])
             ->whereIn('account_type', [AccountTransaction::ACCOUNT_TYPE_CASH, AccountTransaction::ACCOUNT_TYPE_BANK]);
         $this->applyShopFilter($baseQuery, $shopFilter['shop_ids']);
 
-        // Cash flow UI mapping: credit = inflow (money received), debit = outflow (money spent). Defensive: empty set => zero.
-        $totalInflow = (float) (clone $baseQuery)->where('direction', AccountTransaction::DIRECTION_CREDIT)->sum('amount');
-        $totalOutflow = (float) (clone $baseQuery)->where('direction', AccountTransaction::DIRECTION_DEBIT)->sum('amount');
+        // Correct logic: debit = Inflow, credit = Outflow
+        $totalInflow = (float) (clone $baseQuery)->where('direction', AccountTransaction::DIRECTION_DEBIT)->sum('amount');
+        $totalOutflow = (float) (clone $baseQuery)->where('direction', AccountTransaction::DIRECTION_CREDIT)->sum('amount');
         $netCashFlow = $totalInflow - $totalOutflow;
 
-        // Group by transaction_date (by day), account_type, account_ref_id. Inflow = credit, outflow = debit. Only cash/bank.
+        // Group by transaction_date, account (cash vs each bank). Inflow = debit, outflow = credit.
         $byDateAccountQuery = AccountTransaction::query()
             ->leftJoin('bank_shop', 'bank_shop.id', '=', 'account_transactions.account_ref_id')
             ->leftJoin('banks', 'banks.id', '=', 'bank_shop.bank_id')
@@ -132,11 +131,11 @@ class FinancialReportController extends Controller
                 'account_transactions.account_type',
                 'account_transactions.account_ref_id',
                 DB::raw('MAX(banks.name) as bank_name'),
-                DB::raw("SUM(CASE WHEN account_transactions.direction = 'credit' THEN account_transactions.amount ELSE 0 END) as inflow"),
-                DB::raw("SUM(CASE WHEN account_transactions.direction = 'debit' THEN account_transactions.amount ELSE 0 END) as outflow")
+                DB::raw("SUM(CASE WHEN account_transactions.direction = 'debit' THEN account_transactions.amount ELSE 0 END) as inflow"),
+                DB::raw("SUM(CASE WHEN account_transactions.direction = 'credit' THEN account_transactions.amount ELSE 0 END) as outflow")
             )
             ->groupBy(DB::raw('DATE(account_transactions.transaction_date)'), 'account_transactions.account_type', 'account_transactions.account_ref_id')
-            ->orderBy('date')
+            ->orderBy('date', 'asc')
             ->orderBy('account_transactions.account_type');
 
         $byDateAccount = $byDateAccountQuery->get();

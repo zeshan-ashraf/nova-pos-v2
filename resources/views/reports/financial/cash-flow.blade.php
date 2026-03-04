@@ -42,7 +42,7 @@
             <div class="d-flex flex-wrap align-items-center justify-content-between mb-4">
                 <div>
                     <h4 class="mb-3">Cash Flow Report</h4>
-                    <p class="mb-0 text-muted">Actual money movement (ledger only). Credit = inflow (money received), Debit = outflow (money spent). Excludes unpaid sales/purchases.</p>
+                    <p class="mb-0 text-muted">Actual money movement (ledger only). Debit = Inflow, Credit = Outflow (cash/bank accounts only). Excludes unpaid sales/purchases.</p>
                 </div>
                 <div class="d-print-none">
                     <a href="{{ route('reports.index') }}" class="btn btn-secondary"><i class="ri-arrow-left-line mr-1"></i> Back to Reports</a>
@@ -110,7 +110,7 @@
                                 <i class="ri-arrow-down-circle-line text-success" style="font-size: 1.75rem;"></i>
                             </div>
                             <div class="flex-grow-1 min-w-0">
-                                <p class="text-muted mb-0 small font-weight-500">Total Inflow (Credit)</p>
+                                <p class="text-muted mb-0 small font-weight-500">Total Inflow (Debit)</p>
                                 <h4 class="mb-0 font-weight-bold text-success">{{ number_format($totalInflow ?? 0, 2) }}</h4>
                             </div>
                         </div>
@@ -123,7 +123,7 @@
                                 <i class="ri-arrow-up-circle-line text-danger" style="font-size: 1.75rem;"></i>
                             </div>
                             <div class="flex-grow-1 min-w-0">
-                                <p class="text-muted mb-0 small font-weight-500">Total Outflow (Debit)</p>
+                                <p class="text-muted mb-0 small font-weight-500">Total Outflow (Credit)</p>
                                 <h4 class="mb-0 font-weight-bold text-danger">{{ number_format($totalOutflow ?? 0, 2) }}</h4>
                             </div>
                         </div>

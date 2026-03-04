@@ -248,10 +248,31 @@ class SalesReportController extends Controller
         $totalDue = max(0, $totalRevenue - $totalPaid);
 
         // Get selected customer for display
-        $selectedCustomer = null;
+        $selectedCustomer = $selectedCustomerId ? \App\Models\Customer::find($selectedCustomerId) : null;
+
+        // Orders grid: one customer selected => that customer's orders; otherwise all orders in date range
+        $customerOrdersQuery = Order::with(['customer', 'shop.parent'])
+            ->whereBetween('order_date', [$dateRange['start_datetime'], $dateRange['end_datetime']]);
         if ($selectedCustomerId) {
-            $selectedCustomer = \App\Models\Customer::find($selectedCustomerId);
+            $customerOrdersQuery->where('customer_id', $selectedCustomerId);
         }
+        $this->applyShopFilter($customerOrdersQuery, $shopFilter['shop_ids']);
+        $customerOrders = $customerOrdersQuery->orderByDesc('order_date')->orderByDesc('id')
+            ->paginate($row, ['*'], 'orders_page')->appends($request->except('orders_page'));
+
+        // Payments grid: one customer selected => that customer's payments; otherwise all customer payments in date range
+        $customerPaymentsQuery = AccountTransaction::query()
+            ->with('customer')
+            ->where('account_type', AccountTransaction::ACCOUNT_TYPE_CUSTOMER)
+            ->where('direction', AccountTransaction::DIRECTION_CREDIT)
+            ->where('source_type', AccountTransaction::SOURCE_CUSTOMER_PAYMENT)
+            ->whereBetween('transaction_date', [$dateRange['start_datetime'], $dateRange['end_datetime']]);
+        if ($selectedCustomerId) {
+            $customerPaymentsQuery->where('account_ref_id', $selectedCustomerId);
+        }
+        $this->applyShopFilter($customerPaymentsQuery, $shopFilter['shop_ids']);
+        $customerPayments = $customerPaymentsQuery->orderByDesc('transaction_date')->orderByDesc('id')
+            ->paginate($row, ['*'], 'payments_page')->appends($request->except('payments_page'));
 
         return view('reports.sales.customer', compact(
             'dateRange',
@@ -263,6 +284,8 @@ class SalesReportController extends Controller
             'totalDue',
             'selectedCustomerId',
             'selectedCustomer',
+            'customerOrders',
+            'customerPayments',
             'row'
         ));
     }
@@ -282,16 +305,18 @@ class SalesReportController extends Controller
         $this->applyShopFilter($orderIds, $shopFilter['shop_ids']);
         $orderIds = $orderIds->pluck('id');
 
-        // Product sales summary
+        // Product sales summary (cost: order_details.cost_per_unit, fallback to product.buying_price when null/0)
         $productSalesQuery = OrderDetails::with(['product', 'order.shop.parent'])
+            ->join('products', 'order_details.product_id', '=', 'products.id')
             ->whereIn('order_id', $orderIds)
             ->select(
-                'product_id',
-                DB::raw('SUM(quantity) as total_quantity'),
-                DB::raw('SUM(total) as total_revenue'),
-                DB::raw('COUNT(DISTINCT order_id) as order_count')
+                'order_details.product_id',
+                DB::raw('SUM(order_details.quantity) as total_quantity'),
+                DB::raw('SUM(order_details.total) as total_revenue'),
+                DB::raw('SUM(order_details.quantity * COALESCE(COALESCE(NULLIF(order_details.cost_per_unit, 0), products.buying_price), 0)) as total_cost'),
+                DB::raw('COUNT(DISTINCT order_details.order_id) as order_count')
             )
-            ->groupBy('product_id');
+            ->groupBy('order_details.product_id');
 
         // Apply product filter if provided
         $selectedProductId = $request->input('product_id');
@@ -311,6 +336,18 @@ class SalesReportController extends Controller
         $totalQuantity = $summaryQuery->sum('quantity');
         $totalRevenue = (clone $summaryQuery)->sum('total');
 
+        // Total cost (same fallback: cost_per_unit or product.buying_price) for total profit
+        $totalCostQuery = OrderDetails::query()
+            ->join('products', 'order_details.product_id', '=', 'products.id')
+            ->whereIn('order_id', $orderIds);
+        if ($selectedProductId) {
+            $totalCostQuery->where('order_details.product_id', $selectedProductId);
+        }
+        $totalCost = (float) $totalCostQuery->sum(
+            DB::raw('order_details.quantity * COALESCE(COALESCE(NULLIF(order_details.cost_per_unit, 0), products.buying_price), 0)')
+        );
+        $totalProfit = $totalRevenue - $totalCost;
+
         // Get total count for pagination (without ORDER BY to avoid SQL errors)
         $totalCount = (clone $productSalesQuery)->get()->count();
         
@@ -320,7 +357,7 @@ class SalesReportController extends Controller
         
         // Apply ordering and get results manually
         $productSalesItems = $productSalesQuery
-            ->orderByRaw('SUM(total) DESC')
+            ->orderByRaw('SUM(order_details.total) DESC')
             ->offset($offset)
             ->limit($row)
             ->get();
@@ -347,6 +384,7 @@ class SalesReportController extends Controller
             'totalProducts',
             'totalQuantity',
             'totalRevenue',
+            'totalProfit',
             'selectedProductId',
             'selectedProduct',
             'row'

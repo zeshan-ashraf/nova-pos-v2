@@ -222,6 +222,152 @@
                 </div>
             </div>
         </div>
+
+        <!-- Sales (Invoices) grid: all orders or selected customer's orders -->
+        <div class="col-lg-12 mt-3 sales-orders-table-wrap">
+            <div class="card">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Sales (Invoices)</h5>
+                    <div>
+                        <form action="{{ route('reports.sales.customer') }}" method="GET" class="d-inline">
+                            @foreach(request()->except(['orders_page']) as $key => $val)
+                                @if(is_array($val))
+                                    @foreach($val as $v)
+                                        <input type="hidden" name="{{ $key }}[]" value="{{ $v }}">
+                                    @endforeach
+                                @else
+                                    <input type="hidden" name="{{ $key }}" value="{{ $val }}">
+                                @endif
+                            @endforeach
+                            <select name="row" class="form-control form-control-sm d-inline-block" style="width: auto;" onchange="this.form.submit()">
+                                <option value="10" {{ $row == 10 ? 'selected' : '' }}>10</option>
+                                <option value="25" {{ $row == 25 ? 'selected' : '' }}>25</option>
+                                <option value="50" {{ $row == 50 ? 'selected' : '' }}>50</option>
+                                <option value="100" {{ $row == 100 ? 'selected' : '' }}>100</option>
+                            </select>
+                        </form>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped" id="customerOrdersTable">
+                            <thead>
+                                <tr>
+                                    <th>No.</th>
+                                    @if(!$selectedCustomerId)
+                                    <th>Customer</th>
+                                    @endif
+                                    <th>Invoice No</th>
+                                    <th>Date</th>
+                                    <th>Total</th>
+                                    <th>Paid</th>
+                                    <th>Due</th>
+                                    <th>Payment Status</th>
+                                    <th>Order Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse($customerOrders as $order)
+                                <tr>
+                                    <td>{{ (($customerOrders->currentPage() * $customerOrders->perPage()) - $customerOrders->perPage()) + $loop->iteration }}</td>
+                                    @if(!$selectedCustomerId)
+                                    <td>{{ optional($order->customer)->name ?? optional($order->customer)->shopname ?? 'N/A' }}</td>
+                                    @endif
+                                    <td>{{ $order->invoice_no }}</td>
+                                    <td>{{ $order->order_date ? \Carbon\Carbon::parse($order->order_date)->format('Y-m-d') : '—' }}</td>
+                                    <td>{{ number_format($order->total, 2) }}</td>
+                                    <td>{{ number_format($order->pay, 2) }}</td>
+                                    <td>{{ number_format($order->due, 2) }}</td>
+                                    <td>{{ $order->payment_status ?? '—' }}</td>
+                                    <td>
+                                        <span class="badge {{ ($order->order_status ?? '') == 'complete' ? 'badge-success' : 'badge-danger' }}">
+                                            {{ $order->order_status ?? '—' }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                @empty
+                                <tr>
+                                    <td colspan="{{ $selectedCustomerId ? 8 : 9 }}" class="text-center">No orders found for the selected period.</td>
+                                </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                    @if($customerOrders->hasPages())
+                    <div class="mt-3">
+                        {{ $customerOrders->links() }}
+                    </div>
+                    @endif
+                </div>
+            </div>
+        </div>
+
+        <!-- Payments grid: all customer payments or selected customer's payments -->
+        <div class="col-lg-12 mt-3 sales-orders-table-wrap">
+            <div class="card">
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Payments</h5>
+                    <div>
+                        <form action="{{ route('reports.sales.customer') }}" method="GET" class="d-inline">
+                            @foreach(request()->except(['payments_page']) as $key => $val)
+                                @if(is_array($val))
+                                    @foreach($val as $v)
+                                        <input type="hidden" name="{{ $key }}[]" value="{{ $v }}">
+                                    @endforeach
+                                @else
+                                    <input type="hidden" name="{{ $key }}" value="{{ $val }}">
+                                @endif
+                            @endforeach
+                            <select name="row" class="form-control form-control-sm d-inline-block" style="width: auto;" onchange="this.form.submit()">
+                                <option value="10" {{ $row == 10 ? 'selected' : '' }}>10</option>
+                                <option value="25" {{ $row == 25 ? 'selected' : '' }}>25</option>
+                                <option value="50" {{ $row == 50 ? 'selected' : '' }}>50</option>
+                                <option value="100" {{ $row == 100 ? 'selected' : '' }}>100</option>
+                            </select>
+                        </form>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped" id="customerPaymentsTable">
+                            <thead>
+                                <tr>
+                                    <th>No.</th>
+                                    @if(!$selectedCustomerId)
+                                    <th>Customer</th>
+                                    @endif
+                                    <th>Date</th>
+                                    <th>Amount</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse($customerPayments as $payment)
+                                <tr>
+                                    <td>{{ (($customerPayments->currentPage() * $customerPayments->perPage()) - $customerPayments->perPage()) + $loop->iteration }}</td>
+                                    @if(!$selectedCustomerId)
+                                    <td>{{ optional($payment->customer)->name ?? optional($payment->customer)->shopname ?? 'N/A' }}</td>
+                                    @endif
+                                    <td>{{ $payment->transaction_date ? $payment->transaction_date->format('Y-m-d') : '—' }}</td>
+                                    <td>{{ number_format($payment->amount, 2) }}</td>
+                                    <td>{{ $payment->description ?? '—' }}</td>
+                                </tr>
+                                @empty
+                                <tr>
+                                    <td colspan="{{ $selectedCustomerId ? 4 : 5 }}" class="text-center">No payments found for the selected period.</td>
+                                </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                    @if($customerPayments->hasPages())
+                    <div class="mt-3">
+                        {{ $customerPayments->links() }}
+                    </div>
+                    @endif
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 @endsection
