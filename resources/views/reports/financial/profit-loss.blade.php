@@ -206,10 +206,9 @@
 
                         {{-- Net Profit --}}
                         <tr><td colspan="2" class="pl-rule border-top pt-3 pb-2"></td></tr>
-                        <tr><td class="pl-net"><strong>Net Profit</strong></td><td class="pl-amount pl-net-amount text-right"><strong>{{ $fmt($netProfit) }}</strong></td></tr>
+                        <tr><td class="pl-net"><strong>Net Profit</strong></td><td class="pl-amount pl-net-amount text-right"><strong>{{ number_format($profitMargin ?? 0, 2) }}% ({{ $fmt($netProfit) }})</strong></td></tr>
                     </tbody>
                 </table>
-                <p class="mb-0 mt-3 small text-muted text-right">Profit Margin: {{ number_format($profitMargin ?? 0, 2) }}%</p>
             </div>
                 </div>
             </div>
