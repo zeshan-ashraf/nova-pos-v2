@@ -217,6 +217,24 @@ class SalesReportController extends Controller
 
         $customerSales = $customerSalesQuery->paginate($row)->appends($request->query());
 
+        // Per-customer total paid = sum(orders.pay) in date range + sum(customer_payment credits) in date range
+        $customerIds = $customerSales->pluck('customer_id')->unique()->filter()->values();
+        $customerPaymentSums = [];
+        if ($customerIds->isNotEmpty()) {
+            $cpQuery = AccountTransaction::query()
+                ->where('account_type', AccountTransaction::ACCOUNT_TYPE_CUSTOMER)
+                ->whereIn('account_ref_id', $customerIds)
+                ->where('source_type', AccountTransaction::SOURCE_CUSTOMER_PAYMENT)
+                ->where('direction', AccountTransaction::DIRECTION_CREDIT)
+                ->whereBetween('transaction_date', [$dateRange['start_datetime'], $dateRange['end_datetime']]);
+            $this->applyShopFilter($cpQuery, $shopFilter['shop_ids']);
+            $customerPaymentSums = $cpQuery->selectRaw('account_ref_id as customer_id, SUM(amount) as total')
+                ->groupBy('account_ref_id')
+                ->pluck('total', 'customer_id')
+                ->map(fn ($v) => (float) $v)
+                ->all();
+        }
+
         // Summary - recalculate based on filtered data
         $summaryQuery = clone $ordersQuery;
         if ($selectedCustomerId) {
@@ -278,6 +296,7 @@ class SalesReportController extends Controller
             'dateRange',
             'shopFilter',
             'customerSales',
+            'customerPaymentSums',
             'totalCustomers',
             'totalRevenue',
             'totalPaid',

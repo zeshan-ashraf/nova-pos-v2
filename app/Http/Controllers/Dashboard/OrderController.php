@@ -855,115 +855,111 @@ class OrderController extends Controller
         $this->ensureShopAccess($order);
 
         try {
-            DB::transaction(function () use ($order, $balanceService) {
-                // 1. Lock invoice (with relations for stock reversal and payment log ids)
-                $order = Order::with(['orderDetails.product', 'paymentLogs'])
-                    ->lockForUpdate()
-                    ->findOrFail($order->id);
-                if ($order->trashed()) {
-                    throw new \RuntimeException('This invoice has already been deleted.');
-                }
-
-                // 1b. If this is a mother sale with a linked child purchase, delete the child side first (inter-branch cascade).
-                $childPurchase = Purchase::with(['purchaseDetails.product', 'paymentLogs'])
-                    ->where('source_sale_id', $order->id)
-                    ->first();
-
-                if ($childPurchase && !$childPurchase->trashed()) {
-                    $childPurchase = Purchase::with(['purchaseDetails.product', 'paymentLogs'])
-                        ->lockForUpdate()
-                        ->find($childPurchase->id);
-                    if ($childPurchase && !$childPurchase->trashed()) {
-                        // 2A: Reverse child stock (decrement product_store for purchased quantity).
-                        // Use explicit query for purchase_details so we always have rows; update products directly to avoid any shop scope.
-                        $childDetails = PurchaseDetail::where('purchase_id', $childPurchase->id)->get();
-                        foreach ($childDetails as $purchaseDetail) {
-                            if ((int) $purchaseDetail->quantity <= 0) {
-                                continue;
-                            }
-                            $productId = (int) $purchaseDetail->product_id;
-                            $qty = (int) $purchaseDetail->quantity;
-                            $current = (int) DB::table('products')->where('id', $productId)->value('product_store');
-                            if ($current < $qty) {
-                                $productName = DB::table('products')->where('id', $productId)->value('product_name');
-                                throw new \RuntimeException(
-                                    'Cannot delete: linked child purchase would make product "' . ($productName ?? $productId) . '" negative.'
-                                );
-                            }
-                            DB::table('products')->where('id', $productId)->decrement('product_store', $qty);
-                        }
-                        // 2B: Soft delete child account_transactions (purchase + purchase_payment).
-                        $childPaymentLogIds = $childPurchase->paymentLogs()->pluck('id')->toArray();
-                        AccountTransaction::query()
-                            ->where(function ($q) use ($childPurchase, $childPaymentLogIds) {
-                                $q->where('source_type', AccountTransaction::SOURCE_PURCHASE)
-                                    ->where('source_id', $childPurchase->id);
-                                if (count($childPaymentLogIds) > 0) {
-                                    $q->orWhere(function ($q2) use ($childPaymentLogIds) {
-                                        $q2->where('source_type', AccountTransaction::SOURCE_PURCHASE_PAYMENT)
-                                            ->whereIn('source_id', $childPaymentLogIds);
-                                    });
-                                }
-                                // System-generated child purchase uses source_id = purchase_id for payment entry
-                                $q->orWhere(function ($q2) use ($childPurchase) {
-                                    $q2->where('source_type', AccountTransaction::SOURCE_PURCHASE_PAYMENT)
-                                        ->where('source_id', $childPurchase->id);
-                                });
-                            })
-                            ->delete();
-                        // 2C: Soft delete child purchase_details, payment_logs, stock_logs, then purchase.
-                        PurchaseDetail::where('purchase_id', $childPurchase->id)->delete();
-                        PurchasePaymentLog::where('purchase_id', $childPurchase->id)->delete();
-                        StockLog::query()
-                            ->where('source_type', 'purchase')
-                            ->where('source_id', (string) $childPurchase->id)
-                            ->delete();
-                        $childPurchase->delete();
-                    }
-                }
-
-                // 2. Reverse stock: increase product_store by sold quantity (sale invoice)
-                foreach ($order->orderDetails as $orderDetail) {
-                    $product = Product::withoutGlobalScope('shop')
-                        ->where('id', $orderDetail->product_id)
-                        ->lockForUpdate()
-                        ->first();
-                    if ($product && $orderDetail->quantity > 0) {
-                        $product->increment('product_store', $orderDetail->quantity);
-                    }
-                }
-
-                // 3. Soft delete related: order_details
-                OrderDetails::where('order_id', $order->id)->delete();
-
-                // 4. Soft delete account_transactions related to this invoice (all use source_id = order.id)
-                AccountTransaction::query()
-                    ->where('source_type', AccountTransaction::SOURCE_SALE)
-                    ->where('source_id', $order->id)
-                    ->delete();
-
-                // 5. Soft delete payment_logs
-                PaymentLog::where('order_id', $order->id)->delete();
-
-                // 6. Soft delete stock_logs for this sale
-                StockLog::query()
-                    ->where('source_type', 'sale')
-                    ->where('source_id', (string) $order->id)
-                    ->delete();
-
-                // 7. Soft delete order
-                $order->delete();
-
-                // 8. Sync customer balance in customers table (ledger already excludes soft-deleted transactions)
-                if ($order->customer_id) {
-                    $balance = $balanceService->getCustomerBalance((int) $order->customer_id, $order->shop_id);
-                    Customer::where('id', $order->customer_id)->update(['credit_amount' => $balance]);
-                }
+            DB::transaction(function () use ($order_id, $balanceService) {
+                $this->performOrderDestroy($order_id, $balanceService);
             });
 
             return Redirect::route('order.index')->with('success', 'Order has been deleted successfully! Stock has been reversed and payments have been removed.');
         } catch (\Exception $e) {
             return Redirect::route('order.index')->with('error', 'Failed to delete order: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Core logic to soft-delete an order and reverse stock/ledger/payments.
+     * Caller must run inside a DB::transaction. Used by destroy() and update().
+     */
+    private function performOrderDestroy(int $order_id, LedgerBalanceService $balanceService): void
+    {
+        $order = Order::with(['orderDetails.product', 'paymentLogs'])
+            ->lockForUpdate()
+            ->findOrFail($order_id);
+        if ($order->trashed()) {
+            throw new \RuntimeException('This invoice has already been deleted.');
+        }
+
+        // If this is a mother sale with a linked child purchase, delete the child side first (inter-branch cascade).
+        $childPurchase = Purchase::with(['purchaseDetails.product', 'paymentLogs'])
+            ->where('source_sale_id', $order->id)
+            ->first();
+
+        if ($childPurchase && !$childPurchase->trashed()) {
+            $childPurchase = Purchase::with(['purchaseDetails.product', 'paymentLogs'])
+                ->lockForUpdate()
+                ->find($childPurchase->id);
+            if ($childPurchase && !$childPurchase->trashed()) {
+                $childDetails = PurchaseDetail::where('purchase_id', $childPurchase->id)->get();
+                foreach ($childDetails as $purchaseDetail) {
+                    if ((int) $purchaseDetail->quantity <= 0) {
+                        continue;
+                    }
+                    $productId = (int) $purchaseDetail->product_id;
+                    $qty = (int) $purchaseDetail->quantity;
+                    $current = (int) DB::table('products')->where('id', $productId)->value('product_store');
+                    if ($current < $qty) {
+                        $productName = DB::table('products')->where('id', $productId)->value('product_name');
+                        throw new \RuntimeException(
+                            'Cannot delete: linked child purchase would make product "' . ($productName ?? $productId) . '" negative.'
+                        );
+                    }
+                    DB::table('products')->where('id', $productId)->decrement('product_store', $qty);
+                }
+                $childPaymentLogIds = $childPurchase->paymentLogs()->pluck('id')->toArray();
+                AccountTransaction::query()
+                    ->where(function ($q) use ($childPurchase, $childPaymentLogIds) {
+                        $q->where('source_type', AccountTransaction::SOURCE_PURCHASE)
+                            ->where('source_id', $childPurchase->id);
+                        if (count($childPaymentLogIds) > 0) {
+                            $q->orWhere(function ($q2) use ($childPaymentLogIds) {
+                                $q2->where('source_type', AccountTransaction::SOURCE_PURCHASE_PAYMENT)
+                                    ->whereIn('source_id', $childPaymentLogIds);
+                            });
+                        }
+                        $q->orWhere(function ($q2) use ($childPurchase) {
+                            $q2->where('source_type', AccountTransaction::SOURCE_PURCHASE_PAYMENT)
+                                ->where('source_id', $childPurchase->id);
+                        });
+                    })
+                    ->delete();
+                PurchaseDetail::where('purchase_id', $childPurchase->id)->delete();
+                PurchasePaymentLog::where('purchase_id', $childPurchase->id)->delete();
+                StockLog::query()
+                    ->where('source_type', 'purchase')
+                    ->where('source_id', (string) $childPurchase->id)
+                    ->delete();
+                $childPurchase->delete();
+            }
+        }
+
+        foreach ($order->orderDetails as $orderDetail) {
+            $product = Product::withoutGlobalScope('shop')
+                ->where('id', $orderDetail->product_id)
+                ->lockForUpdate()
+                ->first();
+            if ($product && $orderDetail->quantity > 0) {
+                $product->increment('product_store', $orderDetail->quantity);
+            }
+        }
+
+        OrderDetails::where('order_id', $order->id)->delete();
+
+        AccountTransaction::query()
+            ->where('source_type', AccountTransaction::SOURCE_SALE)
+            ->where('source_id', $order->id)
+            ->delete();
+
+        PaymentLog::where('order_id', $order->id)->delete();
+
+        StockLog::query()
+            ->where('source_type', 'sale')
+            ->where('source_id', (string) $order->id)
+            ->delete();
+
+        $order->delete();
+
+        if ($order->customer_id) {
+            $balance = $balanceService->getCustomerBalance((int) $order->customer_id, $order->shop_id);
+            Customer::where('id', $order->customer_id)->update(['credit_amount' => $balance]);
         }
     }
 
@@ -1046,7 +1042,111 @@ class OrderController extends Controller
             'childShops' => $childShops,
             'categories' => Category::orderBy('name')->get(),
             'shopBanks' => $shopBanks,
+            'isEdit' => false,
+            'order' => null,
         ]);
+    }
+
+    /**
+     * Show the form for editing an existing invoice. Uses the same view as create (orders.create-invoice).
+     */
+    public function edit(int $id)
+    {
+        $order = Order::with(['orderDetails.product', 'customer', 'paymentLogs'])
+            ->findOrFail($id);
+        $this->ensureShopAccess($order);
+
+        $authUser = auth()->user();
+        $customersQuery = Customer::query()
+            ->where(function ($query) {
+                $query->where('is_system', false)
+                    ->orWhere('is_system', 0)
+                    ->orWhereNull('is_system');
+            });
+        if ($authUser->shop_id) {
+            $customersQuery->where('shop_id', $authUser->shop_id);
+        } else {
+            $customersQuery->whereRaw('1 = 0');
+        }
+
+        $targetShopId = $authUser->shop_id;
+        $productsQuery = Product::where('status', 'active')
+            ->whereNotNull('selling_price')
+            ->where('selling_price', '>', 0);
+        if ($targetShopId) {
+            $productsQuery->where('shop_id', $targetShopId);
+        } else {
+            $productsQuery->whereRaw('1 = 0');
+        }
+
+        $childShops = collect();
+        if ($authUser->shop_id) {
+            $userShop = Shop::find($authUser->shop_id);
+            if ($userShop && $userShop->is_parent) {
+                $childShops = Shop::where('parent_shop_id', $userShop->id)
+                    ->where('status', true)
+                    ->orderBy('name')
+                    ->get();
+            }
+        }
+
+        $shopBanks = $this->getShopBanksByShopId($authUser->shop_id);
+
+        return view('orders.create-invoice', [
+            'customers' => $customersQuery->orderBy('shopname')->get(),
+            'products' => $productsQuery->orderBy('product_name')->get(),
+            'childShops' => $childShops,
+            'categories' => Category::orderBy('name')->get(),
+            'shopBanks' => $shopBanks,
+            'isEdit' => true,
+            'order' => $order,
+        ]);
+    }
+
+    /**
+     * Update an invoice by soft-deleting the old one and creating a new one with the same invoice_no.
+     * All steps run in a single DB transaction: if creating the new invoice fails, the delete is rolled back.
+     */
+    public function update(
+        Request $request,
+        int $id,
+        CustomerCreditService $creditService,
+        SupplierCreditService $supplierCreditService,
+        LedgerBalanceService $balanceService
+    ) {
+        $order = Order::with(['customer', 'orderDetails.product', 'paymentLogs'])
+            ->findOrFail($id);
+        $this->ensureShopAccess($order);
+
+        $request->merge(['edited_from_order_id' => $id]);
+
+        try {
+            $response = DB::transaction(function () use ($request, $id, $balanceService, $creditService, $supplierCreditService) {
+                $order = Order::lockForUpdate()->findOrFail($id);
+                if ($order->trashed()) {
+                    throw new \RuntimeException('This invoice has already been deleted.');
+                }
+
+                $originalInvoiceNo = $order->invoice_no;
+                $order->invoice_no = 'DEL-' . $order->id . '-' . $order->invoice_no;
+                $order->save();
+
+                $this->performOrderDestroy($id, $balanceService);
+
+                $request->merge([
+                    'invoice_no' => $originalInvoiceNo,
+                    'edited_from_order_id' => $id,
+                ]);
+
+                return $this->storeInvoice($request, $creditService, $supplierCreditService);
+            });
+
+            return $response;
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
+        } catch (\Exception $e) {
+            return Redirect::route('order.index')->with('error', 'Failed to update invoice: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -1238,6 +1338,7 @@ class OrderController extends Controller
         ]);
 
         $authUser = auth()->user();
+        $isEdit = $request->filled('edited_from_order_id');
 
         $rules = [
             'customer_id' => 'required_without:shop_id|nullable|numeric',
@@ -1276,35 +1377,40 @@ class OrderController extends Controller
 
             // Validate that at least one product remains after filtering
             if (empty($validatedData['products'])) {
-                return back()->withErrors(['products' => 'Please add at least one product to the invoice.'])
-                    ->withInput();
+                $err = back()->withErrors(['products' => 'Please add at least one product to the invoice.'])->withInput();
+                if ($request->filled('edited_from_order_id')) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['products' => ['Please add at least one product to the invoice.']]);
+                }
+                return $err;
             }
 
             // Payment 1: bank/cheque requires shop_bank_id_1 and must belong to user's shop
             if (in_array($validatedData['payment_method_1'], ['bank', 'cheque'])) {
                 if (empty($validatedData['shop_bank_id_1'])) {
-                    return back()->withErrors(['shop_bank_id_1' => 'Please select a bank for Payment 1.'])
-                        ->withInput();
+                    if ($isEdit) throw \Illuminate\Validation\ValidationException::withMessages(['shop_bank_id_1' => ['Please select a bank for Payment 1.']]);
+                    return back()->withErrors(['shop_bank_id_1' => 'Please select a bank for Payment 1.'])->withInput();
                 }
                 if (!DB::table('bank_shop')->where('id', $validatedData['shop_bank_id_1'])->where('shop_id', $authUser->shop_id)->exists()) {
-                    return back()->withErrors(['shop_bank_id_1' => 'The selected bank is not valid for your shop.'])
-                        ->withInput();
+                    if ($isEdit) throw \Illuminate\Validation\ValidationException::withMessages(['shop_bank_id_1' => ['The selected bank is not valid for your shop.']]);
+                    return back()->withErrors(['shop_bank_id_1' => 'The selected bank is not valid for your shop.'])->withInput();
                 }
             }
 
-            // Payment 2: when pay_2 > 0 and method is bank/cheque, require shop_bank_id_2
             $pay2 = (float) ($validatedData['pay_2'] ?? 0);
             if ($pay2 > 0 && in_array($validatedData['payment_method_2'] ?? '', ['bank', 'cheque'])) {
                 if (empty($validatedData['shop_bank_id_2'])) {
-                    return back()->withErrors(['shop_bank_id_2' => 'Please select a bank for Payment 2.'])
-                        ->withInput();
+                    if ($isEdit) throw \Illuminate\Validation\ValidationException::withMessages(['shop_bank_id_2' => ['Please select a bank for Payment 2.']]);
+                    return back()->withErrors(['shop_bank_id_2' => 'Please select a bank for Payment 2.'])->withInput();
                 }
                 if (!DB::table('bank_shop')->where('id', $validatedData['shop_bank_id_2'])->where('shop_id', $authUser->shop_id)->exists()) {
-                    return back()->withErrors(['shop_bank_id_2' => 'The selected bank is not valid for your shop.'])
-                        ->withInput();
+                    if ($isEdit) throw \Illuminate\Validation\ValidationException::withMessages(['shop_bank_id_2' => ['The selected bank is not valid for your shop.']]);
+                    return back()->withErrors(['shop_bank_id_2' => 'The selected bank is not valid for your shop.'])->withInput();
                 }
             }
         } catch (\Illuminate\Validation\ValidationException $e) {
+            if ($request->filled('edited_from_order_id')) {
+                throw $e;
+            }
             return back()->withErrors($e->errors())->withInput();
         }
 
@@ -1323,23 +1429,25 @@ class OrderController extends Controller
             
             if ($authUser->shop_id) {
                 if ($customer->shop_id !== $authUser->shop_id) {
-                    return back()->withErrors(['customer_id' => 'The selected customer does not belong to your shop.'])
-                        ->withInput();
+                    if ($isEdit) throw \Illuminate\Validation\ValidationException::withMessages(['customer_id' => ['The selected customer does not belong to your shop.']]);
+                    return back()->withErrors(['customer_id' => 'The selected customer does not belong to your shop.'])->withInput();
                 }
             } else {
                 if (!$customer->shop_id) {
-                    return back()->withErrors(['customer_id' => 'The selected customer is not assigned to any shop.'])
-                        ->withInput();
+                    if ($isEdit) throw \Illuminate\Validation\ValidationException::withMessages(['customer_id' => ['The selected customer is not assigned to any shop.']]);
+                    return back()->withErrors(['customer_id' => 'The selected customer is not assigned to any shop.'])->withInput();
                 }
             }
 
-            // Generate invoice number
-            $invoice_no = IdGenerator::generate([
-                'table' => 'orders',
-                'field' => 'invoice_no',
-                'length' => 10,
-                'prefix' => 'INV-'
-            ]);
+            // Generate invoice number (or use existing when editing)
+            $invoice_no = $request->filled('invoice_no')
+                ? $request->input('invoice_no')
+                : IdGenerator::generate([
+                    'table' => 'orders',
+                    'field' => 'invoice_no',
+                    'length' => 10,
+                    'prefix' => 'INV-'
+                ]);
 
             // Calculate totals
             $subtotal = 0;
@@ -1365,22 +1473,20 @@ class OrderController extends Controller
             $pay = $payPaid;
             $due = max(0, $total - $pay);
 
-            // Walk-in customer: must be fully paid (no partial)
             if ($customer->is_walkin && abs($pay - $total) > 0.01) {
-                return back()->withErrors(['pay_1' => 'Walk-in sale must be fully paid.'])
-                    ->withInput();
+                if ($isEdit) throw \Illuminate\Validation\ValidationException::withMessages(['pay_1' => ['Walk-in sale must be fully paid.']]);
+                return back()->withErrors(['pay_1' => 'Walk-in sale must be fully paid.'])->withInput();
             }
 
-            // When both payments are cash/bank/cheque (no credit), sum must equal invoice total
             $method1NonCredit = in_array($paymentMethod1, ['cash', 'bank', 'cheque']);
             $method2NonCredit = $paymentMethod2 && in_array($paymentMethod2, ['cash', 'bank', 'cheque']);
             if ($method1NonCredit && $method2NonCredit && $pay2 > 0 && abs($payAmount - $total) > 0.01) {
-                return back()->withErrors(['pay_1' => 'When paying by Cash, Bank or Cheque only, the total of both amounts must equal the invoice total.'])
-                    ->withInput();
+                if ($isEdit) throw \Illuminate\Validation\ValidationException::withMessages(['pay_1' => ['When paying by Cash, Bank or Cheque only, the total of both amounts must equal the invoice total.']]);
+                return back()->withErrors(['pay_1' => 'When paying by Cash, Bank or Cheque only, the total of both amounts must equal the invoice total.'])->withInput();
             }
             if ($method1NonCredit && $pay2 <= 0 && abs($pay1 - $total) > 0.01) {
-                return back()->withErrors(['pay_1' => 'Payment amount must equal the invoice total when using Cash, Bank or Cheque only.'])
-                    ->withInput();
+                if ($isEdit) throw \Illuminate\Validation\ValidationException::withMessages(['pay_1' => ['Payment amount must equal the invoice total when using Cash, Bank or Cheque only.']]);
+                return back()->withErrors(['pay_1' => 'Payment amount must equal the invoice total when using Cash, Bank or Cheque only.'])->withInput();
             }
 
             $orderStatus = 'complete';
@@ -1402,6 +1508,9 @@ class OrderController extends Controller
                 'due' => $due,
                 'comment' => $request->input('comment'),
             ];
+            if ($request->filled('edited_from_order_id')) {
+                $orderData['edited_from_order_id'] = $request->input('edited_from_order_id');
+            }
 
             $order_id = null;
             try {
@@ -1472,8 +1581,10 @@ class OrderController extends Controller
                     }
                 });
             } catch (InvalidArgumentException $e) {
+                if ($isEdit) throw \Illuminate\Validation\ValidationException::withMessages(['products' => [$e->getMessage()]]);
                 return back()->withErrors(['products' => $e->getMessage()])->withInput();
             } catch (\Exception $e) {
+                if ($isEdit) throw \Illuminate\Validation\ValidationException::withMessages(['products' => [$e->getMessage()]]);
                 return back()->withErrors(['products' => $e->getMessage()])->withInput();
             }
 
@@ -1869,18 +1980,19 @@ class OrderController extends Controller
                 ]);
 
             } catch (\Exception $e) {
-                // Rollback on error
                 if ($order_id) {
                     Order::where('id', $order_id)->delete();
                 }
                 if ($purchase_id) {
                     Purchase::where('id', $purchase_id)->delete();
                 }
+                if ($isEdit) throw $e;
                 return back()->withErrors(['error' => $e->getMessage()])->withInput();
             }
         }
 
         // Should not reach here
+        if ($isEdit) throw \Illuminate\Validation\ValidationException::withMessages(['error' => ['Please select either a customer or a shop.']]);
         return back()->withErrors(['error' => 'Please select either a customer or a shop.'])->withInput();
     }
 

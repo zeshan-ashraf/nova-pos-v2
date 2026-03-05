@@ -26,6 +26,7 @@ class Order extends Model
         'pay',
         'due',
         'comment',
+        'edited_from_order_id',
     ];
 
     public $sortable = [

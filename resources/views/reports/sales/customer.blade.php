@@ -180,7 +180,7 @@
                                     <th>Total Paid</th>
                                     <th>Total Due</th>
                                     <th>Credit Limit</th>
-                                    <th>Credit Amount</th>
+                                    <th>Due Amount</th>
                                     <th>Credit Utilization</th>
                                 </tr>
                             </thead>
@@ -198,7 +198,7 @@
                                     <td>{{ $customer->shopname ?? 'N/A' }}</td>
                                     <td>{{ $customerSale->order_count }}</td>
                                     <td>{{ number_format($customerSale->total_sales, 2) }}</td>
-                                    <td>{{ number_format($customerSale->total_paid, 2) }}</td>
+                                    <td>{{ number_format($customerSale->total_paid + (($customerPaymentSums ?? [])[$customerSale->customer_id] ?? 0), 2) }}</td>
                                     <td>{{ number_format($customerSale->total_due, 2) }}</td>
                                     <td>{{ number_format($customer->credit_limit ?? 0, 2) }}</td>
                                     <td>{{ number_format($customer->credit_amount ?? 0, 2) }}</td>

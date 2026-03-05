@@ -180,10 +180,18 @@
                 </div>
             @endif
 
-            <div class="invoice-form-container">
+            <div class="invoice-form-container" id="invoiceFormContainer">
                 <div class="invoice-header">
-                    <h4>Create New Invoice</h4>
+                    <h4>{{ ($isEdit ?? false) ? 'Edit Invoice' : 'Create New Invoice' }}</h4>
                 </div>
+                @if($isEdit ?? false)
+                <div id="invoiceEditLoadingOverlay" class="position-fixed w-100 h-100 d-flex align-items-center justify-content-center" style="left:0;top:0;background:rgba(255,255,255,0.85);z-index:9999;display:none !important;">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary mb-2" style="width:3rem;height:3rem;" role="status"><span class="sr-only">Loading...</span></div>
+                        <p class="text-muted mb-0">Loading invoice...</p>
+                    </div>
+                </div>
+                @endif
                 
                 <!-- Error Messages -->
                 @if ($errors->any())
@@ -203,8 +211,11 @@
                     </div>
                 </div>
 
-                <form id="invoiceForm" method="POST" action="{{ route('invoice.store') }}">
+                <form id="invoiceForm" method="POST" action="{{ ($isEdit ?? false) ? route('order.update', $order->id) : route('invoice.store') }}">
                     @csrf
+                    @if($isEdit ?? false)
+                    <input type="hidden" name="edited_from_order_id" value="{{ $order->id }}">
+                    @endif
 
                     <!-- Customer/Shop and Date Section -->
                     <div class="form-row-invoice">
@@ -548,10 +559,11 @@
                     <!-- Submit Button -->
                     <div class="mt-4">
                         <button type="button" class="btn btn-primary btn-lg" id="createInvoiceBtn">
-                            <i class="ri-file-add-line"></i> Save
+                            <span class="btn-text"><i class="ri-file-add-line"></i> {{ ($isEdit ?? false) ? 'Update' : 'Save' }}</span>
+                            <span class="btn-spinner d-none"><span class="spinner-border spinner-border-sm mr-1" role="status"></span> Processing...</span>
                         </button>
                         <a href="{{ route('order.index') }}" class="btn btn-secondary btn-lg">Cancel</a>
-                        <button type="button" class="btn btn-success btn-lg" id="createAndPrintInvoiceBtn">
+                        <button type="button" class="btn btn-success btn-lg" id="createAndPrintInvoiceBtn" @if($isEdit ?? false) style="display:none;" @endif>
                             <i class="ri-printer-line"></i> Save & Print
                         </button>
                     </div>
@@ -563,6 +575,41 @@
 
 {{-- Add Product Modal - MUST be outside the invoice form to prevent conflicts --}}
 @include('partials.add-product-modal')
+
+@if($isEdit ?? false)
+<!-- Confirm Update Invoice Modal -->
+<div class="modal fade" id="confirmUpdateInvoiceModal" tabindex="-1" role="dialog" aria-labelledby="confirmUpdateInvoiceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-warning">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="confirmUpdateInvoiceModalLabel">
+                    <i class="ri-error-warning-line mr-2"></i> Confirm Update Invoice
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2"><strong>Please recheck all entries before confirming.</strong></p>
+                <p class="mb-0 text-muted small">
+                    This will replace the current invoice: the existing invoice will be reversed (stock, payments, and ledger). This action cannot be undone.
+                </p>
+                <p class="mt-3 mb-0 font-weight-bold text-dark">
+                    Are you sure you want to update this invoice?
+                </p>
+            </div>
+            <div class="modal-footer border-top">
+                <button type="button" class="btn btn-outline-secondary btn-lg" data-dismiss="modal">
+                    <i class="ri-close-line mr-1"></i> Cancel
+                </button>
+                <button type="button" class="btn btn-primary btn-lg px-4" id="confirmUpdateInvoiceBtn">
+                    <i class="ri-check-line mr-1"></i> Yes, Update Invoice
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
 
 <!-- Add Customer Modal -->
 <div class="modal fade" id="addCustomerModal" tabindex="-1" role="dialog" aria-labelledby="addCustomerModalLabel" aria-hidden="true">
@@ -651,6 +698,9 @@
         console.log('Invoice form page loaded');
         let rowCount = 0;
 
+        // Edit mode: hide loading overlay immediately so the form is usable
+        $('#invoiceEditLoadingOverlay').hide();
+
         // Old input (flashed by Laravel when redirecting back with errors) - for repopulating form
         @php
             $invoiceOldInput = [
@@ -680,6 +730,39 @@
         var productIdToText = @json($productIdToText);
         var productIdToCode = @json($productIdToCode);
 
+        @if(!empty($isEdit) && !empty($order))
+        @php
+            $invoiceEditPayload = [
+                'customer_id' => $order->customer_id,
+                'order_date' => $order->order_date ? \Carbon\Carbon::parse($order->order_date)->format('Y-m-d\TH:i') : '',
+                'comment' => $order->comment ?? '',
+                'vat' => $order->vat ?? 0,
+                'invoice_discount' => $order->invoice_discount ?? 0,
+                'pay' => $order->pay ?? 0,
+                'due' => $order->due ?? 0,
+                'payment_logs' => $order->paymentLogs ? $order->paymentLogs->map(function ($log) {
+                    return ['payment_method' => $log->payment_method, 'amount_paid' => $log->amount_paid, 'shop_bank_id' => $log->shop_bank_id];
+                })->values()->all() : [],
+                'order_details' => $order->orderDetails ? $order->orderDetails->map(function ($d) {
+                    $p = $d->product;
+                    return [
+                        'product_id' => $d->product_id,
+                        'quantity' => $d->quantity,
+                        'unit_price' => $d->unitcost,
+                        'total' => $d->total,
+                        'item_discount' => $d->item_discount ?? 0,
+                        'product_name' => $p ? $p->product_name : '',
+                        'product_code' => $p ? ($p->product_code ?? '') : '',
+                        'product_store' => $p ? ($p->product_store ?? 0) : 0,
+                    ];
+                })->values()->all() : [],
+            ];
+        @endphp
+        window.invoiceEditData = @json($invoiceEditPayload);
+        @else
+        window.invoiceEditData = null;
+        @endif
+
         @if($errors->any())
         var validationErrorKeys = @json(array_keys($errors->getMessageBag()->getMessages()));
         var validationProductErrorIndices = validationErrorKeys
@@ -701,8 +784,11 @@
                          $('#invoiceForm').find('.form-control.is-invalid').length > 0;
         
         if (hasErrors) {
-            $('#createInvoiceBtn').prop('disabled', false).html('<i class="ri-file-add-line"></i> Save');
-            $('#createAndPrintInvoiceBtn').prop('disabled', false).html('<i class="ri-printer-line"></i> Save & Print');
+            var $saveBtn = $('#createInvoiceBtn');
+            $saveBtn.prop('disabled', false);
+            $saveBtn.find('.btn-text').removeClass('d-none');
+            $saveBtn.find('.btn-spinner').addClass('d-none');
+            $('#createAndPrintInvoiceBtn').prop('disabled', false);
             $('#invoiceForm').data('submitting', false);
             console.log('Errors detected on page load, re-enabling buttons');
         }
@@ -767,24 +853,52 @@
             return false;
         }
         
-        // Prevent default button behavior and manually submit form
         e.preventDefault();
         e.stopPropagation();
+
+        // Edit mode: show confirmation modal instead of submitting immediately
+        var isEditMode = $invoiceForm.find('input[name="edited_from_order_id"]').length > 0;
+        if (isEditMode && $('#confirmUpdateInvoiceModal').length) {
+            $('#confirmUpdateInvoiceModal').modal('show');
+            return;
+        }
         
-        // Manually trigger form submit
+        var $btn = $('#createInvoiceBtn');
+        $btn.prop('disabled', true);
+        $btn.find('.btn-text').addClass('d-none');
+        $btn.find('.btn-spinner').removeClass('d-none');
+        
         console.log('Manually triggering form submit via jQuery...');
         $invoiceForm.data('submitting', true);
-        
-        // Trigger jQuery submit event (this will call our validation handler)
         $invoiceForm.submit();
         
-        // Reset flag after a delay
         setTimeout(function() {
             $invoiceForm.data('submitting', false);
+            $btn.prop('disabled', false);
+            $btn.find('.btn-text').removeClass('d-none');
+            $btn.find('.btn-spinner').addClass('d-none');
         }, 1000);
-                // Don't prevent default, let form submit naturally
             });
         }
+
+        // Confirm Update Invoice: user confirmed in modal, submit the form
+        $(document).on('click', '#confirmUpdateInvoiceBtn', function() {
+            var $invoiceForm = $('#invoiceForm');
+            if ($invoiceForm.length === 0 || $invoiceForm.data('submitting')) return;
+            $('#confirmUpdateInvoiceModal').modal('hide');
+            var $btn = $('#createInvoiceBtn');
+            $btn.prop('disabled', true);
+            $btn.find('.btn-text').addClass('d-none');
+            $btn.find('.btn-spinner').removeClass('d-none');
+            $invoiceForm.data('submitting', true);
+            $invoiceForm.submit();
+            setTimeout(function() {
+                $invoiceForm.data('submitting', false);
+                $btn.prop('disabled', false);
+                $btn.find('.btn-text').removeClass('d-none');
+                $btn.find('.btn-spinner').addClass('d-none');
+            }, 1000);
+        });
 
     // Initialize Select2 on existing product selects
     function initializeSelect2($select) {
@@ -1021,6 +1135,75 @@ var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
         if (o.customer_id) {
             setTimeout(function() { $('#customer_id').trigger('change'); }, 100);
         }
+    }
+
+    // Edit mode: prefill from invoiceEditData then hide loading overlay (defer so addRow/calculateInvoiceTotal/calculateDue exist)
+    if (window.invoiceEditData) {
+        var runEditPrefill = function() {
+            try {
+                var d = window.invoiceEditData;
+                $('#customer_id').val(d.customer_id || '').trigger('change');
+                if (d.order_date) $('#order_date').val(d.order_date);
+                if (d.comment != null) $('#comment').val(d.comment);
+                if (d.vat != null) $('#vat').val(d.vat);
+                if (d.invoice_discount != null) $('#invoice_discount').val(d.invoice_discount);
+
+                var details = d.order_details || [];
+                var $tbody = $('#productTableBody');
+                var $firstRow = $tbody.find('tr[data-row-index="0"]');
+                $tbody.find('tr[data-row-index]').not($firstRow).each(function() {
+                    var $row = $(this);
+                    var $sel = $row.find('.product-select');
+                    if ($sel.data('select2')) $sel.select2('destroy');
+                    $row.remove();
+                });
+                rowCount = 0;
+                for (var i = 0; i < details.length; i++) {
+                    var p = details[i];
+                    if (i > 0) addRow();
+                    var $row = $tbody.find('tr[data-row-index="' + i + '"]');
+                    var pid = String(p.product_id || '');
+                    if (pid) {
+                        var $select = $row.find('.product-select');
+                        if ($select.data('select2')) $select.select2('destroy');
+                        var text = (p.product_code ? p.product_code + ' - ' : '') + (p.product_name || 'Product #' + pid);
+                        $select.append(new Option(text, pid, true, true));
+                        initializeSelect2($select);
+                        $select.val(pid).trigger('change');
+                        $row.find('.original-price').val(p.unit_price || 0);
+                        $row.find('.unit-price').val(p.unit_price || 0);
+                        $row.find('.quantity').val(p.quantity || 1);
+                        $row.find('.item-discount-value').val(p.item_discount || 0);
+                        $row.find('.total-value').val(p.total || 0);
+                        $row.find('.product-code-display').text(p.product_code || '-');
+                        $row.find('.total-display').text(parseFloat(p.total || 0).toFixed(2));
+                        $row.find('.stock-display').text(p.product_store != null ? p.product_store : 0);
+                        $row.find('.stock-value').val(p.product_store != null ? p.product_store : 0);
+                    }
+                }
+                if (typeof calculateInvoiceTotal === 'function') calculateInvoiceTotal();
+                if (typeof calculateDue === 'function') calculateDue();
+
+                var logs = d.payment_logs || [];
+                if (logs.length > 0) {
+                    $('#payment_method_1').val(logs[0].payment_method || 'credit').trigger('change');
+                    $('#pay_1').val(parseFloat(logs[0].amount_paid || 0));
+                    if (logs[0].shop_bank_id) $('#shop_bank_id_1').val(logs[0].shop_bank_id);
+                }
+                if (logs.length > 1) {
+                    $('#payment_row_2_block').show();
+                    $('#payment_method_2').val(logs[1].payment_method || '').trigger('change');
+                    $('#pay_2').val(parseFloat(logs[1].amount_paid || 0));
+                    if (logs[1].shop_bank_id) $('#shop_bank_id_2').val(logs[1].shop_bank_id);
+                }
+                setTimeout(function() { $('#customer_id').trigger('change'); }, 100);
+            } catch (err) {
+                console.error('Edit prefill error:', err);
+            } finally {
+                $('#invoiceEditLoadingOverlay').hide();
+            }
+        };
+        setTimeout(runEditPrefill, 0);
     }
 
     // Highlight product rows that have validation errors and scroll to first invalid row

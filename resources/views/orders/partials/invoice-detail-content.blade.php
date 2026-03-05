@@ -144,6 +144,9 @@
             <button type="button" class="btn btn-success btn-lg mr-2" data-toggle="modal" data-target="#completeOrderModal" onclick="showCompleteOrderModal({{ $order->id }}, '{{ addslashes($order->invoice_no) }}')"><i class="ri-check-line mr-1"></i> Complete Order</button>
         @endif
         <a href="{{ route('order.invoiceDownload', $order->id) }}" class="btn btn-primary btn-lg" target="_blank"><i class="ri-printer-line mr-1"></i> Print</a>
+        @if($order->order_status == 'complete')
+        <a href="{{ route('order.edit', $order->id) }}" class="btn btn-warning btn-lg mr-2"><i class="ri-edit-line mr-1"></i> Edit Invoice</a>
+        @endif
         <a href="{{ route('order.index') }}" class="btn btn-secondary btn-lg">Back</a>
     @else
         <a href="{{ route('order.invoiceDownload', $order->id) }}" class="btn btn-primary btn-lg mr-2" target="_blank"><i class="ri-printer-line mr-1"></i> Print</a>
