@@ -88,7 +88,7 @@
         <div class="col-lg-12 mb-3">
             <div class="row sales-kpi-row-1">
                 <div class="col-md-3 mb-3 mb-md-0">
-                    <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
+                    <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi summary-kpi-card card-primary h-100">
                         <div class="card-body d-flex align-items-center">
                             <div class="icon iq-icon-box-2 bg-primary-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
                                 <i class="ri-barcode-box-line text-primary" style="font-size: 1.75rem;"></i>
@@ -101,7 +101,7 @@
                     </div>
                 </div>
                 <div class="col-md-3 mb-3 mb-md-0">
-                    <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
+                    <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi summary-kpi-card card-info h-100">
                         <div class="card-body d-flex align-items-center">
                             <div class="icon iq-icon-box-2 bg-info-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
                                 <i class="ri-stack-line text-info" style="font-size: 1.75rem;"></i>
@@ -114,7 +114,7 @@
                     </div>
                 </div>
                 <div class="col-md-3 mb-3 mb-md-0">
-                    <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
+                    <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi summary-kpi-card card-success h-100">
                         <div class="card-body d-flex align-items-center">
                             <div class="icon iq-icon-box-2 bg-success-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
                                 <i class="ri-money-dollar-circle-line text-success" style="font-size: 1.75rem;"></i>
@@ -127,7 +127,7 @@
                     </div>
                 </div>
                 <div class="col-md-3 mb-3 mb-md-0">
-                    <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi h-100">
+                    <div class="card card-block card-stretch card-height shadow-sm sales-report-kpi summary-kpi-card card-warning h-100">
                         <div class="card-body d-flex align-items-center">
                             <div class="icon iq-icon-box-2 bg-warning-light d-flex align-items-center justify-content-center mr-3 flex-shrink-0">
                                 <i class="ri-line-chart-line text-warning" style="font-size: 1.75rem;"></i>

@@ -40,6 +40,8 @@ use App\Http\Controllers\Dashboard\ComparativeReportController;
 use App\Http\Controllers\Dashboard\ExecutiveReportController;
 use App\Http\Controllers\Dashboard\SuperAdminDashboardController;
 use App\Http\Controllers\Dashboard\SystemResetController;
+use App\Http\Controllers\Dashboard\PayableController;
+use App\Http\Controllers\Dashboard\PayableTransactionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -60,7 +62,9 @@ Route::get('/', function () {
 // DEFAULT DASHBOARD & PROFILE
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth'])->name('dashboard');
+    Route::get('/dashboard/kpis', [DashboardController::class, 'getKPIs'])->name('dashboard.kpis');
     Route::get('/super-admin/dashboard', [SuperAdminDashboardController::class, 'index'])->name('super-admin.dashboard');
+    Route::get('/super-admin/dashboard/kpis', [SuperAdminDashboardController::class, 'kpis'])->name('super-admin.dashboard.kpis');
 
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
     Route::get('/profile/edit', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -246,6 +250,14 @@ Route::middleware(['permission:purchases.menu'])->group(function () {
     Route::put('/purchases/update/status', [PurchaseController::class, 'updateStatus'])->name('purchases.updateStatus');
     Route::delete('/purchases/{purchase_id}', [PurchaseController::class, 'destroy'])->name('purchases.destroy');
     Route::get('/api/purchases/products/search', [PurchaseController::class, 'searchProducts'])->name('api.purchases.products.search');
+});
+
+// ====== PAYABLES ======
+Route::middleware(['permission:manage_payables'])->group(function () {
+    Route::resource('payables', PayableController::class);
+    Route::get('/api/payables/search', [PayableController::class, 'searchPayables'])->name('api.payables.search');
+    Route::post('payable-transactions', [PayableTransactionController::class, 'store'])->name('payable-transactions.store');
+    Route::delete('payable-transactions/{id}', [PayableTransactionController::class, 'destroy'])->name('payable-transactions.destroy');
 });
 
 // ====== EXPENSE CONTROLLER ======

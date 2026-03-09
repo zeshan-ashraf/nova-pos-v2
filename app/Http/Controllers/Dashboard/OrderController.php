@@ -81,6 +81,17 @@ class OrderController extends Controller
             ]);
         }
 
+        // Payment type (Credit, Cash, Bank)
+        $paymentType = $request->input('payment_type');
+        if (in_array($paymentType, ['Credit', 'Cash', 'Bank'], true)) {
+            $paymentStatusMap = [
+                'Credit' => ['credit', 'Due'],
+                'Cash' => ['cash', 'HandCash'],
+                'Bank' => ['bank', 'Cheque'],
+            ];
+            $ordersQuery->whereIn('payment_status', $paymentStatusMap[$paymentType]);
+        }
+
         // Invoice no (partial match)
         if ($request->filled('invoice_no')) {
             $ordersQuery->where('invoice_no', 'like', '%' . $request->input('invoice_no') . '%');

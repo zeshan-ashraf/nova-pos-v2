@@ -37,12 +37,31 @@
                 </li>
                 @endif
 
-                @if (auth()->user()->can('shop.menu'))
-                <li class="{{ Request::is('shops*') ? 'active' : '' }}">
-                    <a href="{{ route('shops.index') }}" class="svg-icon">
+                @if (auth()->user()->can('shop.menu') || auth()->user()->can('manage_payables'))
+                <li>
+                    <a href="#shop-menu" class="collapsed" data-toggle="collapse" aria-expanded="false">
                         <i class="fas fa-store"></i>
-                        <span class="ml-3">Shops</span>
+                        <span class="ml-3">Shop</span>
+                        <svg class="svg-icon iq-arrow-right arrow-active" width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="10 15 15 20 20 15"></polyline><path d="M4 4h7a4 4 0 0 1 4 4v12"></path>
+                        </svg>
                     </a>
+                    <ul id="shop-menu" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
+                        @if (auth()->user()->can('shop.menu'))
+                        <li class="{{ Request::is('shops*') ? 'active' : '' }}">
+                            <a href="{{ route('shops.index') }}">
+                                <i class="fas fa-arrow-right"></i><span>Shops</span>
+                            </a>
+                        </li>
+                        @endif
+                        @if (auth()->user()->can('manage_payables'))
+                        <li class="{{ Request::is('payables*') ? 'active' : '' }}">
+                            <a href="{{ route('payables.index') }}">
+                                <i class="fas fa-arrow-right"></i><span>Payables</span>
+                            </a>
+                        </li>
+                        @endif
+                    </ul>
                 </li>
                 @endif
 

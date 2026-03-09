@@ -31,6 +31,7 @@ class Order extends Model
 
     public $sortable = [
         'customer_id',
+        'customer.name',
         'order_date',
         'pay',
         'due',

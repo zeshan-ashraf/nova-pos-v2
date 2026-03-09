@@ -3,6 +3,14 @@
 @section('specificpagestyles')
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+<style>
+.sortable-th-link { text-decoration: none; cursor: pointer; white-space: nowrap; }
+.sortable-th-link:hover { text-decoration: underline; }
+/* Keep filter dropdowns inside columns to prevent overlap */
+#orders-filter-form .form-control,
+#orders-filter-form .select2-container { max-width: 100%; box-sizing: border-box; }
+#orders-filter-form .row [class^="col-"] { min-width: 0; }
+</style>
 @endsection
 
 @section('container')
@@ -45,60 +53,98 @@
             $dateRange = $dateRange ?? [];
             $dateFilter = $dateRange['date_filter'] ?? 'all';
         @endphp
-        <div class="col-lg-12">
-            <form action="{{ route('order.index') }}" method="get" id="orders-filter-form">
-                {{-- Row 1: Filters (date, invoice no, total range, customer, Apply) --}}
-                <div class="d-flex flex-wrap align-items-end mb-3">
-                    <div class="form-group mr-3 mb-2">
-                        <label for="date_filter" class="small mb-0">Date</label>
-                        <select class="form-control form-control-sm" name="date_filter" id="date_filter" onchange="toggleOrderCustomDates()">
-                            <option value="all" {{ $dateFilter == 'all' ? 'selected' : '' }}>All</option>
-                            <option value="today" {{ $dateFilter == 'today' ? 'selected' : '' }}>Today</option>
-                            <option value="yesterday" {{ $dateFilter == 'yesterday' ? 'selected' : '' }}>Yesterday</option>
-                            <option value="this_week" {{ $dateFilter == 'this_week' ? 'selected' : '' }}>This Week</option>
-                            <option value="last_week" {{ $dateFilter == 'last_week' ? 'selected' : '' }}>Last Week</option>
-                            <option value="this_month" {{ $dateFilter == 'this_month' ? 'selected' : '' }}>This Month</option>
-                            <option value="last_month" {{ $dateFilter == 'last_month' ? 'selected' : '' }}>Last Month</option>
-                            <option value="this_year" {{ $dateFilter == 'this_year' ? 'selected' : '' }}>This Year</option>
-                            <option value="last_year" {{ $dateFilter == 'last_year' ? 'selected' : '' }}>Last Year</option>
-                            <option value="custom" {{ $dateFilter == 'custom' ? 'selected' : '' }}>Custom Range</option>
-                        </select>
-                    </div>
-                    <div class="form-group mr-3 mb-2" id="order_start_date_group" style="display: {{ $dateFilter == 'custom' ? 'block' : 'none' }};">
-                        <label for="start_date" class="small mb-0">Start Date</label>
-                        <input type="date" class="form-control form-control-sm" name="start_date" id="start_date" value="{{ $dateRange['start_date'] ?? '' }}">
-                    </div>
-                    <div class="form-group mr-3 mb-2" id="order_end_date_group" style="display: {{ $dateFilter == 'custom' ? 'block' : 'none' }};">
-                        <label for="end_date" class="small mb-0">End Date</label>
-                        <input type="date" class="form-control form-control-sm" name="end_date" id="end_date" value="{{ $dateRange['end_date'] ?? '' }}">
-                    </div>
-                    <div class="form-group mr-3 mb-2">
-                        <label for="invoice_no" class="small mb-0">Invoice No</label>
-                        <input type="text" class="form-control form-control-sm" name="invoice_no" id="invoice_no" placeholder="Partial match" value="{{ request('invoice_no') }}" style="min-width: 120px;">
-                    </div>
-                    <div class="form-group mr-3 mb-2">
-                        <label for="total_min" class="small mb-0">Min Total</label>
-                        <input type="number" step="0.01" min="0" class="form-control form-control-sm" name="total_min" id="total_min" placeholder="0" value="{{ request('total_min') }}" style="min-width: 100px;">
-                    </div>
-                    <div class="form-group mr-3 mb-2">
-                        <label for="total_max" class="small mb-0">Max Total</label>
-                        <input type="number" step="0.01" min="0" class="form-control form-control-sm" name="total_max" id="total_max" placeholder="—" value="{{ request('total_max') }}" style="min-width: 100px;">
-                    </div>
-                    <div class="form-group mr-3 mb-2">
-                        <label for="customer_id" class="small mb-0">Customer</label>
-                        <select name="customer_id" id="customer_id" class="form-control customer-select" style="min-width: 320px;">
-                            <option value="">— All —</option>
-                            @foreach ($customers ?? [] as $customer)
-                                <option value="{{ $customer->id }}" {{ request('customer_id') == $customer->id ? 'selected' : '' }}>{{ $customer->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="form-group mb-2">
-                        <button type="submit" class="btn btn-primary btn-sm">Apply</button>
-                    </div>
+        <!-- Filter Section (same UI as reports/sales/summary) -->
+        <div class="col-lg-12 mb-3">
+            <div class="card report-filter-card border-primary shadow-sm">
+                <div class="card-header border-0 py-2">
+                    <h6 class="mb-0 text-primary"><i class="ri-filter-3-line mr-1"></i> Filters</h6>
                 </div>
-                {{-- Row 2: Row count + Search (datatable toolbar) --}}
-                <div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
+                <div class="card-body pt-0">
+                    <form action="{{ route('order.index') }}" method="get" id="orders-filter-form">
+                        <input type="hidden" name="row" value="{{ request('row', '50') }}">
+                        <input type="hidden" name="search" value="{{ request('search') }}">
+                        {{-- Row 1: Date filter, Customer, Invoice No --}}
+                        <div class="row align-items-end mb-3">
+                            <div class="col-md-4 mb-2 mb-md-0">
+                                <label for="date_filter" class="form-label">Date Filter</label>
+                                <select class="form-control" name="date_filter" id="date_filter" onchange="toggleOrderCustomDates()">
+                                    <option value="all" {{ $dateFilter == 'all' ? 'selected' : '' }}>All</option>
+                                    <option value="today" {{ $dateFilter == 'today' ? 'selected' : '' }}>Today</option>
+                                    <option value="yesterday" {{ $dateFilter == 'yesterday' ? 'selected' : '' }}>Yesterday</option>
+                                    <option value="this_week" {{ $dateFilter == 'this_week' ? 'selected' : '' }}>This Week</option>
+                                    <option value="last_week" {{ $dateFilter == 'last_week' ? 'selected' : '' }}>Last Week</option>
+                                    <option value="this_month" {{ $dateFilter == 'this_month' ? 'selected' : '' }}>This Month</option>
+                                    <option value="last_month" {{ $dateFilter == 'last_month' ? 'selected' : '' }}>Last Month</option>
+                                    <option value="this_year" {{ $dateFilter == 'this_year' ? 'selected' : '' }}>This Year</option>
+                                    <option value="last_year" {{ $dateFilter == 'last_year' ? 'selected' : '' }}>Last Year</option>
+                                    <option value="custom" {{ $dateFilter == 'custom' ? 'selected' : '' }}>Custom Range</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 mb-2 mb-md-0">
+                                <label for="customer_id" class="form-label">Customer</label>
+                                <select name="customer_id" id="customer_id" class="form-control customer-select" style="width: 100%;">
+                                    <option value="">— All —</option>
+                                    @foreach ($customers ?? [] as $customer)
+                                        <option value="{{ $customer->id }}" {{ request('customer_id') == $customer->id ? 'selected' : '' }}>{{ $customer->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-4 mb-2 mb-md-0">
+                                <label for="invoice_no" class="form-label">Invoice No</label>
+                                <input type="text" class="form-control" name="invoice_no" id="invoice_no" placeholder="Partial match" value="{{ request('invoice_no') }}">
+                            </div>
+                        </div>
+                        {{-- Row 2: Start/End (when custom), Payment type, Min total, Max total, Filter buttons --}}
+                        <div class="row align-items-end">
+                            <div class="col-md-2 mb-2 mb-md-0" id="order_start_date_group" style="display: {{ $dateFilter == 'custom' ? 'block' : 'none' }};">
+                                <label for="start_date" class="form-label">Start Date</label>
+                                <input type="date" class="form-control" name="start_date" id="start_date" value="{{ $dateRange['start_date'] ?? '' }}">
+                            </div>
+                            <div class="col-md-2 mb-2 mb-md-0" id="order_end_date_group" style="display: {{ $dateFilter == 'custom' ? 'block' : 'none' }};">
+                                <label for="end_date" class="form-label">End Date</label>
+                                <input type="date" class="form-control" name="end_date" id="end_date" value="{{ $dateRange['end_date'] ?? '' }}">
+                            </div>
+                            <div class="col-md-2 mb-2 mb-md-0">
+                                <label for="payment_type" class="form-label">Payment Type</label>
+                                <select class="form-control" name="payment_type" id="payment_type" style="width: 100%;">
+                                    <option value="">— All —</option>
+                                    <option value="Credit" {{ request('payment_type') === 'Credit' ? 'selected' : '' }}>Credit</option>
+                                    <option value="Cash" {{ request('payment_type') === 'Cash' ? 'selected' : '' }}>Cash</option>
+                                    <option value="Bank" {{ request('payment_type') === 'Bank' ? 'selected' : '' }}>Bank</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2 mb-2 mb-md-0">
+                                <label for="total_min" class="form-label">Min Total</label>
+                                <input type="number" step="0.01" min="0" class="form-control" name="total_min" id="total_min" placeholder="0" value="{{ request('total_min') }}">
+                            </div>
+                            <div class="col-md-2 mb-2 mb-md-0">
+                                <label for="total_max" class="form-label">Max Total</label>
+                                <input type="number" step="0.01" min="0" class="form-control" name="total_max" id="total_max" placeholder="—" value="{{ request('total_max') }}">
+                            </div>
+                            <div class="col-md-2 mb-2 mb-md-0 d-flex align-items-end flex-wrap">
+                                <button type="submit" class="btn btn-primary px-3 py-2 mr-2 mb-2 mb-md-0">
+                                    <i class="ri-search-line mr-1"></i> Filter
+                                </button>
+                                <a href="{{ route('order.index') }}" class="btn btn-outline-secondary px-3 py-2" title="Clear all filters">Clear</a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {{-- Row + Search in default place (below filter card) --}}
+        <div class="col-lg-12 mb-3">
+            <form action="{{ route('order.index') }}" method="get" id="orders-filter-form">
+                @foreach (request()->except(['row', 'search', 'page']) as $key => $value)
+                    @if (is_array($value))
+                        @foreach ($value as $v)
+                            <input type="hidden" name="{{ $key }}[]" value="{{ $v }}">
+                        @endforeach
+                    @else
+                        <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                    @endif
+                @endforeach
+                <div class="d-flex flex-wrap align-items-center justify-content-between">
                     <div class="form-group row mb-0">
                         <label for="row" class="col-sm-3 align-self-center col-form-label col-form-label-sm">Row:</label>
                         <div class="col-sm-9">
@@ -132,7 +178,7 @@
         <div class="col-lg-12">
             <div class="row mb-3">
                 <div class="col-md-6">
-                    <div class="card border shadow-none">
+                    <div class="card border shadow-none summary-kpi-card card-primary">
                         <div class="card-body py-3 d-flex align-items-center">
                             <i class="fas fa-shopping-cart text-primary mr-3" style="font-size: 1.75rem;"></i>
                             <div class="flex-grow-1">
@@ -143,7 +189,7 @@
                     </div>
                 </div>
                 <div class="col-md-6">
-                    <div class="card border shadow-none">
+                    <div class="card border shadow-none summary-kpi-card card-success">
                         <div class="card-body py-3 d-flex align-items-center">
                             <i class="fas fa-money-bill-wave text-success mr-3" style="font-size: 1.75rem;"></i>
                             <div class="flex-grow-1">
@@ -163,10 +209,38 @@
                         <tr class="ligth ligth-data">
                             <th>No.</th>
                             <th>Invoice No</th>
-                            <th>@sortablelink('customer.name', 'name')</th>
-                            <th>@sortablelink('order_date', 'order date')</th>
-                            <th>@sortablelink('total', 'Total')</th>
-                            <th>@sortablelink('pay')</th>
+                            <th>
+                                @php
+                                    $col = 'customer.name'; $label = 'Name';
+                                    $dir = (request('sort') === $col && request('direction') === 'asc') ? 'desc' : 'asc';
+                                    $url = route('order.index', array_merge(request()->query(), ['sort' => $col, 'direction' => $dir]));
+                                @endphp
+                                <a href="{{ $url }}" class="sortable-th-link text-dark">{{ $label }} @if(request('sort') === $col)<i class="ri-arrow-{{ request('direction') === 'asc' ? 'up' : 'down' }}-line ml-1"></i>@endif</a>
+                            </th>
+                            <th>
+                                @php
+                                    $col = 'order_date'; $label = 'Order date';
+                                    $dir = (request('sort') === $col && request('direction') === 'asc') ? 'desc' : 'asc';
+                                    $url = route('order.index', array_merge(request()->query(), ['sort' => $col, 'direction' => $dir]));
+                                @endphp
+                                <a href="{{ $url }}" class="sortable-th-link text-dark">{{ $label }} @if(request('sort') === $col)<i class="ri-arrow-{{ request('direction') === 'asc' ? 'up' : 'down' }}-line ml-1"></i>@endif</a>
+                            </th>
+                            <th>
+                                @php
+                                    $col = 'total'; $label = 'Total';
+                                    $dir = (request('sort') === $col && request('direction') === 'asc') ? 'desc' : 'asc';
+                                    $url = route('order.index', array_merge(request()->query(), ['sort' => $col, 'direction' => $dir]));
+                                @endphp
+                                <a href="{{ $url }}" class="sortable-th-link text-dark">{{ $label }} @if(request('sort') === $col)<i class="ri-arrow-{{ request('direction') === 'asc' ? 'up' : 'down' }}-line ml-1"></i>@endif</a>
+                            </th>
+                            <th>
+                                @php
+                                    $col = 'pay'; $label = 'Pay';
+                                    $dir = (request('sort') === $col && request('direction') === 'asc') ? 'desc' : 'asc';
+                                    $url = route('order.index', array_merge(request()->query(), ['sort' => $col, 'direction' => $dir]));
+                                @endphp
+                                <a href="{{ $url }}" class="sortable-th-link text-dark">{{ $label }} @if(request('sort') === $col)<i class="ri-arrow-{{ request('direction') === 'asc' ? 'up' : 'down' }}-line ml-1"></i>@endif</a>
+                            </th>
                             <th>Payment</th>
                             <th>Status</th>
                             <th>Action</th>
@@ -199,6 +273,9 @@
                                 <div class="d-flex align-items-center list-action">
                                     <a class="btn btn-sm btn-info mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Details" href="{{ route('order.orderDetails', $order->id) }}">
                                         Details
+                                    </a>
+                                    <a class="btn btn-sm btn-warning mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Edit Invoice" href="{{ route('order.edit', $order->id) }}">
+                                        Edit
                                     </a>
                                     <a class="btn btn-sm btn-success mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Print" href="{{ route('order.invoiceDownload', $order->id) }}">
                                         Print
@@ -383,7 +460,7 @@ function formatCurrency(amount) {
             theme: 'bootstrap-5',
             placeholder: '— All —',
             allowClear: true,
-            width: '320px'
+            width: '100%'
         });
     });
 </script>

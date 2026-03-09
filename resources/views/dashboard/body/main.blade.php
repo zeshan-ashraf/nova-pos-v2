@@ -96,6 +96,16 @@
                     white-space: normal;
                 }
             }
+
+            /* Left accent border for summary/KPI cards (used on payables, orders, sales reports) */
+            .summary-kpi-card { border-left: 4px solid; }
+            .summary-kpi-card.card-primary { border-left-color: #0d6efd; }
+            .summary-kpi-card.card-warning { border-left-color: #ffc107; }
+            .summary-kpi-card.card-success { border-left-color: #198754; }
+            .summary-kpi-card.card-info { border-left-color: #0dcaf0; }
+            .summary-kpi-card.card-danger { border-left-color: #dc3545; }
+            .summary-kpi-card.card-secondary { border-left-color: #6c757d; }
+            .summary-kpi-card.card-dark { border-left-color: #212529; }
         </style>
 
         @yield('specificpagestyles')
