@@ -257,20 +257,12 @@ class StockService
         $updateData = [self::STOCK_COLUMN => $newStock];
 
         if ($direction === 'in' && $sourceType === 'purchase') {
-            $currentAvgCost = (float) ($product->buying_price ?? 0);
-            $newQty = $qty;
-            $newCost = $price;
-            $totalQty = $currentQty + $newQty;
-
-            if ($totalQty > 0) {
-                $newAvgCost = (
-                    ($currentQty * $currentAvgCost) + ($newQty * $newCost)
-                ) / $totalQty;
-            } else {
-                $newAvgCost = 0.0;
-            }
-
-            $updateData['buying_price'] = round($newAvgCost, 4);
+            $updateData['buying_price'] = round($this->computeWeightedAverageCost(
+                $currentQty,
+                (float) ($product->buying_price ?? 0),
+                $qty,
+                $price
+            ), 4);
         }
 
         $product->update($updateData);
@@ -281,5 +273,60 @@ class StockService
         }
 
         return $log;
+    }
+
+    /**
+     * Single place for moving weighted average cost formula.
+     * Used when recording purchase stock (in insertLogAndUpdateProduct) and when
+     * stock was already increased elsewhere (e.g. child purchase from mother sale).
+     *
+     * @param int   $currentQty       Stock qty before this receipt
+     * @param float $currentAvgCost  Current product buying_price (running average)
+     * @param int   $incomingQty     Qty received in this receipt
+     * @param float $incomingUnitPrice Unit price of this receipt
+     * @return float New weighted average cost (4-decimal precision applied by caller)
+     */
+    private function computeWeightedAverageCost(
+        int $currentQty,
+        float $currentAvgCost,
+        int $incomingQty,
+        float $incomingUnitPrice
+    ): float {
+        $totalQty = $currentQty + $incomingQty;
+        if ($totalQty <= 0) {
+            return 0.0;
+        }
+        return (($currentQty * $currentAvgCost) + ($incomingQty * $incomingUnitPrice)) / $totalQty;
+    }
+
+    /**
+     * Recalculate and persist product.buying_price after a purchase receipt when
+     * product_store was already updated outside this service (e.g. child shop
+     * purchase created from mother sale). Uses the same weighted average formula
+     * as purchase stock. Call after increasing product_store for the product.
+     *
+     * @param Product $product    Product after product_store has been increased (refresh first if needed)
+     * @param int     $qtyAdded   Quantity that was just added
+     * @param float   $unitPrice Unit price of this receipt
+     */
+    public function updateBuyingPriceAfterPurchaseIn(Product $product, int $qtyAdded, float $unitPrice): void
+    {
+        if ($qtyAdded <= 0) {
+            return;
+        }
+        $currentStock = (int) ($product->product_store ?? 0);
+        $currentQtyBefore = max(0, $currentStock - $qtyAdded);
+        $currentAvgCost = (float) ($product->buying_price ?? 0);
+
+        $newAvgCost = $this->computeWeightedAverageCost(
+            $currentQtyBefore,
+            $currentAvgCost,
+            $qtyAdded,
+            $unitPrice
+        );
+
+        Product::withoutGlobalScope('shop')
+            ->where('id', $product->id)
+            ->update(['buying_price' => round($newAvgCost, 4)]);
     }
 }

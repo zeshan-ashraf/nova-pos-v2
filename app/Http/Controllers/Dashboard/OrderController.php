@@ -30,6 +30,7 @@ use App\Services\Ledger\LedgerBalanceService;
 use App\Services\SalePostingService;
 use App\Services\Stock\StockService;
 use App\Services\SupplierCreditService;
+use App\Services\PurchaseDeletionService;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
@@ -38,7 +39,8 @@ class OrderController extends Controller
     use ReportTrait;
 
     public function __construct(
-        private StockService $stockService
+        private StockService $stockService,
+        private PurchaseDeletionService $purchaseDeletionService,
     ) {}
 
     /**
@@ -889,57 +891,14 @@ class OrderController extends Controller
             throw new \RuntimeException('This invoice has already been deleted.');
         }
 
-        // If this is a mother sale with a linked child purchase, delete the child side first (inter-branch cascade).
-        $childPurchase = Purchase::with(['purchaseDetails.product', 'paymentLogs'])
+        // If this is a mother sale with a linked child purchase, delete the child side first (inter-branch cascade)
+        // using the reusable PurchaseDeletionService so stock and ledger logic stay consistent.
+        // Child purchases live in the child shop, so bypass the global shop scope here.
+        $childPurchase = Purchase::withoutGlobalScopes()
             ->where('source_sale_id', $order->id)
             ->first();
-
         if ($childPurchase && !$childPurchase->trashed()) {
-            $childPurchase = Purchase::with(['purchaseDetails.product', 'paymentLogs'])
-                ->lockForUpdate()
-                ->find($childPurchase->id);
-            if ($childPurchase && !$childPurchase->trashed()) {
-                $childDetails = PurchaseDetail::where('purchase_id', $childPurchase->id)->get();
-                foreach ($childDetails as $purchaseDetail) {
-                    if ((int) $purchaseDetail->quantity <= 0) {
-                        continue;
-                    }
-                    $productId = (int) $purchaseDetail->product_id;
-                    $qty = (int) $purchaseDetail->quantity;
-                    $current = (int) DB::table('products')->where('id', $productId)->value('product_store');
-                    if ($current < $qty) {
-                        $productName = DB::table('products')->where('id', $productId)->value('product_name');
-                        throw new \RuntimeException(
-                            'Cannot delete: linked child purchase would make product "' . ($productName ?? $productId) . '" negative.'
-                        );
-                    }
-                    DB::table('products')->where('id', $productId)->decrement('product_store', $qty);
-                }
-                $childPaymentLogIds = $childPurchase->paymentLogs()->pluck('id')->toArray();
-                AccountTransaction::query()
-                    ->where(function ($q) use ($childPurchase, $childPaymentLogIds) {
-                        $q->where('source_type', AccountTransaction::SOURCE_PURCHASE)
-                            ->where('source_id', $childPurchase->id);
-                        if (count($childPaymentLogIds) > 0) {
-                            $q->orWhere(function ($q2) use ($childPaymentLogIds) {
-                                $q2->where('source_type', AccountTransaction::SOURCE_PURCHASE_PAYMENT)
-                                    ->whereIn('source_id', $childPaymentLogIds);
-                            });
-                        }
-                        $q->orWhere(function ($q2) use ($childPurchase) {
-                            $q2->where('source_type', AccountTransaction::SOURCE_PURCHASE_PAYMENT)
-                                ->where('source_id', $childPurchase->id);
-                        });
-                    })
-                    ->delete();
-                PurchaseDetail::where('purchase_id', $childPurchase->id)->delete();
-                PurchasePaymentLog::where('purchase_id', $childPurchase->id)->delete();
-                StockLog::query()
-                    ->where('source_type', 'purchase')
-                    ->where('source_id', (string) $childPurchase->id)
-                    ->delete();
-                $childPurchase->delete();
-            }
+            $this->purchaseDeletionService->deletePurchase((int) $childPurchase->id);
         }
 
         foreach ($order->orderDetails as $orderDetail) {
@@ -962,7 +921,7 @@ class OrderController extends Controller
         PaymentLog::where('order_id', $order->id)->delete();
 
         StockLog::query()
-            ->where('source_type', 'sale')
+            ->whereIn('source_type', ['sale', 'mother_sale'])
             ->where('source_id', (string) $order->id)
             ->delete();
 
@@ -1116,7 +1075,8 @@ class OrderController extends Controller
 
     /**
      * Update an invoice by soft-deleting the old one and creating a new one with the same invoice_no.
-     * All steps run in a single DB transaction: if creating the new invoice fails, the delete is rolled back.
+     * For mother→child shop transfer sales, preserves sale and child purchase invoice numbers and dates
+     * so reports and P&amp;L remain consistent. All steps run in a single DB transaction.
      */
     public function update(
         Request $request,
@@ -1132,25 +1092,83 @@ class OrderController extends Controller
         $request->merge(['edited_from_order_id' => $id]);
 
         try {
-            $response = DB::transaction(function () use ($request, $id, $balanceService, $creditService, $supplierCreditService) {
-                $order = Order::lockForUpdate()->findOrFail($id);
-                if ($order->trashed()) {
-                    throw new \RuntimeException('This invoice has already been deleted.');
-                }
+            $preserved = null;
 
-                $originalInvoiceNo = $order->invoice_no;
-                $order->invoice_no = 'DEL-' . $order->id . '-' . $order->invoice_no;
-                $order->save();
+            // Shop transfer edit: run destroy in its own transaction and COMMIT so the child stock
+            // decrement is committed. Then storeInvoice runs in a new transaction and sees correct stock.
+            $childPurchase = Purchase::withoutGlobalScopes()
+                ->where('source_sale_id', $id)
+                ->first();
+            $isShopTransferEdit = $childPurchase && !$childPurchase->trashed();
 
-                $this->performOrderDestroy($id, $balanceService);
+            if ($isShopTransferEdit) {
+                DB::transaction(function () use ($id, $balanceService, &$preserved) {
+                    $order = Order::lockForUpdate()->findOrFail($id);
+                    if ($order->trashed()) {
+                        throw new \RuntimeException('This invoice has already been deleted.');
+                    }
+                    $originalInvoiceNo = $order->invoice_no;
+                    $originalOrderDate = $order->order_date instanceof \Carbon\Carbon
+                        ? $order->order_date->format('Y-m-d H:i:s')
+                        : (\is_string($order->order_date) ? $order->order_date : null);
+                    $childPurchase = Purchase::withoutGlobalScopes()
+                        ->where('source_sale_id', $order->id)
+                        ->first();
+                    $preservedPurchaseNo = $childPurchase ? $childPurchase->purchase_no : null;
+                    $preservedPurchaseDate = $childPurchase && $childPurchase->purchase_date
+                        ? ($childPurchase->purchase_date instanceof \Carbon\Carbon
+                            ? $childPurchase->purchase_date->format('Y-m-d')
+                            : (string) $childPurchase->purchase_date)
+                        : null;
+
+                    $order->invoice_no = 'DEL-' . $order->id . '-' . $order->invoice_no;
+                    $order->save();
+                    $this->performOrderDestroy($id, $balanceService);
+
+                    $preserved = [
+                        'invoice_no' => $originalInvoiceNo,
+                        'order_date' => $originalOrderDate,
+                        'preserved_purchase_no' => $preservedPurchaseNo,
+                        'preserved_purchase_date' => $preservedPurchaseDate,
+                    ];
+                });
 
                 $request->merge([
-                    'invoice_no' => $originalInvoiceNo,
+                    'invoice_no' => $preserved['invoice_no'],
                     'edited_from_order_id' => $id,
+                    'order_date' => $preserved['order_date'] ?? null,
+                    'preserved_purchase_no' => $preserved['preserved_purchase_no'] ?? null,
+                    'preserved_purchase_date' => $preserved['preserved_purchase_date'] ?? null,
                 ]);
+                $response = DB::transaction(function () use ($request, $creditService, $supplierCreditService) {
+                    return $this->storeInvoice($request, $creditService, $supplierCreditService);
+                });
+            } else {
+                $response = DB::transaction(function () use ($request, $id, $balanceService, $creditService, $supplierCreditService) {
+                    $order = Order::lockForUpdate()->findOrFail($id);
+                    if ($order->trashed()) {
+                        throw new \RuntimeException('This invoice has already been deleted.');
+                    }
+                    $originalInvoiceNo = $order->invoice_no;
+                    $originalOrderDate = $order->order_date instanceof \Carbon\Carbon
+                        ? $order->order_date->format('Y-m-d H:i:s')
+                        : (\is_string($order->order_date) ? $order->order_date : null);
 
-                return $this->storeInvoice($request, $creditService, $supplierCreditService);
-            });
+                    $order->invoice_no = 'DEL-' . $order->id . '-' . $order->invoice_no;
+                    $order->save();
+                    $this->performOrderDestroy($id, $balanceService);
+
+                    $request->merge([
+                        'invoice_no' => $originalInvoiceNo,
+                        'edited_from_order_id' => $id,
+                    ]);
+                    if ($originalOrderDate) {
+                        $request->merge(['order_date' => $originalOrderDate]);
+                    }
+
+                    return $this->storeInvoice($request, $creditService, $supplierCreditService);
+                });
+            }
 
             return $response;
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -1684,13 +1702,15 @@ class OrderController extends Controller
                 ]);
             }
 
-            // Generate invoice number
-            $invoice_no = IdGenerator::generate([
-                'table' => 'orders',
-                'field' => 'invoice_no',
-                'length' => 10,
-                'prefix' => 'INV-'
-            ]);
+            // Preserve invoice number and date when editing (mother sale edit must keep same identifiers).
+            $invoice_no = $request->filled('invoice_no')
+                ? $request->input('invoice_no')
+                : IdGenerator::generate([
+                    'table' => 'orders',
+                    'field' => 'invoice_no',
+                    'length' => 10,
+                    'prefix' => 'INV-'
+                ]);
 
             // Calculate totals
             $subtotal = 0;
@@ -1733,7 +1753,7 @@ class OrderController extends Controller
             $purchase_id = null;
 
             try {
-                DB::transaction(function () use (
+                $runShopTransfer = function () use (
                     &$order_id, &$purchase_id, $validatedData, $motherShop, $childShop, $supplier,
                     $systemCustomer, $invoice_no, $subtotal, $totalProducts, $vat, $invoiceDiscount,
                     $total, $pay, $due, $authUser, $request, $creditService, $supplierCreditService, $orderStatus,
@@ -1822,10 +1842,43 @@ class OrderController extends Controller
                             ->first();
 
                         if ($childProduct) {
+                            // Log BEFORE update product_store: product_code, product id, product_store, quantity being added
+                            \Log::info('OrderController shop-transfer: BEFORE update product_store', [
+                                'product_code' => $childProduct->product_code,
+                                'product_id' => $childProduct->id,
+                                'product_store' => $childProduct->product_store,
+                                'quantity' => $product['quantity'],
+                            ]);
                             // Update stock only (keep existing attributes; child product is in child shop)
                             Product::withoutGlobalScope('shop')
                                 ->where('id', $childProduct->id)
                                 ->update(['product_store' => DB::raw('product_store + ' . $product['quantity'])]);
+                            $childProduct->refresh();
+                            // Same weighted-average buying_price rule as PurchaseController (single place: StockService)
+                            $this->stockService->updateBuyingPriceAfterPurchaseIn(
+                                $childProduct,
+                                (int) $product['quantity'],
+                                (float) ($product['unit_price'] ?? 0)
+                            );
+                            // Log AFTER update product_store: same info
+                            \Log::info('OrderController shop-transfer: AFTER update product_store', [
+                                'product_code' => $childProduct->product_code,
+                                'product_id' => $childProduct->id,
+                                'product_store' => $childProduct->product_store,
+                                'quantity' => $product['quantity'],
+                            ]);
+                            // Step 7 — Insert stock_log for child shop (audit trail for mother_sale).
+                            StockLog::create([
+                                'shop_id' => $childShop->id,
+                                'product_id' => $childProduct->id,
+                                'supplier_id' => $supplier->id,
+                                'qty' => (int) $product['quantity'],
+                                'direction' => 'in',
+                                'source_type' => 'mother_sale',
+                                'source_id' => (string) $order_id,
+                                'price' => (float) ($product['unit_price'] ?? 0),
+                                'stock_qty' => (int) $product['quantity'],
+                            ]);
                         } else {
                             // Resolve category for child shop: find by name or create (query child shop, so bypass shop scope)
                             $motherCategory = Category::withoutGlobalScope('shop')->find($motherProduct->category_id);
@@ -1844,7 +1897,7 @@ class OrderController extends Controller
                             $childCategoryId = $childCategory->id;
 
                             // Create new product for child shop (same product code as mother shop; unique per shop)
-                            Product::create([
+                            $newChild = Product::create([
                                 'product_name' => $motherProduct->product_name,
                                 'category_id' => $childCategoryId,
                                 'supplier_id' => $supplier->id,
@@ -1860,16 +1913,33 @@ class OrderController extends Controller
                                 'selling_price' => $product['unit_price'], // Same as buying_price
                                 'status' => $motherProduct->status,
                             ]);
+                            // Step 7 — Insert stock_log for new child product (mother_sale).
+                            StockLog::create([
+                                'shop_id' => $childShop->id,
+                                'product_id' => $newChild->id,
+                                'supplier_id' => $supplier->id,
+                                'qty' => (int) $product['quantity'],
+                                'direction' => 'in',
+                                'source_type' => 'mother_sale',
+                                'source_id' => (string) $order_id,
+                                'price' => (float) ($product['unit_price'] ?? 0),
+                                'stock_qty' => (int) $product['quantity'],
+                            ]);
                         }
                     }
 
-                    // 3. Generate purchase invoice number
-                    $purchase_no = IdGenerator::generate([
-                        'table' => 'purchases',
-                        'field' => 'purchase_no',
-                        'length' => 10,
-                        'prefix' => 'PUR-'
-                    ]);
+                    // 3. Purchase invoice number and date: reuse when editing (preserve for reports/P&amp;L).
+                    $purchase_no = $request->filled('preserved_purchase_no')
+                        ? $request->input('preserved_purchase_no')
+                        : IdGenerator::generate([
+                            'table' => 'purchases',
+                            'field' => 'purchase_no',
+                            'length' => 10,
+                            'prefix' => 'PUR-'
+                        ]);
+                    $purchase_date = $request->filled('preserved_purchase_date')
+                        ? Carbon::parse($request->input('preserved_purchase_date'))->format('Y-m-d')
+                        : Carbon::parse($validatedData['order_date'])->format('Y-m-d');
 
                     // 4. Create Purchase (Purchase Invoice) — link to mother sale for cascade delete
                     $purchaseData = [
@@ -1877,7 +1947,7 @@ class OrderController extends Controller
                         'shop_id' => $childShop->id,
                         'source_sale_id' => $order_id,
                         'is_system_generated' => true,
-                        'purchase_date' => Carbon::parse($validatedData['order_date'])->format('Y-m-d'),
+                        'purchase_date' => $purchase_date,
                         'purchase_status' => 'pending',
                         'total_products' => $totalProducts,
                         'sub_total' => $subtotal,
@@ -1896,9 +1966,21 @@ class OrderController extends Controller
                     $purchase = Purchase::create($purchaseData);
                     $purchase_id = $purchase->id;
 
-                    // 4b. Accounting entries for system-generated child purchase (prevent duplicates)
+                    // 4a. Create purchase payment log before ledger so we can link cash entry for reversal on delete
+                    $paymentLogId = null;
+                    if ($pay > 0) {
+                        $paymentLog = PurchasePaymentLog::create([
+                            'purchase_id' => $purchase_id,
+                            'amount_paid' => $pay,
+                            'type' => 'payment',
+                        ]);
+                        $paymentLogId = $paymentLog->id;
+                    }
+
+                    // 4b. Accounting entries for system-generated child purchase (prevent duplicates).
+                    // Supplier credit = due only (same as PurchaseLedgerService) so ledger and suppliers.credit_amount stay in sync.
                     if (!AccountTransaction::where('source_type', AccountTransaction::SOURCE_PURCHASE)->where('source_id', $purchase_id)->exists()) {
-                        $transactionDate = Carbon::parse($validatedData['order_date'])->format('Y-m-d');
+                        $transactionDate = $purchase_date;
                         $descPurchase = 'Purchase ' . $purchase_no;
 
                         AccountTransaction::create([
@@ -1913,19 +1995,22 @@ class OrderController extends Controller
                             'transaction_date' => $transactionDate,
                         ]);
 
-                        AccountTransaction::create([
-                            'shop_id' => $childShop->id,
-                            'account_type' => AccountTransaction::ACCOUNT_TYPE_SUPPLIER,
-                            'account_ref_id' => $supplier->id,
-                            'direction' => AccountTransaction::DIRECTION_CREDIT,
-                            'amount' => $total,
-                            'source_type' => AccountTransaction::SOURCE_PURCHASE,
-                            'source_id' => $purchase_id,
-                            'description' => $descPurchase,
-                            'transaction_date' => $transactionDate,
-                        ]);
+                        // Supplier credit = amount we owe (due only), not total; matches addPending($supplier, $due) for sync.
+                        if ($due > 0) {
+                            AccountTransaction::create([
+                                'shop_id' => $childShop->id,
+                                'account_type' => AccountTransaction::ACCOUNT_TYPE_SUPPLIER,
+                                'account_ref_id' => $supplier->id,
+                                'direction' => AccountTransaction::DIRECTION_CREDIT,
+                                'amount' => $due,
+                                'source_type' => AccountTransaction::SOURCE_PURCHASE,
+                                'source_id' => $purchase_id,
+                                'description' => $descPurchase,
+                                'transaction_date' => $transactionDate,
+                            ]);
+                        }
 
-                        if ($pay > 0) {
+                        if ($pay > 0 && $paymentLogId !== null) {
                             $accountType = $paymentMethod1 === 'bank' ? AccountTransaction::ACCOUNT_TYPE_BANK : AccountTransaction::ACCOUNT_TYPE_CASH;
                             AccountTransaction::create([
                                 'shop_id' => $childShop->id,
@@ -1934,14 +2019,14 @@ class OrderController extends Controller
                                 'direction' => AccountTransaction::DIRECTION_CREDIT,
                                 'amount' => $pay,
                                 'source_type' => AccountTransaction::SOURCE_PURCHASE_PAYMENT,
-                                'source_id' => $purchase_id,
+                                'source_id' => $paymentLogId,
                                 'description' => 'Purchase Payment ' . $purchase_no,
                                 'transaction_date' => $transactionDate,
                             ]);
                         }
                     }
 
-                    // 5. Create Purchase Details
+                    // 5. Create Purchase Details and stock_logs for child shop purchase
                     foreach ($validatedData['products'] as $product) {
                         if (empty($product['product_id'])) {
                             continue;
@@ -1951,9 +2036,9 @@ class OrderController extends Controller
                         $motherProduct = Product::findOrFail($product['product_id']);
                         $childProduct = Product::withoutGlobalScope('shop')
                             ->where('shop_id', $childShop->id)
-                            ->where('product_name', $motherProduct->product_name)
+                            ->where('product_code', $motherProduct->product_code)
                             ->firstOrFail();
-
+                        //dd($product['quantity'] , $childProduct->product_store,$childProduct->id,$childProduct->product_code);
                         PurchaseDetail::insert([
                             'purchase_id' => $purchase_id,
                             'product_id' => $childProduct->id,
@@ -1964,27 +2049,38 @@ class OrderController extends Controller
                             'created_at' => Carbon::now(),
                             'updated_at' => Carbon::now(),
                         ]);
+
+                        // Stock log for child shop purchase (source_type = purchase, source_id = purchase_id)
+                        if (!empty($product['quantity']) && $product['quantity'] > 0) {
+                            StockLog::create([
+                                'shop_id' => $childShop->id,
+                                'product_id' => $childProduct->id,
+                                'supplier_id' => $supplier->id,
+                                'qty' => (int) $product['quantity'],
+                                'direction' => 'in',
+                                'source_type' => 'purchase',
+                                'source_id' => (string) $purchase_id,
+                                'price' => (float) ($product['unit_price'] ?? 0),
+                                'stock_qty' => (int) $product['quantity'],
+                            ]);
+                        }
                     }
 
-                    // 6. Create purchase payment log if payment was made
-                    if ($pay > 0) {
-                        PurchasePaymentLog::create([
-                            'purchase_id' => $purchase_id,
-                            'amount_paid' => $pay,
-                            'type' => 'payment',
-                        ]);
-                    }
-
-                    // 7. Handle supplier credit (if due > 0)
+                    // 6. Handle supplier credit (if due > 0) — keeps suppliers.credit_amount in sync with ledger
                     if ($due > 0) {
                         $supplierCreditService->addPending($supplier, $due);
                     }
 
-                    // 8. Handle customer credit (system customer - but should be 0 usually)
+                    // 7. Handle customer credit (system customer - but should be 0 usually)
                     if ($due > 0) {
                         $creditService->addPending($systemCustomer, $due);
                     }
-                });
+                };
+                if (DB::transactionLevel() > 0) {
+                    $runShopTransfer();
+                } else {
+                    DB::transaction($runShopTransfer);
+                }
 
                 return Redirect::route('order.index')->with([
                     'success' => 'Stock transfer invoice has been created successfully! Purchase invoice has been auto-generated.',

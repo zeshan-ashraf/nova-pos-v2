@@ -223,18 +223,21 @@
                             <div class="col-md-6">
                                 @if($childShops->isNotEmpty())
                                     <!-- Parent Shop: Show both Customer and Shop dropdowns -->
+                                    @php
+                                        $isEditShopTransfer = !empty($isEdit) && $order && $order->customer && ($order->customer->is_system ?? false) && !empty($order->customer->child_shop_id);
+                                    @endphp
                                     <div class="form-group">
                                         <label>Select Type <span class="text-danger">*</span></label>
                                         <div class="btn-group btn-group-toggle w-100" data-toggle="buttons">
-                                            <label class="btn btn-outline-primary active" id="btn-customer-type">
-                                                <input type="radio" name="select_type" value="customer" checked> Customer
+                                            <label class="btn btn-outline-primary {{ $isEditShopTransfer ? '' : 'active' }}" id="btn-customer-type">
+                                                <input type="radio" name="select_type" value="customer" {{ $isEditShopTransfer ? '' : 'checked' }}> Customer
                                             </label>
-                                            <label class="btn btn-outline-primary" id="btn-shop-type">
-                                                <input type="radio" name="select_type" value="shop"> Shop Transfer
+                                            <label class="btn btn-outline-primary {{ $isEditShopTransfer ? 'active' : '' }}" id="btn-shop-type">
+                                                <input type="radio" name="select_type" value="shop" {{ $isEditShopTransfer ? 'checked' : '' }}> Shop Transfer
                                             </label>
                                         </div>
                                     </div>
-                                    <div class="form-group" id="customer-group">
+                                    <div class="form-group" id="customer-group" @if($isEditShopTransfer ?? false) style="display: none;" @endif>
                                         <div class="d-flex align-items-center justify-content-between mb-2">
                                             <label for="customer_id" class="mb-0">Customer <span class="text-danger">*</span></label>
                                             <button type="button" class="btn btn-primary btn-sm" id="selectWalkInBtn">
@@ -248,7 +251,9 @@
                                                     <option value="{{ $customer->id }}" 
                                                         data-credit-limit="{{ $customer->credit_limit ?? 0 }}" 
                                                         data-credit-amount="{{ $customer->credit_amount ?? 0 }}"
-                                                        data-is-walkin="{{ $customer->is_walkin ?? 0 }}">
+                                                        data-is-walkin="{{ $customer->is_walkin ?? 0 }}"
+                                                        data-is-system="{{ $customer->is_system ?? 0 }}"
+                                                        data-child-shop-id="{{ $customer->child_shop_id ?? '' }}">
                                                         {{ $customer->name ?: $customer->shopname }}
                                                     </option>
                                                 @endforeach
@@ -261,12 +266,12 @@
                                             <div class="text-danger">{{ $message }}</div>
                                         @enderror
                                     </div>
-                                    <div class="form-group" id="shop-group" style="display: none;">
+                                    <div class="form-group" id="shop-group" @if($isEditShopTransfer ?? false) style="display: block;" @else style="display: none;" @endif>
                                         <label for="shop_id">Child Shop <span class="text-danger">*</span></label>
-                                        <select class="form-control" id="shop_id" name="shop_id">
+                                        <select class="form-control" id="shop_id" name="shop_id" @if($isEditShopTransfer ?? false) required @endif>
                                             <option value="">Select Child Shop</option>
                                             @foreach($childShops as $shop)
-                                                <option value="{{ $shop->id }}">{{ $shop->name }}</option>
+                                                <option value="{{ $shop->id }}" {{ ($isEditShopTransfer && $order && $order->customer && $order->customer->child_shop_id == $shop->id) ? 'selected' : '' }}>{{ $shop->name }}</option>
                                             @endforeach
                                         </select>
                                         @error('shop_id')
@@ -430,6 +435,7 @@
                                                 <option value="">Select Product</option>
                                             </select>
                                             <input type="hidden" class="original-price" name="products[0][original_price]" value="0">
+                                            <input type="hidden" class="original-quantity" name="products[0][original_quantity]" value="0">
                                         </td>
                                         <td>
                                             <span class="product-code-display" data-row="0">-</span>
@@ -734,6 +740,8 @@
         @php
             $invoiceEditPayload = [
                 'customer_id' => $order->customer_id,
+                'customer_is_system' => $order->customer->is_system ?? false,
+                'customer_child_shop_id' => $order->customer->child_shop_id ?? null,
                 'order_date' => $order->order_date ? \Carbon\Carbon::parse($order->order_date)->format('Y-m-d\TH:i') : '',
                 'comment' => $order->comment ?? '',
                 'vat' => $order->vat ?? 0,
@@ -977,6 +985,8 @@
             var stockVal = data.stock != null && data.stock !== '' ? data.stock : 0;
             $row.find('.stock-display').text(stockVal);
             $row.find('.stock-value').val(stockVal);
+            // When changing product in any mode, reset original quantity used for edit stock validation
+            $row.find('.original-quantity').val(0);
             $row.find('.product-code-display').text(data.code || '-');
             
             console.log('Product selected - Row:', rowIdx, 'Product ID:', data.id, 'Select value:', $selectElement.val());
@@ -1052,7 +1062,10 @@
         (invoiceOldInput.products && invoiceOldInput.products.length > 0) ||
         invoiceOldInput.customer_id || invoiceOldInput.shop_id
     );
-    if (hasOldInput) {
+    // Only apply old() repopulation when not in edit mode. For edit invoices we
+    // rely on invoiceEditData to drive the customer/shop toggle state so that
+    // shop-transfer (system) customers don't get overridden back to "Customer".
+    if (hasOldInput && !window.invoiceEditData) {
         var o = invoiceOldInput;
         @if($childShops->isNotEmpty())
         var selectType = o.select_type || 'customer';
@@ -1119,13 +1132,15 @@
                     $row.find('.original-price').val(p.original_price || p.unit_price || 0);
                     $row.find('.unit-price').val(p.unit_price || 0);
                     $row.find('.quantity').val(p.quantity || 1);
+                    // For repopulated forms (validation errors), preserve any original_quantity from old input when present
+                    $row.find('.original-quantity').val(p.original_quantity || 0);
                     $row.find('.item-discount-value').val(p.item_discount || 0);
                     $row.find('.total-value').val(p.total || 0);
                     $row.find('.product-code-display').text(code);
                     $row.find('.total-display').text(parseFloat(p.total || 0).toFixed(2));
-var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
-                $row.find('.stock-display').text(stock);
-                $row.find('.stock-value').val(stock);
+                    var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
+                    $row.find('.stock-display').text(stock);
+                    $row.find('.stock-value').val(stock);
                 }
             }
             calculateInvoiceTotal();
@@ -1142,7 +1157,27 @@ var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
         var runEditPrefill = function() {
             try {
                 var d = window.invoiceEditData;
-                $('#customer_id').val(d.customer_id || '').trigger('change');
+
+                // Do shop-transfer UI first, before setting customer_id, so nothing overwrites the toggle state.
+                if (d.customer_is_system && d.customer_child_shop_id) {
+                    $('input[name="select_type"][value="customer"]').prop('checked', false);
+                    $('input[name="select_type"][value="shop"]').prop('checked', true);
+                    $('#customer-group').hide();
+                    $('#shop-group').show();
+                    $('#customer_id').prop('required', false).val('');
+                    $('#shop_id').prop('required', true).val(String(d.customer_child_shop_id));
+                    $('#btn-shop-type').addClass('active');
+                    $('#btn-customer-type').removeClass('active');
+                    $('#payment_method_1').val('credit').trigger('change');
+                    $('#credit_warning_row').hide();
+                }
+
+                $('#customer_id').val(d.customer_id || '');
+                if (d.customer_is_system && d.customer_child_shop_id) {
+                    // Don't trigger change for shop transfer – customer_id is cleared and dropdown may not have system customer
+                } else {
+                    $('#customer_id').trigger('change');
+                }
                 if (d.order_date) $('#order_date').val(d.order_date);
                 if (d.comment != null) $('#comment').val(d.comment);
                 if (d.vat != null) $('#vat').val(d.vat);
@@ -1173,6 +1208,8 @@ var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
                         $row.find('.original-price').val(p.unit_price || 0);
                         $row.find('.unit-price').val(p.unit_price || 0);
                         $row.find('.quantity').val(p.quantity || 1);
+                        // In edit mode, remember original line quantity so front-end stock validation can add it back
+                        $row.find('.original-quantity').val(p.quantity || 0);
                         $row.find('.item-discount-value').val(p.item_discount || 0);
                         $row.find('.total-value').val(p.total || 0);
                         $row.find('.product-code-display').text(p.product_code || '-');
@@ -1196,7 +1233,10 @@ var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
                     $('#pay_2').val(parseFloat(logs[1].amount_paid || 0));
                     if (logs[1].shop_bank_id) $('#shop_bank_id_2').val(logs[1].shop_bank_id);
                 }
-                setTimeout(function() { $('#customer_id').trigger('change'); }, 100);
+                // Only trigger customer change after delay when NOT edit shop-transfer (avoids re-applying Customer button state).
+                if (!d.customer_is_system || !d.customer_child_shop_id) {
+                    setTimeout(function() { $('#customer_id').trigger('change'); }, 100);
+                }
             } catch (err) {
                 console.error('Edit prefill error:', err);
             } finally {
@@ -1266,15 +1306,21 @@ var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
     // Handle quantity change
     $(document).on('input', '.quantity', function() {
         const rowIndex = $(this).data('row');
+        const $row = $(this).closest('tr');
         let quantity = parseFloat($(this).val()) || 0;
-        const stock = parseFloat($(this).closest('tr').find('.stock-display').text()) || 0;
+        const stock = parseFloat($row.find('.stock-display').text()) || 0;
+        const originalQty = parseFloat($row.find('.original-quantity').val()) || 0;
+        
+        // For edit mode, front-end validation should treat "available" stock as current stock
+        // plus the quantity already sold on this invoice line so user can reuse it safely.
+        const effectiveStock = stock + originalQty;
         
         // Check stock validation
-        const $warning = $(this).closest('tr').find('.stock-warning-msg');
-        if (quantity > stock) {
+        const $warning = $row.find('.stock-warning-msg');
+        if (quantity > effectiveStock) {
             $warning.text('Quantity exceeds available stock!').show();
-            $(this).val(stock);
-            quantity = stock;
+            $(this).val(effectiveStock);
+            quantity = effectiveStock;
         } else {
             $warning.hide();
         }
@@ -1621,6 +1667,28 @@ var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
     });
 
     $(document).on('change', '#customer_id', function() {
+        const $selected = $('#customer_id option:selected');
+        const isSystem = $selected.data('is-system') == 1 || $selected.data('is-system') === true;
+        const childShopId = $selected.data('child-shop-id') || '';
+
+        // If this is a system customer, auto-switch to Shop Transfer and select the mapped child shop
+        if (isSystem && childShopId) {
+            // Toggle UI to Shop Transfer mode (do not rely solely on the generic change handler)
+            $('input[name="select_type"][value="customer"]').prop('checked', false);
+            $('input[name="select_type"][value="shop"]').prop('checked', true);
+
+            $('#customer-group').hide();
+            $('#shop-group').show();
+            $('#customer_id').prop('required', false).val('');
+            $('#shop_id').prop('required', true).val(String(childShopId));
+            $('#btn-shop-type').addClass('active');
+            $('#btn-customer-type').removeClass('active');
+
+            // Shop transfer: payment 1 should be credit, and credit warning should be hidden
+            $('#payment_method_1').val('credit').trigger('change');
+            $('#credit_warning_row').hide();
+        }
+
         // Check credit limit immediately (with 0 due amount to check current status)
         checkCreditLimit(0);
         // Also recalculate due if there's already an invoice total
@@ -1639,6 +1707,7 @@ var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
                         <option value="">Select Product</option>
                     </select>
                     <input type="hidden" class="original-price" name="products[${rowCount}][original_price]" value="0">
+                    <input type="hidden" class="original-quantity" name="products[${rowCount}][original_quantity]" value="0">
                 </td>
                 <td>
                     <span class="product-code-display" data-row="${rowCount}">-</span>

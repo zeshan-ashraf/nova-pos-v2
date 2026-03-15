@@ -22,6 +22,8 @@ class StockValidator
         'loss',
         'expired',
         'theft',
+        'purchase_edit_reverse', // audit trail when reversing child purchase for mother-sale edit
+        'mother_sale',           // child shop stock in from mother shop transfer
     ];
 
     public const DIRECTIONS = ['in', 'out'];

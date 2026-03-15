@@ -70,6 +70,7 @@
                             <th>@sortablelink('purchase_no', 'Purchase No')</th>
                             <th>@sortablelink('supplier.shopname', 'Supplier')</th>
                             <th>@sortablelink('purchase_date', 'Purchase Date')</th>
+                            <th>@sortablelink('total', 'Total')</th>
                             <th>@sortablelink('pay')</th>
                             <th>Payment</th>
                             <th>Status</th>
@@ -83,6 +84,7 @@
                             <td>{{ $purchase->purchase_no }}</td>
                             <td>{{ $purchase->supplier->shopname ?? $purchase->supplier->name ?? 'N/A' }}</td>
                             <td>{{ $purchase->purchase_date }}</td>
+                            <td>{{ number_format($purchase->total ?? 0, 2) }}</td>
                             <td>{{ number_format($purchase->pay ?? 0, 2) }}</td>
                             <td>{{ $purchase->payment_status }}</td>
                             <td>
