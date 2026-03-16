@@ -44,6 +44,13 @@ class ProductController extends Controller
             ->filter(request(['search']))
             ->sortable();
 
+        // When no explicit sort is requested, enforce a stable, business-friendly default
+        // so pagination is deterministic across environments (e.g. 1001–1061 on page 1,
+        // then 1062–1083 on page 2).
+        if (!request()->has('sort')) {
+            $productsQuery->orderBy('product_code', 'asc');
+        }
+
         $products = $productsQuery->paginate($row)->appends(request()->query());
         Product::eagerLoadSameShopCategory($products->getCollection());
 
