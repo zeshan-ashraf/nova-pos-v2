@@ -2,27 +2,24 @@
 
 namespace App\Http\Controllers\Dashboard;
 
-use App\Models\SaleReturn;
-use App\Models\SaleReturnDetail;
+use App\Http\Controllers\Controller;
+use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderDetails;
-use App\Models\Product;
-use App\Models\PaymentLog;
-use App\Models\Customer;
-use Illuminate\Http\Request;
-use App\Http\Controllers\Controller;
-use Illuminate\Support\Facades\Redirect;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Carbon;
-use Haruncpi\LaravelIdGenerator\IdGenerator;
+use App\Models\SaleReturn;
+use App\Models\SaleReturnDetail;
 use App\Support\ActiveShop;
-use App\Services\CustomerCreditService;
-use App\Services\Stock\StockService;
+use App\Services\SaleReturnService;
+use Haruncpi\LaravelIdGenerator\IdGenerator;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Redirect;
 
 class SaleReturnController extends Controller
 {
     public function __construct(
-        private StockService $stockService
+        private SaleReturnService $saleReturnService,
     ) {}
     /**
      * Display a listing of sale returns.
@@ -209,12 +206,15 @@ class SaleReturnController extends Controller
             'order_id' => 'required|numeric|exists:orders,id',
             'return_date' => 'required|date',
             'products' => 'required|array|min:1',
-            'products.*.order_detail_id' => 'required_with:products.*.product_id|numeric|exists:order_details,id',
-            'products.*.product_id' => 'required_with:products.*.quantity|numeric|exists:products,id',
-            'products.*.quantity' => 'required_with:products.*.product_id|numeric|min:1',
-            'products.*.unit_price' => 'required_with:products.*.product_id|numeric|min:0',
+            // Nested product fields are intentionally nullable here.
+            // Only rows with a positive quantity are treated as "checked" return lines;
+            // those are validated by the SaleReturnService::validateReturnQuantities method.
+            'products.*.order_detail_id' => 'nullable|numeric|exists:order_details,id',
+            'products.*.product_id' => 'nullable|numeric|exists:products,id',
+            'products.*.quantity' => 'nullable|numeric|min:0',
+            'products.*.unit_price' => 'nullable|numeric|min:0',
             'products.*.item_discount' => 'nullable|numeric|min:0',
-            'products.*.total' => 'required_with:products.*.product_id|numeric|min:0',
+            'products.*.total' => 'nullable|numeric|min:0',
             'vat' => 'nullable|numeric|min:0',
             'invoice_discount' => 'nullable|numeric|min:0',
             'reason' => 'nullable|string|max:500',
@@ -234,7 +234,6 @@ class SaleReturnController extends Controller
         }
 
         $customer = $order->customer;
-        $creditService = new CustomerCreditService();
 
         // Generate return number
         $return_no = IdGenerator::generate([
@@ -244,13 +243,17 @@ class SaleReturnController extends Controller
             'prefix' => 'RET-'
         ]);
 
+        // Validate per-line return quantities before creating any records.
+        // Ensures we never insert sale_return_details that exceed sold quantity.
+        $this->saleReturnService->validateReturnQuantities($order, $validatedData['products']);
+
         // Calculate totals (only for selected products)
         $subtotal = 0;
         $totalProducts = 0;
-        $selectedProducts = array_filter($validatedData['products'], function($product) {
+        $selectedProducts = array_filter($validatedData['products'], function ($product) {
             return !empty($product['product_id']) && !empty($product['quantity']) && $product['quantity'] > 0;
         });
-        
+
         foreach ($selectedProducts as $product) {
             $subtotal += $product['total'];
             $totalProducts++;
@@ -279,109 +282,37 @@ class SaleReturnController extends Controller
         $return_id = null;
 
         try {
-            DB::transaction(function () use (&$return_id, $returnData, $validatedData, $order, $customer, $creditService, $authUser) {
-                // 1. Create sale return
+            DB::transaction(function () use (&$return_id, $returnData, $validatedData, $order, $customer, $authUser) {
+                // 1. Create sale return header using existing insert structure
                 $saleReturn = SaleReturn::create($returnData);
                 $return_id = $saleReturn->id;
 
-                // 2. Create return details and adjust stock
-                // Filter out empty products (only process selected items)
-                $selectedProducts = array_filter($validatedData['products'], function($product) {
+                // 2. Create return details and restore inventory for each selected item
+                $selectedProducts = array_filter($validatedData['products'], function ($product) {
                     return !empty($product['product_id']) && !empty($product['quantity']) && $product['quantity'] > 0;
                 });
 
                 if (empty($selectedProducts)) {
-                    throw new \Exception("Please select at least one item to return.");
+                    throw new \RuntimeException('Please select at least one item to return.');
                 }
 
                 foreach ($selectedProducts as $product) {
-
-                    $orderDetail = OrderDetails::findOrFail($product['order_detail_id']);
-                    
-                    // Validate that we're not returning more than available
-                    $alreadyReturned = SaleReturnDetail::where('order_detail_id', $orderDetail->id)
-                        ->sum('quantity');
-                    $availableToReturn = $orderDetail->quantity - $alreadyReturned;
-
-                    if ($product['quantity'] > $availableToReturn) {
-                        throw new \Exception("Cannot return more than available quantity for product. Available: {$availableToReturn}");
-                    }
-
-                    // Validate shop access for product
-                    $productModel = Product::findOrFail($product['product_id']);
-                    if ($authUser->shop_id && $productModel->shop_id !== $authUser->shop_id) {
-                        throw new \Exception("Product does not belong to your shop.");
-                    }
-
-                    // Create return detail
-                    $returnDetailData = [
-                        'return_id' => $return_id,
-                        'order_id' => $order->id,
-                        'order_detail_id' => $orderDetail->id,
-                        'product_id' => $product['product_id'],
-                        'quantity' => $product['quantity'],
-                        'unitcost' => $product['unit_price'],
-                        'item_discount' => $product['item_discount'] ?? 0,
-                        'total' => $product['total'],
-                        'created_at' => Carbon::now(),
-                        'updated_at' => Carbon::now(),
-                    ];
-
-                    SaleReturnDetail::create($returnDetailData);
-
-                    // Increase stock via ledger-safe stock service (stock_logs, product_store in sync)
-                    $this->stockService->saleReturnStock(
-                        $productModel,
-                        (int) $product['quantity'],
-                        $saleReturn->id,
-                        $saleReturn->return_date
+                    $this->saleReturnService->createReturnDetailAndRestoreInventory(
+                        $saleReturn,
+                        $order,
+                        $product,
+                        $authUser->shop_id
                     );
                 }
 
-                // 3. Adjust order paid amount and create refund
-                $returnAmount = $total;
-                $originalPay = $order->pay ?? 0;
-                $originalDue = $order->due ?? 0;
-                
-                // Reduce paid amount (but not below 0)
-                $payReduction = min($returnAmount, $originalPay);
-                $newPay = max(0, $originalPay - $payReduction);
-                
-                // Increase due by the amount that was reduced from paid
-                $newDue = $originalDue + $payReduction;
-
-                $order->update([
-                    'pay' => $newPay,
-                    'due' => $newDue,
-                ]);
-
-                // 4. Create refund in payment log (always create refund entry)
-                if ($returnAmount > 0) {
-                    PaymentLog::create([
-                        'order_id' => $order->id,
-                        'amount_paid' => -$returnAmount, // Negative amount for refund
-                        'type' => 'refund',
-                    ]);
-                }
-
-                // 5. Adjust customer credit
-                if ($customer) {
-                    // If order had due amount before return, reduce credit by the return amount
-                    // This is because returning items reduces the credit that was added when order was created
-                    if ($originalDue > 0) {
-                        // Reduce credit by the return amount (up to the original due)
-                        $creditReduction = min($returnAmount, $originalDue);
-                        if ($creditReduction > 0) {
-                            $creditService->removePending($customer, $creditReduction);
-                        }
-                    }
-                    // Note: If order was fully paid (no due), we don't adjust credit
-                    // The refund is tracked in payment log with negative amount
-                }
+                // 3. Apply financial impact (inventory-safe and accounting-safe)
+                $this->saleReturnService->applyFinancialImpact($saleReturn, $order, $customer);
             });
 
             return Redirect::route('sale-returns.index')->with('success', 'Sale return has been created successfully!');
-        } catch (\Exception $e) {
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
+        } catch (\Throwable $e) {
             // If return was created, delete it
             if ($return_id) {
                 SaleReturn::where('id', $return_id)->delete();
@@ -415,63 +346,9 @@ class SaleReturnController extends Controller
             ->findOrFail($return_id);
         $this->ensureShopAccess($saleReturn);
 
-        $creditService = new CustomerCreditService();
-        $customer = $saleReturn->customer;
-        $order = $saleReturn->order;
-
         try {
-            DB::transaction(function () use ($saleReturn, $customer, $order, $creditService) {
-                // 1. Reverse stock for this sale return via stock_logs (append-only reversal)
-                $this->stockService->reverseStock('sale_return', $saleReturn->id);
-
-                // 2. Reverse order paid/due adjustments
-                $returnAmount = $saleReturn->total;
-                $currentPay = $order->pay ?? 0;
-                $currentDue = $order->due ?? 0;
-                
-                // When return was created, paid was reduced and due was increased
-                // Now we need to restore: increase paid back, decrease due back
-                $newPay = $currentPay + $returnAmount;
-                $newDue = max(0, $currentDue - $returnAmount);
-
-                $order->update([
-                    'pay' => $newPay,
-                    'due' => $newDue,
-                ]);
-
-                // 3. Delete refund payment log entry (find by order_id, type='refund', and amount)
-                // We'll find the most recent refund matching the return amount
-                $refundLog = PaymentLog::where('order_id', $order->id)
-                    ->where('type', 'refund')
-                    ->where('amount_paid', -$returnAmount)
-                    ->orderBy('created_at', 'desc')
-                    ->first();
-                
-                if ($refundLog) {
-                    $refundLog->delete();
-                }
-
-                // 4. Reverse customer credit adjustment
-                if ($customer) {
-                    // When return was created, if order had due, credit was reduced
-                    // We need to restore it - but we need to check what the due was before return
-                    // Since we're increasing due back, we should restore credit proportionally
-                    // For simplicity, restore credit by the return amount (if it affects due)
-                    if ($currentDue > 0) {
-                        $creditRestored = min($returnAmount, $currentDue);
-                        if ($creditRestored > 0) {
-                            $creditService->addPending($customer, $creditRestored);
-                        }
-                    }
-                }
-
-                // 5. Soft delete return details
-                foreach ($saleReturn->returnDetails as $returnDetail) {
-                    $returnDetail->delete();
-                }
-
-                // 6. Soft delete return
-                $saleReturn->delete();
+            DB::transaction(function () use ($saleReturn) {
+                $this->saleReturnService->reverseAndDelete($saleReturn);
             });
 
             return Redirect::route('sale-returns.index')->with('success', 'Sale return has been deleted successfully! Stock and payments have been reversed.');

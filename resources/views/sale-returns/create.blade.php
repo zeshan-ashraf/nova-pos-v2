@@ -370,9 +370,9 @@
                                         data-index="${index}" 
                                         data-max="${availableQty}"
                                         value="0" 
-                                        min="1" 
+                                        min="0" 
                                         max="${availableQty}"
-                                        ${isDisabled ? 'disabled' : ''}
+                                        disabled
                                         style="width: 80px;">
                                 </td>
                                 <td>
@@ -408,13 +408,17 @@
             const index = $(this).data('index');
             const $row = $(this).closest('tr');
             const $qtyInput = $row.find('.return-quantity');
-            
+
             if ($(this).is(':checked')) {
-                $qtyInput.prop('disabled', false);
+                // When user selects a row for return, enable qty input,
+                // enforce min=1, and default to quantity 1.
+                $qtyInput.prop('disabled', false).attr('min', 1);
                 $qtyInput.val(1);
                 calculateRowTotal(index);
             } else {
-                $qtyInput.prop('disabled', true).val(0);
+                // When row is not selected, disable qty input and relax min to 0
+                // so browser does not block form submission for value 0.
+                $qtyInput.prop('disabled', true).attr('min', 0).val(0);
                 $row.find('.total-display').text('0.00');
                 $row.find('.total-value').val(0);
                 calculateReturnTotal();
