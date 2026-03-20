@@ -86,8 +86,8 @@
                                 @foreach ($saleReturn->returnDetails as $detail)
                                 <tr>
                                     <td>{{ $loop->iteration }}</td>
-                                    <td>{{ $detail->product->product_name ?? 'N/A' }}</td>
-                                    <td>{{ $detail->product->product_code ?? 'N/A' }}</td>
+                                    <td>{{ $detail->product->resolved_name ?? 'N/A' }}</td>
+                                    <td>{{ $detail->product->resolved_code ?? 'N/A' }}</td>
                                     <td>{{ $detail->quantity }}</td>
                                     <td>{{ number_format($detail->unitcost, 2) }}</td>
                                     <td>{{ number_format($detail->total, 2) }}</td>

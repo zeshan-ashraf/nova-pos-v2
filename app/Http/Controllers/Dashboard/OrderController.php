@@ -1842,6 +1842,11 @@ class OrderController extends Controller
                             ->first();
 
                         if ($childProduct) {
+                            // Product mapping: ensure child product points to mother/master product.
+                            if (empty($childProduct->parent_product_id)) {
+                                $childProduct->parent_product_id = $motherProduct->id;
+                                $childProduct->save();
+                            }
                             // Log BEFORE update product_store: product_code, product id, product_store, quantity being added
                             \Log::info('OrderController shop-transfer: BEFORE update product_store', [
                                 'product_code' => $childProduct->product_code,
@@ -1902,6 +1907,8 @@ class OrderController extends Controller
                                 'category_id' => $childCategoryId,
                                 'supplier_id' => $supplier->id,
                                 'shop_id' => $childShop->id,
+                                // Product mapping: link child product to mother/master product.
+                                'parent_product_id' => $motherProduct->id,
                                 'product_code' => $motherProduct->product_code,
                                 'product_garage' => $motherProduct->product_garage,
                                 'product_image' => $motherProduct->product_image,

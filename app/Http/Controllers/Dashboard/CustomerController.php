@@ -6,6 +6,7 @@ use App\Models\AccountTransaction;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\PaymentLog;
+use App\Models\SaleReturn;
 use App\Services\CustomerOpeningBalanceService;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
@@ -458,6 +459,13 @@ class CustomerController extends Controller
             $invoiceNos = Order::query()->whereIn('id', $saleSourceIds)->pluck('invoice_no', 'id')->all();
         }
 
+        // Resolve sale return numbers for adjustment entries (sale returns post as SOURCE_ADJUSTMENT with source_id = sale_return.id)
+        $adjustmentReturnIds = $rows->where('source_type', AccountTransaction::SOURCE_ADJUSTMENT)->pluck('source_id')->unique()->filter()->values()->all();
+        $saleReturnNos = [];
+        if (!empty($adjustmentReturnIds)) {
+            $saleReturnNos = SaleReturn::query()->whereIn('id', $adjustmentReturnIds)->pluck('return_no', 'id')->all();
+        }
+
         $transactions = [];
         $runningBalance = $calculatedOpeningBalance;
 
@@ -474,8 +482,18 @@ class CustomerController extends Controller
                 $rowBalance = $runningBalance;
             }
 
+            // Reference text for each row type.
+            // - SOURCE_SALE: show invoice number and link to invoice
+            // - SOURCE_ADJUSTMENT (sale return): show sale return number and link to sale return
+            // - SOURCE_CUSTOMER_PAYMENT: generic Payment reference with payment detail link
+            // - SOURCE_CUSTOMER_OPENING: Opening Balance label
+            // - Others: use description as-is
+            $saleReturnId = null;
             if ($r->source_type === AccountTransaction::SOURCE_SALE) {
                 $reference = $invoiceNos[$r->source_id] ?? ('#' . $r->source_id);
+            } elseif ($r->source_type === AccountTransaction::SOURCE_ADJUSTMENT && isset($saleReturnNos[$r->source_id])) {
+                $reference = $saleReturnNos[$r->source_id];
+                $saleReturnId = (int) $r->source_id;
             } elseif ($r->source_type === AccountTransaction::SOURCE_CUSTOMER_PAYMENT) {
                 $reference = 'Payment';
             } elseif ($r->source_type === AccountTransaction::SOURCE_CUSTOMER_OPENING) {
@@ -493,6 +511,7 @@ class CustomerController extends Controller
                 'balance' => $rowBalance,
                 'order_id' => $r->source_type === AccountTransaction::SOURCE_SALE ? (int) $r->source_id : null,
                 'payment_transaction_id' => $r->source_type === AccountTransaction::SOURCE_CUSTOMER_PAYMENT ? (int) $r->id : null,
+                'sale_return_id' => $saleReturnId,
                 'is_opening' => $r->source_type === AccountTransaction::SOURCE_CUSTOMER_OPENING,
             ];
         }

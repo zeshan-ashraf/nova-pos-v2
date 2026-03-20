@@ -42,6 +42,8 @@ use App\Http\Controllers\Dashboard\SuperAdminDashboardController;
 use App\Http\Controllers\Dashboard\SystemResetController;
 use App\Http\Controllers\Dashboard\PayableController;
 use App\Http\Controllers\Dashboard\PayableTransactionController;
+use App\Http\Controllers\Dashboard\PurchaseReturnController;
+use App\Http\Controllers\Dashboard\TransferReturnController;
 
 /*
 |--------------------------------------------------------------------------
@@ -250,6 +252,20 @@ Route::middleware(['permission:purchases.menu'])->group(function () {
     Route::put('/purchases/update/status', [PurchaseController::class, 'updateStatus'])->name('purchases.updateStatus');
     Route::delete('/purchases/{purchase_id}', [PurchaseController::class, 'destroy'])->name('purchases.destroy');
     Route::get('/api/purchases/products/search', [PurchaseController::class, 'searchProducts'])->name('api.purchases.products.search');
+});
+
+// ====== PURCHASE RETURNS (child shops) ======
+Route::middleware(['permission:purchases.menu'])->group(function () {
+    Route::resource('/purchase-returns', PurchaseReturnController::class)->only(['index', 'create', 'store', 'show']);
+    Route::get('/purchase-returns/purchase/{purchaseId}/details', [PurchaseReturnController::class, 'getPurchaseDetails'])->name('purchase-returns.getPurchaseDetails');
+});
+
+// ====== TRANSFER RETURNS (mother shop approval) ======
+Route::middleware(['permission:purchases.menu'])->group(function () {
+    Route::get('/transfer-returns/pending', [TransferReturnController::class, 'pending'])->name('transfer-returns.pending');
+    Route::get('/transfer-returns/{id}', [TransferReturnController::class, 'show'])->name('transfer-returns.show');
+    Route::post('/transfer-returns/{id}/approve', [TransferReturnController::class, 'approve'])->name('transfer-returns.approve');
+    Route::post('/transfer-returns/{id}/reject', [TransferReturnController::class, 'reject'])->name('transfer-returns.reject');
 });
 
 // ====== PAYABLES ======

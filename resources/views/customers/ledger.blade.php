@@ -214,6 +214,8 @@
                             <td>
                                 @if(!empty($txn['is_opening']))
                                     Opening Balance
+                                @elseif(!empty($txn['sale_return_id']))
+                                    Sale Return
                                 @elseif(!empty($txn['order_id']))
                                     Sale
                                 @elseif(!empty($txn['payment_transaction_id']))
@@ -227,6 +229,10 @@
                                     <a href="javascript:void(0)" class="ledger-invoice-link text-primary" data-order-id="{{ $txn['order_id'] }}" title="View invoice details">{{ $txn['reference'] }}</a>
                                 @elseif(!empty($txn['payment_transaction_id']))
                                     <a href="javascript:void(0)" class="ledger-payment-link text-primary" data-transaction-id="{{ $txn['payment_transaction_id'] }}" title="View payment details">{{ $txn['reference'] }}</a>
+                                @elseif(!empty($txn['sale_return_id']))
+                                    <a href="{{ route('sale-returns.show', $txn['sale_return_id']) }}" class="text-primary" title="View sale return details">
+                                        {{ $txn['reference'] }}
+                                    </a>
                                 @else
                                     {{ $txn['reference'] }}
                                 @endif

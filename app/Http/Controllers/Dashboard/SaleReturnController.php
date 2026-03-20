@@ -146,7 +146,7 @@ class SaleReturnController extends Controller
      */
     public function getOrderDetails($orderId)
     {
-        $order = Order::with(['orderDetails.product', 'customer'])
+        $order = Order::with(['orderDetails.product.parent', 'customer'])
             ->findOrFail($orderId);
         
         $authUser = auth()->user();
@@ -167,8 +167,8 @@ class SaleReturnController extends Controller
             return [
                 'id' => $orderDetail->id,
                 'product_id' => $orderDetail->product_id,
-                'product_name' => $orderDetail->product->product_name ?? 'N/A',
-                'product_code' => $orderDetail->product->product_code ?? 'N/A',
+                'product_name' => $orderDetail->product->resolved_name ?? 'N/A',
+                'product_code' => $orderDetail->product->resolved_code ?? 'N/A',
                 'quantity' => $orderDetail->quantity,
                 'returned_quantity' => $returnedQty,
                 'available_to_return' => $orderDetail->quantity - $returnedQty,
@@ -327,7 +327,7 @@ class SaleReturnController extends Controller
      */
     public function show(int $return_id)
     {
-        $saleReturn = SaleReturn::with(['customer', 'order', 'returnDetails.product', 'shop'])
+        $saleReturn = SaleReturn::with(['customer', 'order', 'returnDetails.product.parent', 'shop'])
             ->findOrFail($return_id);
         
         $this->ensureShopAccess($saleReturn);

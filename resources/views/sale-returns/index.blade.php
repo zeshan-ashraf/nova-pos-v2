@@ -91,6 +91,15 @@
                                     <a class="btn btn-info mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Details" href="{{ route('sale-returns.show', $return->id) }}">
                                         Details
                                     </a>
+                                    <button type="button"
+                                            class="btn btn-danger btn-sm border-none"
+                                            data-toggle="tooltip"
+                                            data-placement="top"
+                                            title=""
+                                            data-original-title="Delete"
+                                            onclick="showDeleteReturnModal({{ $return->id }})">
+                                        <i class="ri-delete-bin-line mr-0"></i>
+                                    </button>
                                 </div>
                             </td>
                         </tr>
@@ -104,5 +113,63 @@
     </div>
     <!-- Page end  -->
 </div>
+
+<!-- Delete Sale Return Confirmation Modal -->
+<div class="modal fade" id="deleteReturnModal" tabindex="-1" role="dialog" aria-labelledby="deleteReturnModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteReturnModalLabel">Confirm Sale Return Deletion</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-3">
+                    <h4 class="mb-2" style="font-weight: 700;">
+                        <i class="ri-alert-line"></i> Warning
+                    </h4>
+                    <p class="mb-0" style="font-size: 1.05rem;">
+                        <strong>Deleting this Sale Return will reverse all its effects.</strong>
+                    </p>
+                </div>
+                <div class="alert alert-warning" role="alert" style="font-size: 0.9rem;">
+                    <p class="mb-2">The system will:</p>
+                    <ul class="mb-2" style="font-size: 0.9rem;">
+                        <li><strong>Remove returned items from inventory</strong> &mdash; stock quantities will be reduced by the returned amounts</li>
+                        <li><strong>Reverse stock log entries</strong> &mdash; all stock history entries created for this return will be removed</li>
+                        <li><strong>Restore customer balance (if applicable)</strong> &mdash; the customer&rsquo;s running balance will be restored</li>
+                        <li><strong>Remove accounting ledger entries</strong> &mdash; adjustment entries for this return will be deleted</li>
+                        <li><strong>Remove refund logs</strong> &mdash; any refund payment logs created for this return will be deleted</li>
+                        <li><strong>Mark this sale return as deleted</strong> &mdash; the return and its line items will be soft deleted</li>
+                    </ul>
+                    <p class="mb-0">
+                        <strong>This operation cannot be undone.</strong> Are you sure you want to delete this Sale Return?
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <form id="deleteReturnForm" method="POST" style="display: inline;">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="btn btn-danger">
+                        <i class="ri-delete-bin-line mr-1"></i> Delete Return
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function showDeleteReturnModal(returnId) {
+        // Match the delete confirmation flow used on the orders page:
+        // - open Bootstrap modal
+        // - wire DELETE form action dynamically for the selected resource
+        $('#deleteReturnModal').modal('show');
+        $('#deleteReturnForm').attr('action', '/sale-returns/' + returnId);
+    }
+</script>
 
 @endsection

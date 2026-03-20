@@ -81,4 +81,9 @@ class Purchase extends Model
     {
         return $this->hasMany(PurchasePaymentLog::class, 'purchase_id', 'id');
     }
+
+    public function order()
+    {
+        return $this->belongsTo(Order::class, 'source_sale_id', 'id');
+    }
 }

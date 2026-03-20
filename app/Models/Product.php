@@ -17,6 +17,7 @@ class Product extends Model
         'category_id',
         'supplier_id',
         'shop_id',
+        'parent_product_id',
         'product_code',
         'product_garage',
         'product_image',
@@ -109,6 +110,54 @@ class Product extends Model
 
     public function supplier(){
         return $this->belongsTo(Supplier::class, 'supplier_id');
+    }
+
+    public function parent()
+    {
+        return $this->belongsTo(Product::class, 'parent_product_id');
+    }
+
+    public function children()
+    {
+        return $this->hasMany(Product::class, 'parent_product_id');
+    }
+
+    /**
+     * Master product resolver for multi-shop product mapping.
+     * If this product is a child-shop clone, parent_product_id points to the mother/master product.
+     */
+    public function getMasterProduct(): Product
+    {
+        if ($this->parent_product_id) {
+            // Prefer already-loaded relation to avoid extra queries.
+            return $this->relationLoaded('parent') && $this->parent ? $this->parent : (Product::find($this->parent_product_id) ?? $this);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Unified product name for UI: always show master (parent) product name when mapped.
+     */
+    public function getResolvedNameAttribute(): ?string
+    {
+        return $this->parent?->product_name ?? $this->product_name;
+    }
+
+    /**
+     * Unified product code for UI: always show master (parent) product code when mapped.
+     */
+    public function getResolvedCodeAttribute(): ?string
+    {
+        return $this->parent?->product_code ?? $this->product_code;
+    }
+
+    /**
+     * Optional helper alias for service/controller layers.
+     */
+    public function resolveProduct(): Product
+    {
+        return $this->parent ?? $this;
     }
 
     public function shop(){

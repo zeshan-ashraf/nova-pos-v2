@@ -469,6 +469,20 @@
                                 <i class="fas fa-arrow-right"></i><span>Complete Purchases</span>
                             </a>
                         </li>
+                        @if (auth()->user()->can('purchase_returns.create') || auth()->user()->can('purchase_returns.view'))
+                        <li class="{{ Request::is('purchase-returns*') ? 'active' : '' }}">
+                            <a href="{{ route('purchase-returns.index') }}">
+                                <i class="fas fa-arrow-right"></i><span>Purchase Returns</span>
+                            </a>
+                        </li>
+                        @endif
+                        @if (auth()->user()->can('transfer_returns.view'))
+                        <li class="{{ Request::is('transfer-returns*') ? 'active' : '' }}">
+                            <a href="{{ route('transfer-returns.pending') }}">
+                                <i class="fas fa-arrow-right"></i><span>Transfer Return Reviews</span>
+                            </a>
+                        </li>
+                        @endif
                     </ul>
                 </li>
                 @endif
