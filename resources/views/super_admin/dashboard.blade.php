@@ -39,6 +39,37 @@
     .kpi-trend { font-size: 0.85rem; margin-left: 4px; }
     .kpi-trend.up { color: #28a745; }
     .kpi-trend.down { color: #dc3545; }
+    .activity-item {
+        font-size: 14px;
+        padding: 4px 0;
+    }
+    .ticker-toggle-btn {
+        border: 0;
+        background: transparent;
+        color: #6c757d;
+        font-size: 14px;
+        cursor: pointer;
+    }
+    .bg-light-success { background-color: #e9f8ef; }
+    .bg-light-danger { background-color: #fdecea; }
+    .report-filter-card .card-header {
+        border: 0;
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+    }
+    .report-filter-card .card-body {
+        padding-top: 0;
+    }
+    #shop-performance-table thead th {
+        background: #dfe4ea;
+        font-weight: 700;
+    }
+    #shop-performance-table tbody tr {
+        transition: background 0.2s ease;
+    }
+    #shop-performance-table tbody tr:hover {
+        background: rgba(0,0,0,0.03);
+    }
     #consolidated-kpis .card.kpi-up { animation: kpiPulseUp 0.5s ease; }
     #consolidated-kpis .card.kpi-down { animation: kpiPulseDown 0.5s ease; }
     @keyframes kpiPulseUp {
@@ -70,9 +101,9 @@
     {{-- 1️⃣ Global Filter Section (Top Bar) --}}
     <div class="row sa-dashboard-section">
         <div class="col-12">
-            <div class="card border">
+            <div class="card report-filter-card border-primary shadow-sm">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0 text-uppercase">Global Filters</h6>
+                    <h6 class="mb-0 text-primary"><i class="ri-filter-3-line mr-1"></i> Filters</h6>
                 </div>
                 <div class="card-body">
                     <form id="sa_filter_form" class="form-row align-items-end">
@@ -109,7 +140,7 @@
                         </div>
                         <div class="form-group col-md-12 mt-2">
                             <button type="button" id="sa_apply_filters_btn" class="btn btn-primary">
-                                Apply Filters
+                                <i class="ri-search-line mr-1"></i> Filter
                             </button>
                         </div>
                     </form>
@@ -288,6 +319,32 @@
     </div>
     <div id="kpi-error-alert" class="alert alert-danger mt-2" style="display: none;" role="alert"></div>
 
+    <div class="row sa-dashboard-section">
+        <div class="col-12">
+            <div class="card border mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center py-2" style="background-color: #FF7E41;">
+                    <h6 class="mb-0 text-uppercase text-white">Live Activity Ticker</h6>
+                    <button
+                        type="button"
+                        id="activityTickerToggle"
+                        class="ticker-toggle-btn"
+                        data-toggle="collapse"
+                        data-target="#activityTickerCollapse"
+                        aria-expanded="true"
+                        aria-controls="activityTickerCollapse"
+                    >
+                        <i class="fas fa-chevron-up text-white"></i>
+                    </button>
+                </div>
+                <div id="activityTickerCollapse" class="collapse show">
+                <div class="card-body py-2">
+                    <div id="activityTicker" class="d-flex flex-column"></div>
+                </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {{-- 3️⃣ Child Shop Comparison Table --}}
     <div class="row sa-dashboard-section">
         <div class="col-12">
@@ -297,29 +354,30 @@
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table mb-0 table-striped table-hover">
-                            <thead class="thead-light">
+                        <table id="shop-performance-table" class="table mb-0 table-striped table-hover">
+                            <thead>
                                 <tr>
                                     <th>Shop Name</th>
-                                    <th>Sales</th>
-                                    <th>Total Orders</th>
-                                    <th>COGS</th>
-                                    <th>Gross Profit</th>
-                                    <th>Invoice Discount</th>
-                                    <th>Net Profit</th>
-                                    <th>Margin %</th>
+                                    <th class="text-right"><i class="fas fa-dollar-sign mr-1"></i>Sales</th>
+                                    <th class="text-right"><i class="fas fa-shopping-cart mr-1"></i>Orders</th>
+                                    <th class="text-right"><i class="fas fa-box mr-1"></i>COGS</th>
+                                    <th class="text-right"><i class="fas fa-chart-line mr-1"></i>Gross Profit</th>
+                                    <th class="text-right"><i class="fas fa-tag mr-1"></i>Invoice Discount</th>
+                                    <th class="text-right"><i class="fas fa-coins mr-1"></i>Net Profit</th>
+                                    <th class="text-right"><i class="fas fa-percentage mr-1"></i>Margin %</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @forelse($shops ?? [] as $shop)
                                     <tr>
                                         <td>{{ $shop->name ?? 'Shop Name' }}</td>
-                                        <td>{{ number_format(0, 2) }}</td>
-                                        <td>{{ number_format(0, 0) }}</td>
-                                        <td>{{ number_format(0, 2) }}</td>
-                                        <td>{{ number_format(0, 2) }}</td>
-                                        <td>{{ number_format(0, 2) }}</td>
-                                        <td>{{ number_format(0, 2) }}%</td>
+                                        <td id="sales_{{ $shop->id }}" class="text-right">{{ number_format(0, 2) }}</td>
+                                        <td id="orders_{{ $shop->id }}" class="text-right">{{ number_format(0, 0) }}</td>
+                                        <td id="cogs_{{ $shop->id }}" class="text-right">{{ number_format(0, 2) }}</td>
+                                        <td id="gross_{{ $shop->id }}" class="text-right">{{ number_format(0, 2) }}</td>
+                                        <td id="discount_{{ $shop->id }}" class="text-right">{{ number_format(0, 2) }}</td>
+                                        <td id="net_{{ $shop->id }}" class="text-right">0.00</td>
+                                        <td id="margin_{{ $shop->id }}" class="text-right">0.00%</td>
                                     </tr>
                                 @empty
                                     <tr>
@@ -369,38 +427,38 @@
             <h6 class="text-uppercase mb-2">Insights</h6>
         </div>
         <div class="col-md-3 mb-3">
-            <div class="card border h-100">
-                <div class="card-body">
-                    <div class="sa-dashboard-card-title">Top Selling Shop</div>
-                    <div class="sa-dashboard-metric-value">—</div>
-                    <div class="sa-dashboard-subtext">Highest total sales</div>
+            <div class="card border h-100 bg-light-success">
+                <div class="card-body text-center">
+                    <div class="sa-dashboard-card-title"><i class="fas fa-trophy mr-1 text-warning"></i>Top Selling Shop</div>
+                    <div id="topSellingShop" class="sa-dashboard-metric-value h4 font-weight-bold text-success">-</div>
+                    <small id="topSellingValue" class="text-muted">PKR 0.00</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3 mb-3">
-            <div class="card border h-100">
-                <div class="card-body">
-                    <div class="sa-dashboard-card-title">Highest Profit Shop</div>
-                    <div class="sa-dashboard-metric-value">—</div>
-                    <div class="sa-dashboard-subtext">Highest net profit</div>
+            <div class="card border h-100 bg-light-success">
+                <div class="card-body text-center">
+                    <div class="sa-dashboard-card-title"><i class="fas fa-coins mr-1 text-success"></i>Highest Profit Shop</div>
+                    <div id="highestProfitShop" class="sa-dashboard-metric-value h4 font-weight-bold text-success">-</div>
+                    <small id="highestProfitValue" class="text-muted">PKR 0.00</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3 mb-3">
-            <div class="card border h-100">
-                <div class="card-body">
-                    <div class="sa-dashboard-card-title">Best Margin Shop</div>
-                    <div class="sa-dashboard-metric-value">—</div>
-                    <div class="sa-dashboard-subtext">Best profit margin %</div>
+            <div class="card border h-100 bg-light-success">
+                <div class="card-body text-center">
+                    <div class="sa-dashboard-card-title"><i class="fas fa-percentage mr-1 text-primary"></i>Best Margin Shop</div>
+                    <div id="bestMarginShop" class="sa-dashboard-metric-value h4 font-weight-bold text-primary">-</div>
+                    <small id="bestMarginValue" class="text-muted">0.00%</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3 mb-3">
-            <div class="card border h-100">
-                <div class="card-body">
-                    <div class="sa-dashboard-card-title">Lowest Performing Shop</div>
-                    <div class="sa-dashboard-metric-value">—</div>
-                    <div class="sa-dashboard-subtext">Based on net profit</div>
+            <div class="card border h-100 bg-light-danger">
+                <div class="card-body text-center">
+                    <div class="sa-dashboard-card-title"><i class="fas fa-exclamation-triangle mr-1 text-danger"></i>Lowest Performing Shop</div>
+                    <div id="lowestShop" class="sa-dashboard-metric-value h4 font-weight-bold text-danger">-</div>
+                    <small id="lowestValue" class="text-muted">PKR 0.00</small>
                 </div>
             </div>
         </div>
@@ -487,6 +545,7 @@
 @endsection
 
 @section('specificpagescripts')
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 (function() {
     'use strict';
@@ -501,6 +560,15 @@
         { key: 'net_profit', id: 'netProfit', cardId: 'card-netProfit', trendId: 'netProfitTrend', suffix: '' },
         { key: 'profit_margin', id: 'profitMargin', cardId: 'card-profitMargin', trendId: 'profitMarginTrend', suffix: '%' }
     ];
+    var lastActivityTime = null;
+    var previousShopStats = {};
+    var previousInsights = {};
+    var salesChart = null;
+    var profitChart = null;
+    var previousChartData = {
+        sales: [],
+        profit: []
+    };
 
     function showKpiSpinners(clearValues) {
         KPI_MAP.forEach(function(m) {
@@ -678,12 +746,385 @@
         });
     }
 
+    function escapeHtml(value) {
+        return $('<div>').text(value || '').html();
+    }
+
+    function renderActivity(activity) {
+        var color = activity.type === 'sale' ? 'success' : 'danger';
+        var icon = activity.type === 'sale' ? 'fa-arrow-up' : 'fa-arrow-down';
+        var typeLabel = String(activity.type || '').toUpperCase();
+        var shop = escapeHtml(activity.shop || 'Unknown Shop');
+        var amount = Number(activity.amount || 0).toLocaleString();
+
+        var html = '\
+            <div class="activity-item text-' + color + '" style="display:none;">\
+                <i class="fas ' + icon + '"></i>\
+                ' + typeLabel + ' -\
+                <strong>' + shop + '</strong> -\
+                PKR ' + amount + '\
+            </div>\
+        ';
+
+        $('#activityTicker').prepend(html);
+        $('#activityTicker .activity-item:first').slideDown(300);
+
+        if ($('#activityTicker .activity-item').length > 10) {
+            $('#activityTicker .activity-item:last').remove();
+        }
+    }
+
+    function fetchActivities() {
+        $.get('{{ route("super-admin.dashboard.activities") }}', function(data) {
+            if (!Array.isArray(data) || !data.length) {
+                return;
+            }
+
+            data.slice().reverse().forEach(function(activity) {
+                if (lastActivityTime && activity.time <= lastActivityTime) {
+                    return;
+                }
+                renderActivity(activity);
+            });
+
+            lastActivityTime = data[0].time;
+        });
+    }
+
+    function formatStat(field, value) {
+        var num = Number(value || 0);
+        if (field === 'orders') {
+            return num.toLocaleString('en-US', { maximumFractionDigits: 0 });
+        }
+        if (field === 'margin') {
+            return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+        }
+        return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function applyMetricTone(field, selector, value) {
+        var el = $(selector);
+        if (!el.length) return;
+        el.removeClass('text-success text-danger text-warning');
+
+        if (field === 'net') {
+            el.addClass(Number(value) >= 0 ? 'text-success' : 'text-danger');
+            return;
+        }
+
+        if (field === 'margin') {
+            var margin = Number(value || 0);
+            if (margin > 20) {
+                el.addClass('text-success');
+            } else if (margin < 10) {
+                el.addClass('text-danger');
+            } else {
+                el.addClass('text-warning');
+            }
+        }
+    }
+
+    function animateNumber(selector, field, value) {
+        var el = $(selector);
+        if (!el.length) return;
+
+        var isMargin = field === 'margin';
+        var isOrders = field === 'orders';
+        var currentRaw = (el.text() || '0').replace(/,/g, '').replace('%', '');
+        var start = parseFloat(currentRaw);
+        if (isNaN(start)) start = 0;
+        var end = Number(value || 0);
+
+        $({ n: start }).animate({ n: end }, {
+            duration: 500,
+            step: function(now) {
+                if (isOrders) {
+                    el.text(Math.round(now).toLocaleString('en-US'));
+                } else if (isMargin) {
+                    el.text(now.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%');
+                } else {
+                    el.text(now.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                }
+            },
+            complete: function() {
+                el.text(formatStat(field, end));
+            }
+        });
+    }
+
+    function updateCell(field, shop, prev) {
+        var selector = '#' + field + '_' + shop.shop_id;
+        var newVal = Number(shop[field] || 0);
+        var oldVal = Number(prev[field] || 0);
+        if (newVal === oldVal) {
+            applyMetricTone(field, selector, newVal);
+            return;
+        }
+
+        animateNumber(selector, field, newVal);
+
+        var el = $(selector);
+        var indicator = newVal > oldVal
+            ? ' <span class="text-success small ml-1">▲</span>'
+            : ' <span class="text-danger small ml-1">▼</span>';
+        el.find('.delta-indicator').remove();
+        el.append('<span class="delta-indicator">' + indicator + '</span>');
+
+        el.addClass(newVal > oldVal ? 'text-success' : 'text-danger');
+        setTimeout(function() {
+            el.find('.delta-indicator').remove();
+            el.removeClass('text-success text-danger');
+            applyMetricTone(field, selector, newVal);
+        }, 800);
+    }
+
+    function fetchShopPerformance() {
+        var filters = {
+            date_filter: $('#sa_date_range').val(),
+            start_date: $('#sa_start_date').val(),
+            end_date: $('#sa_end_date').val(),
+            shops: $('#sa_shops').val()
+        };
+
+        $.get('{{ route("dashboard.shop-performance") }}', filters, function(res) {
+            if (!res || !Array.isArray(res.shops)) return;
+
+            res.shops.forEach(function(shop) {
+                var prev = previousShopStats[shop.shop_id] || {};
+
+                updateCell('sales', shop, prev);
+                updateCell('orders', shop, prev);
+                updateCell('cogs', shop, prev);
+                updateCell('gross', shop, prev);
+                updateCell('discount', shop, prev);
+                updateCell('net', shop, prev);
+                updateCell('margin', shop, prev);
+
+                previousShopStats[shop.shop_id] = shop;
+            });
+        });
+    }
+
+    function chartCurrency(value) {
+        return 'PKR ' + Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function updateSalesChart(labels, data) {
+        if (JSON.stringify(previousChartData.sales) === JSON.stringify(data)) return;
+        previousChartData.sales = data.slice();
+
+        if (salesChart) {
+            salesChart.data.labels = labels;
+            salesChart.data.datasets[0].data = data;
+            salesChart.update();
+            return;
+        }
+
+        var ctx = document.getElementById('salesComparisonChart');
+        if (!ctx || typeof Chart === 'undefined') return;
+
+        salesChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Sales',
+                    data: data,
+                    backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                animation: { duration: 800 },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) { return chartCurrency(context.parsed.x); }
+                        }
+                    }
+                },
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
+
+    function updateProfitChart(labels, data) {
+        if (JSON.stringify(previousChartData.profit) === JSON.stringify(data)) return;
+        previousChartData.profit = data.slice();
+
+        var colors = data.map(function(val) {
+            return Number(val) >= 0 ? 'rgba(40,167,69,0.6)' : 'rgba(220,53,69,0.6)';
+        });
+
+        if (profitChart) {
+            profitChart.data.labels = labels;
+            profitChart.data.datasets[0].data = data;
+            profitChart.data.datasets[0].backgroundColor = colors;
+            profitChart.update();
+            return;
+        }
+
+        var ctx = document.getElementById('profitComparisonChart');
+        if (!ctx || typeof Chart === 'undefined') return;
+
+        profitChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Net Profit',
+                    data: data,
+                    backgroundColor: colors,
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                animation: { duration: 800 },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) { return chartCurrency(context.parsed.y); }
+                        }
+                    }
+                },
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
+
+    function fetchChartData() {
+        var filters = {
+            date_filter: $('#sa_date_range').val(),
+            start_date: $('#sa_start_date').val(),
+            end_date: $('#sa_end_date').val(),
+            shops: $('#sa_shops').val()
+        };
+
+        $.get('{{ route("dashboard.shop-performance") }}', filters, function(res) {
+            if (!res || !Array.isArray(res.shops)) return;
+
+            var salesSorted = res.shops.slice().sort(function(a, b) {
+                return Number(b.sales || 0) - Number(a.sales || 0);
+            });
+            var profitSorted = res.shops.slice().sort(function(a, b) {
+                return Number(b.net || b.net_profit || 0) - Number(a.net || a.net_profit || 0);
+            });
+
+            var salesLabels = [];
+            var salesData = [];
+            salesSorted.forEach(function(shop) {
+                salesLabels.push(shop.shop_name);
+                salesData.push(Number(shop.sales || 0));
+            });
+
+            var profitLabels = [];
+            var profitData = [];
+            profitSorted.forEach(function(shop) {
+                profitLabels.push(shop.shop_name);
+                profitData.push(Number(shop.net || shop.net_profit || 0));
+            });
+
+            updateSalesChart(salesLabels, salesData);
+            updateProfitChart(profitLabels, profitData);
+        });
+    }
+
+    function animateInsightValue(selector, value, isPercent) {
+        var el = $(selector);
+        if (!el.length) return;
+        var currentRaw = (el.text() || '0').replace(/,/g, '').replace('PKR', '').replace('%', '').trim();
+        var start = parseFloat(currentRaw);
+        if (isNaN(start)) start = 0;
+        var end = Number(value || 0);
+
+        $({ n: start }).animate({ n: end }, {
+            duration: 500,
+            step: function(now) {
+                if (isPercent) {
+                    el.text(now.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%');
+                } else {
+                    el.text('PKR ' + now.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                }
+            },
+            complete: function() {
+                if (isPercent) {
+                    el.text(end.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%');
+                } else {
+                    el.text('PKR ' + end.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                }
+            }
+        });
+    }
+
+    function updateInsight(prefix, newData, oldData) {
+        if (!newData) return;
+        oldData = oldData || {};
+        var valueChanged = Number(newData.value || 0) !== Number(oldData.value || 0);
+        var nameChanged = (newData.name || '-') !== (oldData.name || '-');
+        if (!valueChanged && !nameChanged) return;
+
+        $('#' + prefix + 'Shop').text((newData.name || '-') + (prefix === 'topSelling' ? ' 👑' : ''));
+        animateInsightValue('#' + prefix + 'Value', Number(newData.value || 0), prefix === 'bestMargin');
+
+        var el = $('#' + prefix + 'Value');
+        el.addClass('text-warning');
+        setTimeout(function() { el.removeClass('text-warning'); }, 800);
+    }
+
+    function fetchInsights() {
+        var filters = {
+            date_filter: $('#sa_date_range').val(),
+            start_date: $('#sa_start_date').val(),
+            end_date: $('#sa_end_date').val(),
+            shops: $('#sa_shops').val()
+        };
+
+        $.get('{{ route("dashboard.insights") }}', filters, function(data) {
+            if (!data) return;
+
+            updateInsight('topSelling', data.top_selling, previousInsights.top_selling);
+            updateInsight('highestProfit', data.highest_profit, previousInsights.highest_profit);
+            updateInsight('bestMargin', data.best_margin, previousInsights.best_margin);
+            updateInsight('lowest', data.lowest, previousInsights.lowest);
+
+            previousInsights = data;
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
+        $('#activityTickerCollapse').on('shown.bs.collapse', function() {
+            $('#activityTickerToggle i').removeClass('fa-chevron-down').addClass('fa-chevron-up');
+        });
+        $('#activityTickerCollapse').on('hidden.bs.collapse', function() {
+            $('#activityTickerToggle i').removeClass('fa-chevron-up').addClass('fa-chevron-down');
+        });
+
         toggleSaCustomDates();
         var btn = document.getElementById('sa_apply_filters_btn');
-        if (btn) btn.addEventListener('click', function() { fetchKPIs(true); });
+        if (btn) btn.addEventListener('click', function() {
+            previousShopStats = {};
+            previousInsights = {};
+            previousChartData = { sales: [], profit: [] };
+            fetchKPIs(true);
+            fetchShopPerformance();
+            fetchInsights();
+            fetchChartData();
+        });
         fetchKPIs(true);
+        fetchActivities();
+        fetchShopPerformance();
+        fetchInsights();
+        fetchChartData();
         setInterval(function() { fetchKPIs(false); }, 5000);
+        setInterval(fetchActivities, 5000);
+        setInterval(fetchShopPerformance, 5000);
+        setInterval(fetchInsights, 5000);
+        setInterval(fetchChartData, 5000);
     });
 
     window.toggleSaCustomDates = toggleSaCustomDates;

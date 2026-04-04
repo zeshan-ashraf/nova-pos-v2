@@ -34,6 +34,7 @@ class Purchase extends Model
         'is_system_generated',
         'purchase_date',
         'purchase_status',
+        'landed_cost_status',
         'total_products',
         'sub_total',
         'invoice_discount',
@@ -75,6 +76,14 @@ class Purchase extends Model
     public function purchaseDetails()
     {
         return $this->hasMany(PurchaseDetail::class, 'purchase_id', 'id');
+    }
+
+    /**
+     * Purchase expenses (activities) used for landed-cost allocation.
+     */
+    public function activities()
+    {
+        return $this->hasMany(Activity::class, 'purchase_id', 'id');
     }
 
     public function paymentLogs()

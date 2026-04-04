@@ -8,6 +8,7 @@ use App\Models\Activity;
 use App\Models\Order;
 use App\Models\OrderDetails;
 use App\Models\Purchase;
+use App\Models\Shop;
 use Illuminate\Http\Request;
 
 class SuperAdminDashboardController extends Controller
@@ -98,6 +99,51 @@ class SuperAdminDashboardController extends Controller
             'profit_margin_trend_pct' => $previous['profit_margin'] !== null && $previous['profit_margin'] != 0
                 ? $trend($current['profit_margin'], $previous['profit_margin']) : null,
         ]);
+    }
+
+    public function activities(Request $request)
+    {
+        $orders = Order::withoutGlobalScopes()
+            ->latest()
+            ->limit(10)
+            ->get(['id', 'shop_id', 'total', 'created_at']);
+
+        $purchases = Purchase::withoutGlobalScopes()
+            ->latest()
+            ->limit(10)
+            ->get(['id', 'shop_id', 'total', 'created_at']);
+
+        $shopIds = $orders->pluck('shop_id')
+            ->merge($purchases->pluck('shop_id'))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $shopNames = Shop::withoutGlobalScopes()
+            ->whereIn('id', $shopIds)
+            ->pluck('name', 'id');
+
+        $activities = $orders->map(function ($order) use ($shopNames) {
+            return [
+                'type' => 'sale',
+                'shop' => $shopNames[$order->shop_id] ?? 'Unknown Shop',
+                'amount' => (float) $order->total,
+                'time' => optional($order->created_at)->toIso8601String(),
+            ];
+        })->merge(
+            $purchases->map(function ($purchase) use ($shopNames) {
+                return [
+                    'type' => 'purchase',
+                    'shop' => $shopNames[$purchase->shop_id] ?? 'Unknown Shop',
+                    'amount' => (float) $purchase->total,
+                    'time' => optional($purchase->created_at)->toIso8601String(),
+                ];
+            })
+        )->sortByDesc('time')
+            ->take(10)
+            ->values();
+
+        return response()->json($activities);
     }
 
     /**

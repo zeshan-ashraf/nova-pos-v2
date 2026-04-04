@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Models\AccountTransaction;
+use App\Models\Activity;
 use App\Models\Purchase;
 use App\Models\PurchaseDetail;
 use App\Models\PurchasePaymentLog;
 use App\Models\Product;
+use App\Models\Expense;
 use App\Models\StockLog;
 use App\Models\Supplier;
 use Illuminate\Http\Request;
@@ -17,15 +19,14 @@ use Illuminate\Support\Carbon;
 use Haruncpi\LaravelIdGenerator\IdGenerator;
 use App\Support\ActiveShop;
 use App\Services\Ledger\PurchaseLedgerService;
-use App\Services\Stock\StockService;
 use App\Services\SupplierCreditService;
+use App\Services\Purchase\PurchaseApprovalService;
+use App\Services\Purchase\PurchaseExpenseService;
+use App\Services\Purchase\PurchaseLandedCostService;
+use App\Services\Purchase\PurchaseReceiveService;
 
 class PurchaseController extends Controller
 {
-    public function __construct(
-        private StockService $stockService
-    ) {}
-
     /**
      * Display a listing of purchases.
      */
@@ -270,7 +271,7 @@ class PurchaseController extends Controller
                 $purchaseLedgerService->recordPurchaseDebit($purchase);
                 $purchaseLedgerService->recordPurchaseSupplierCredit($purchase);
 
-                // 2. Create purchase details and increase stock (stock_logs with purchase_date for COGS)
+                // 2. Create purchase details (NO stock movement yet; stock is received after landed-cost approval)
                 foreach ($validatedData['products'] as $product) {
                     if (empty($product['product_id'])) {
                         continue;
@@ -296,21 +297,6 @@ class PurchaseController extends Controller
                     ];
 
                     PurchaseDetail::insert($purchaseDetailData);
-
-                    // Increase stock via ledger (StockService; price = purchase_unit_cost for COGS)
-                    $this->stockService->purchaseStock(
-                        $productModel,
-                        (int) $product['quantity'],
-                        (float) ($product['unit_price'] ?? 0),
-                        (int) $supplier->id,
-                        $purchase_id,
-                        $purchaseDate
-                    );
-
-                    // Once buying price is set via purchase, mark product as active (was ordered)
-                    if ($productModel->status === 'ordered') {
-                        $productModel->update(['status' => 'active']);
-                    }
                 }
 
                 // 3. Create payment log if payment was made (shop_bank_id for bank/cheque)
@@ -353,7 +339,7 @@ class PurchaseController extends Controller
     /**
      * Display the specified purchase.
      */
-    public function show(int $purchase_id)
+    public function show(int $purchase_id, PurchaseLandedCostService $landedCostService)
     {
         $purchase = Purchase::with(['supplier', 'shop.banks'])->findOrFail($purchase_id);
         $this->ensureShopAccess($purchase);
@@ -363,9 +349,54 @@ class PurchaseController extends Controller
                         ->orderBy('id', 'DESC')
                         ->get();
 
+        $purchaseExpenses = Activity::query()
+            ->with('expense')
+            ->where('purchase_id', $purchase_id)
+            ->orderBy('date', 'desc')
+            ->get();
+
+        $allocationLocked = $purchaseExpenses->where('allocation_locked', 1)->isNotEmpty();
+
+        $expenseCategories = Expense::query()
+            ->when(auth()->user()?->shop_id, fn ($q) => $q->where('shop_id', auth()->user()->shop_id))
+            ->orderBy('expense_title')
+            ->get(['id', 'expense_title']);
+
+        // Auto-calculate landed cost on load (only while not approved) so review table is always consistent.
+        // We avoid overwriting manual adjustments by only re-calculating when:
+        // - any detail has not been calculated yet (landed_unit_cost <= 0), OR
+        // - an expense was changed after the last purchase detail update.
+        $isInternal = (bool) ($purchase->is_system_generated ?? false);
+        if (!$isInternal && ($purchase->landed_cost_status ?? 'pending') !== 'approved') {
+            $needsInitialCalc = $purchaseDetails->contains(fn ($d) => (float) ($d->landed_unit_cost ?? 0) <= 0);
+
+            $latestActivityUpdatedAt = Activity::query()
+                ->where('purchase_id', $purchase_id)
+                ->max('updated_at');
+
+            $latestDetailUpdatedAt = PurchaseDetail::query()
+                ->where('purchase_id', $purchase_id)
+                ->max('updated_at');
+
+            $activitiesChanged = $latestActivityUpdatedAt !== null
+                && ($latestDetailUpdatedAt === null || $latestActivityUpdatedAt > $latestDetailUpdatedAt);
+
+            if ($needsInitialCalc || $activitiesChanged) {
+                $landedCostService->calculate($purchase_id);
+                $purchaseDetails = PurchaseDetail::with('product')
+                    ->where('purchase_id', $purchase_id)
+                    ->orderBy('id', 'DESC')
+                    ->get();
+            }
+        }
+
         return view('purchases.show', [
             'purchase' => $purchase,
             'purchaseDetails' => $purchaseDetails,
+            'purchaseExpenses' => $purchaseExpenses,
+            'expenseCategories' => $expenseCategories,
+            'allocationLocked' => $allocationLocked,
+            'isInternalPurchase' => $isInternal,
         ]);
     }
 
@@ -394,14 +425,220 @@ class PurchaseController extends Controller
     /**
      * Update purchase status to complete.
      */
-    public function updateStatus(Request $request)
+    public function updateStatus(Request $request, PurchaseReceiveService $receiveService)
     {
         $purchase = Purchase::findOrFail($request->id);
         $this->ensureShopAccess($purchase);
 
-        $purchase->update(['purchase_status' => 'complete']);
+        try {
+            $receiveService->receivePurchase((int) $purchase->id);
+        } catch (\RuntimeException $e) {
+            return Redirect::back()->withErrors(['error' => $e->getMessage()]);
+        }
 
         return Redirect::route('purchases.pending')->with('success', 'Purchase has been completed!');
+    }
+
+    /**
+     * Add a purchase expense (stored as an Activity linked to this purchase).
+     */
+    public function storePurchaseExpense(
+        Request $request,
+        int $purchase_id,
+        PurchaseExpenseService $expenseService,
+        PurchaseLandedCostService $landedCostService
+    ) {
+        $purchase = Purchase::with('shop')->findOrFail($purchase_id);
+        $this->ensureShopAccess($purchase);
+
+        if ((bool) ($purchase->is_system_generated ?? false)) {
+            return Redirect::back()->withErrors(['error' => 'Internal purchases do not support landed-cost expenses.']);
+        }
+
+        if (($purchase->purchase_status ?? '') === 'complete') {
+            return Redirect::back()->withErrors(['error' => 'Cannot edit purchase after it has been received.']);
+        }
+
+        $request->validate([
+            'expense_id' => 'required|integer|exists:expenses,id',
+            'activity_cost' => 'required|numeric|min:0.01',
+            'date' => 'required|date',
+            'description' => 'nullable|string',
+            'payment_method' => 'nullable|string|in:cash,bank',
+            'shop_bank_id' => 'nullable|numeric|exists:bank_shop,id',
+        ]);
+
+        if ($purchase->shop_id) {
+            $validCategory = Expense::query()
+                ->where('id', (int) $request->input('expense_id'))
+                ->where('shop_id', $purchase->shop_id)
+                ->exists();
+            if (!$validCategory) {
+                return Redirect::back()->withErrors(['expense_id' => 'The selected expense category is not valid for your shop.'])->withInput();
+            }
+        }
+
+        // Prevent edits when allocation is locked.
+        $allocationLocked = Activity::query()
+            ->where('purchase_id', $purchase_id)
+            ->where('allocation_locked', 1)
+            ->exists();
+        if ($allocationLocked) {
+            return Redirect::back()->withErrors(['error' => 'Expenses are locked; landed cost is already being approved/approved.']);
+        }
+
+        try {
+            $expenseService->addExpense($purchase_id, $request->only([
+                'expense_id',
+                'activity_cost',
+                'date',
+                'description',
+                'payment_method',
+                'shop_bank_id',
+            ]));
+
+            $landedCostService->calculate($purchase_id);
+        } catch (\Throwable $e) {
+            return Redirect::back()->withErrors(['error' => $e->getMessage()]);
+        }
+
+        return Redirect::route('purchases.show', $purchase_id)->with('success', 'Purchase expense added!');
+    }
+
+    /**
+     * Update a purchase expense (Activity).
+     */
+    public function updatePurchaseExpense(
+        Request $request,
+        int $purchase_id,
+        int $activity_id,
+        PurchaseExpenseService $expenseService,
+        PurchaseLandedCostService $landedCostService
+    ) {
+        $purchase = Purchase::with('shop')->findOrFail($purchase_id);
+        $this->ensureShopAccess($purchase);
+
+        if ((bool) ($purchase->is_system_generated ?? false)) {
+            return Redirect::back()->withErrors(['error' => 'Internal purchases do not support landed-cost expenses.']);
+        }
+
+        if (($purchase->purchase_status ?? '') === 'complete') {
+            return Redirect::back()->withErrors(['error' => 'Cannot edit purchase after it has been received.']);
+        }
+
+        $request->validate([
+            'expense_id' => 'required|integer|exists:expenses,id',
+            'activity_cost' => 'required|numeric|min:0.01',
+            'date' => 'required|date',
+            'description' => 'nullable|string',
+            'payment_method' => 'nullable|string|in:cash,bank',
+            'shop_bank_id' => 'nullable|numeric|exists:bank_shop,id',
+        ]);
+
+        if ($purchase->shop_id) {
+            $validCategory = Expense::query()
+                ->where('id', (int) $request->input('expense_id'))
+                ->where('shop_id', $purchase->shop_id)
+                ->exists();
+            if (!$validCategory) {
+                return Redirect::back()->withErrors(['expense_id' => 'The selected expense category is not valid for your shop.'])->withInput();
+            }
+        }
+
+        try {
+            $activity = Activity::query()->where('id', $activity_id)->where('purchase_id', $purchase_id)->firstOrFail();
+            if ((int) ($activity->allocation_locked ?? 0) === 1) {
+                return Redirect::back()->withErrors(['error' => 'Expenses are locked; landed cost is already being approved/approved.']);
+            }
+
+            $expenseService->updateExpense($activity_id, $request->only([
+                'expense_id',
+                'activity_cost',
+                'date',
+                'description',
+                'payment_method',
+                'shop_bank_id',
+            ]));
+
+            $landedCostService->calculate($purchase_id);
+        } catch (\Throwable $e) {
+            return Redirect::back()->withErrors(['error' => $e->getMessage()]);
+        }
+
+        return Redirect::route('purchases.show', $purchase_id)->with('success', 'Purchase expense updated!');
+    }
+
+    /**
+     * Delete a purchase expense (Activity).
+     */
+    public function deletePurchaseExpense(
+        Request $request,
+        int $purchase_id,
+        int $activity_id,
+        PurchaseExpenseService $expenseService,
+        PurchaseLandedCostService $landedCostService
+    ) {
+        $purchase = Purchase::with('shop')->findOrFail($purchase_id);
+        $this->ensureShopAccess($purchase);
+
+        if ((bool) ($purchase->is_system_generated ?? false)) {
+            return Redirect::back()->withErrors(['error' => 'Internal purchases do not support landed-cost expenses.']);
+        }
+
+        if (($purchase->purchase_status ?? '') === 'complete') {
+            return Redirect::back()->withErrors(['error' => 'Cannot edit purchase after it has been received.']);
+        }
+
+        try {
+            $activity = Activity::query()->where('id', $activity_id)->where('purchase_id', $purchase_id)->firstOrFail();
+            if ((int) ($activity->allocation_locked ?? 0) === 1) {
+                return Redirect::back()->withErrors(['error' => 'Expenses are locked; landed cost is already being approved/approved.']);
+            }
+
+            $expenseService->deleteExpense($activity_id);
+            $landedCostService->calculate($purchase_id);
+        } catch (\Throwable $e) {
+            return Redirect::back()->withErrors(['error' => $e->getMessage()]);
+        }
+
+        return Redirect::route('purchases.show', $purchase_id)->with('success', 'Purchase expense deleted!');
+    }
+
+    /**
+     * Approve landed cost:
+     * - apply manual landed_unit_cost adjustments
+     * - approve (locks expenses + sets landed_cost_status)
+     */
+    public function approvePurchaseLandedCost(
+        Request $request,
+        int $purchase_id,
+        PurchaseLandedCostService $landedCostService,
+        PurchaseApprovalService $approvalService
+    ) {
+        $purchase = Purchase::with('shop')->findOrFail($purchase_id);
+        $this->ensureShopAccess($purchase);
+
+        if ((bool) ($purchase->is_system_generated ?? false)) {
+            return Redirect::back()->withErrors(['error' => 'Internal purchases skip landed-cost approval.']);
+        }
+
+        if (($purchase->purchase_status ?? '') === 'complete') {
+            return Redirect::back()->withErrors(['error' => 'Cannot approve landed cost after purchase is received.']);
+        }
+
+        $request->validate([
+            'landed_unit_costs' => 'required|array',
+            'landed_unit_costs.*' => 'required|numeric|min:0.0001',
+        ]);
+
+        try {
+            $landedCostService->applyManualAdjustment($purchase_id, $request->input('landed_unit_costs', []));
+            $approvalService->approveLandedCost($purchase_id);
+        } catch (\Throwable $e) {
+            return Redirect::back()->withErrors(['error' => $e->getMessage()]);
+        }
+
+        return Redirect::route('purchases.show', $purchase_id)->with('success', 'Landed cost approved!');
     }
 
     /**
@@ -509,20 +746,24 @@ class PurchaseController extends Controller
                     throw new \RuntimeException('This purchase invoice has already been deleted.');
                 }
 
-                // 2. Reverse stock: decrease product_store by purchased quantity (purchase invoice)
-                foreach ($purchase->purchaseDetails as $purchaseDetail) {
-                    $product = Product::withoutGlobalScope('shop')
-                        ->where('id', $purchaseDetail->product_id)
-                        ->lockForUpdate()
-                        ->first();
-                    if ($product && $purchaseDetail->quantity > 0) {
-                        $current = (int) $product->product_store;
-                        if ($current < $purchaseDetail->quantity) {
-                            throw new \RuntimeException(
-                                'Cannot delete purchase: product "' . ($product->product_name ?? $product->id) . '" would have negative stock.'
-                            );
+                $shouldReverseStock = ($purchase->purchase_status ?? '') === 'complete';
+
+                // 2. Reverse stock only after external purchase has been received.
+                if ($shouldReverseStock) {
+                    foreach ($purchase->purchaseDetails as $purchaseDetail) {
+                        $product = Product::withoutGlobalScope('shop')
+                            ->where('id', $purchaseDetail->product_id)
+                            ->lockForUpdate()
+                            ->first();
+                        if ($product && $purchaseDetail->quantity > 0) {
+                            $current = (int) $product->product_store;
+                            if ($current < $purchaseDetail->quantity) {
+                                throw new \RuntimeException(
+                                    'Cannot delete purchase: product "' . ($product->product_name ?? $product->id) . '" would have negative stock.'
+                                );
+                            }
+                            $product->decrement('product_store', $purchaseDetail->quantity);
                         }
-                        $product->decrement('product_store', $purchaseDetail->quantity);
                     }
                 }
 
@@ -545,11 +786,13 @@ class PurchaseController extends Controller
                 // 5. Soft delete purchase_payment_logs
                 PurchasePaymentLog::where('purchase_id', $purchase->id)->delete();
 
-                // 6. Soft delete stock_logs for this purchase
-                StockLog::query()
-                    ->where('source_type', 'purchase')
-                    ->where('source_id', (string) $purchase->id)
-                    ->delete();
+                // 6. Soft delete stock_logs for this purchase (only if it had been received)
+                if ($shouldReverseStock) {
+                    StockLog::query()
+                        ->where('source_type', 'purchase')
+                        ->where('source_id', (string) $purchase->id)
+                        ->delete();
+                }
 
                 // 7. Soft delete purchase
                 $purchase->delete();

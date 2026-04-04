@@ -1,6 +1,12 @@
 {{-- Shared purchase details content: used by purchases.show page and by ledger modal (purchases/{id}/content). --}}
 @php
     $in_modal = $in_modal ?? false;
+
+    // Optional vars for the extended landed-cost flow (only populated on non-modal `purchases.show`).
+    $purchaseExpenses = $purchaseExpenses ?? collect();
+    $expenseCategories = $expenseCategories ?? collect();
+    $allocationLocked = $allocationLocked ?? false;
+    $isInternalPurchase = $isInternalPurchase ?? false;
 @endphp
 <div class="container-fluid purchase-detail-content">
     <div class="row">
@@ -71,6 +77,9 @@
                     <!-- end: Show Data -->
 
                     @if (!$in_modal && $purchase->purchase_status == 'pending')
+                        @php
+                            $canReceive = $isInternalPurchase || (($purchase->landed_cost_status ?? 'pending') === 'approved');
+                        @endphp
                         <div class="row">
                             <div class="col-lg-12">
                                 <div class="d-flex align-items-center list-action">
@@ -78,11 +87,26 @@
                                         @method('put')
                                         @csrf
                                         <input type="hidden" name="id" value="{{ $purchase->id }}">
-                                        <button type="submit" class="btn btn-success mr-2 border-none" data-toggle="tooltip" data-placement="top" title="" data-original-title="Complete">Complete Purchase</button>
+                                        <button
+                                            type="submit"
+                                            class="btn btn-success mr-2 border-none {{ $canReceive ? '' : 'opacity-50' }}"
+                                            data-toggle="tooltip"
+                                            data-placement="top"
+                                            title=""
+                                            data-original-title="{{ $canReceive ? 'Complete' : 'Approve landed cost first' }}"
+                                            {{ $canReceive ? '' : 'disabled' }}
+                                        >
+                                            Complete Purchase
+                                        </button>
 
                                         <a class="btn btn-danger mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Cancel" href="{{ route('purchases.pending') }}">Cancel</a>
                                     </form>
                                 </div>
+                                @if (!$isInternalPurchase && !$canReceive)
+                                    <div class="text-warning mt-2" style="font-size: 14px;">
+                                        Approve landed cost first before receiving this purchase.
+                                    </div>
+                                @endif
                             </div>
                         </div>
                     @endif
@@ -118,5 +142,298 @@
                 </table>
             </div>
         </div>
+
+        @if (!$in_modal && !$isInternalPurchase)
+            <div class="col-lg-12 mt-3">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title mb-0">Purchase Expenses</h4>
+                    </div>
+                    <div class="card-body">
+                        @php
+                            $canEditExpenses = !$allocationLocked && ($purchase->purchase_status ?? '') === 'pending' && (($purchase->landed_cost_status ?? 'pending') !== 'approved');
+                        @endphp
+
+                        @if ($purchaseExpenses->isEmpty())
+                            <div class="text-muted mb-3">No purchase expenses added yet.</div>
+                        @endif
+
+                        <div class="table-responsive rounded mb-3">
+                            <table class="table mb-0">
+                                <thead class="bg-white text-uppercase">
+                                    <tr class="ligth ligth-data">
+                                        <th>No.</th>
+                                        <th>Expense</th>
+                                        <th>Amount</th>
+                                        <th>Date</th>
+                                        <th>Description</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="ligth-body">
+                                    @foreach ($purchaseExpenses as $expenseActivity)
+                                        <tr>
+                                            <td>{{ $loop->iteration }}</td>
+                                            <td>
+                                                {{ $expenseActivity->expense->expense_title ?? 'N/A' }}
+                                            </td>
+                                            <td>{{ number_format($expenseActivity->activity_cost ?? 0, 2) }}</td>
+                                            <td>{{ $expenseActivity->date }}</td>
+                                            <td>{{ $expenseActivity->description ?? '-' }}</td>
+                                            <td>
+                                                @if ($canEditExpenses)
+                                                    <div class="d-flex flex-wrap align-items-center" style="gap: 8px;">
+                                                        <form
+                                                            method="POST"
+                                                            action="{{ route('purchases.expenses.update', [$purchase->id, $expenseActivity->id]) }}"
+                                                            class="d-flex flex-wrap align-items-center"
+                                                            style="gap: 8px;"
+                                                        >
+                                                            @csrf
+                                                            @method('PUT')
+
+                                                            <select class="form-control form-control-sm" name="expense_id" style="min-width: 160px;">
+                                                                @foreach ($expenseCategories as $category)
+                                                                    <option
+                                                                        value="{{ $category->id }}"
+                                                                        {{ (string) $expenseActivity->expense_id === (string) $category->id ? 'selected' : '' }}
+                                                                    >
+                                                                        {{ $category->expense_title }}
+                                                                    </option>
+                                                                @endforeach
+                                                            </select>
+
+                                                            <input
+                                                                type="number"
+                                                                step="0.01"
+                                                                min="0"
+                                                                class="form-control form-control-sm"
+                                                                name="activity_cost"
+                                                                value="{{ $expenseActivity->activity_cost ?? 0 }}"
+                                                                style="width: 120px;"
+                                                            />
+
+                                                            <input
+                                                                type="date"
+                                                                class="form-control form-control-sm"
+                                                                name="date"
+                                                                value="{{ $expenseActivity->date }}"
+                                                                style="width: 160px;"
+                                                            />
+
+                                                            <input
+                                                                type="text"
+                                                                class="form-control form-control-sm"
+                                                                name="description"
+                                                                value="{{ $expenseActivity->description ?? '' }}"
+                                                                style="width: 200px;"
+                                                            />
+
+                                                            <button type="submit" class="btn btn-sm btn-primary">
+                                                                Update
+                                                            </button>
+                                                        </form>
+
+                                                        <form method="POST" action="{{ route('purchases.expenses.delete', [$purchase->id, $expenseActivity->id]) }}">
+                                                            @csrf
+                                                            @method('DELETE')
+                                                            <button
+                                                                type="submit"
+                                                                class="btn btn-sm btn-danger"
+                                                                onclick="return confirm('Delete this expense?')"
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                @else
+                                                    <span class="badge badge-secondary">Locked</span>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+
+                        @if ($canEditExpenses)
+                            <form
+                                method="POST"
+                                action="{{ route('purchases.expenses.store', $purchase->id) }}"
+                                class="mt-2"
+                            >
+                                @csrf
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label>Expense</label>
+                                            <select class="form-control" name="expense_id" required>
+                                                <option value="">Select expense</option>
+                                                @foreach ($expenseCategories as $category)
+                                                    <option value="{{ $category->id }}">{{ $category->expense_title }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label>Amount</label>
+                                            <input type="number" step="0.01" min="0" class="form-control" name="activity_cost" required value="0">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label>Date</label>
+                                            <input type="date" class="form-control" name="date" required value="{{ $purchase->purchase_date }}">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label>Description (optional)</label>
+                                            <input type="text" class="form-control" name="description" value="">
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-success mt-2">Add Expense</button>
+                            </form>
+                        @endif
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-12 mt-3">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title mb-0">Landed Cost Review</h4>
+                    </div>
+                    <div class="card-body">
+                        @php
+                            $purchaseDetailsForTable = $purchaseDetails ?? collect();
+                            $canEditLandedCost = !$allocationLocked
+                                && ($purchase->purchase_status ?? '') === 'pending'
+                                && (($purchase->landed_cost_status ?? 'pending') !== 'approved');
+
+                            $totalExpense = $purchaseExpenses->sum(fn ($a) => (float) ($a->activity_cost ?? 0));
+                            $canApprove = $canEditLandedCost && $totalExpense > 0;
+                        @endphp
+
+                        @if ($totalExpense <= 0)
+                            <div class="text-muted mb-2">
+                                Add expenses to calculate landed cost before approving.
+                            </div>
+                        @endif
+
+                        <form method="POST" action="{{ route('purchases.landed-cost.approve', $purchase->id) }}">
+                            @csrf
+
+                            <div class="table-responsive rounded mb-3">
+                                <table class="table mb-0" id="landedCostTable">
+                                    <thead class="bg-white text-uppercase">
+                                        <tr class="ligth ligth-data">
+                                            <th>Product</th>
+                                            <th>Qty</th>
+                                            <th>Unit Cost</th>
+                                            <th>Allocated Expense</th>
+                                            <th>Landed Unit Cost</th>
+                                            <th>Landed Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="ligth-body">
+                                        @foreach ($purchaseDetailsForTable as $detail)
+                                            @php
+                                                $qty = (int) ($detail->quantity ?? 0);
+                                                $unitCost = (float) ($detail->unitcost ?? 0);
+                                                $storedLandedUnitCost = $detail->landed_unit_cost;
+                                                $landedUnitCost = ($storedLandedUnitCost !== null && (float) $storedLandedUnitCost > 0)
+                                                    ? (float) $storedLandedUnitCost
+                                                    : $unitCost;
+                                                $storedAllocatedExpense = (float) ($detail->allocated_expense ?? 0);
+                                                $storedLandedTotal = (float) ($detail->landed_total ?? 0);
+                                                $landedTotal = $storedLandedTotal > 0 ? $storedLandedTotal : ($landedUnitCost * $qty);
+                                                $allocatedExpense = $storedAllocatedExpense != 0
+                                                    ? $storedAllocatedExpense
+                                                    : ($landedTotal - ($qty * $unitCost));
+                                            @endphp
+
+                                            <tr>
+                                                <td>
+                                                    {{ $detail->product->product_name ?? 'N/A' }}
+                                                    <input type="hidden" name="purchase_detail_ids[]" value="{{ $detail->id }}">
+                                                </td>
+                                                <td>{{ $qty }}</td>
+                                                <td>{{ number_format($unitCost, 4) }}</td>
+                                                <td>
+                                                    <span
+                                                        class="allocated-expense"
+                                                        data-detail-id="{{ $detail->id }}"
+                                                    >{{ number_format($allocatedExpense, 4) }}</span>
+                                                </td>
+                                                <td>
+                                                    <input
+                                                        type="number"
+                                                        step="0.0001"
+                                                        min="0"
+                                                        class="form-control landed-unit-cost-input"
+                                                        name="landed_unit_costs[{{ $detail->id }}]"
+                                                        value="{{ number_format($landedUnitCost, 4, '.', '') }}"
+                                                        data-qty="{{ $qty }}"
+                                                        data-unitcost="{{ number_format($unitCost, 6, '.', '') }}"
+                                                        data-lctarget="#row-{{ $detail->id }}"
+                                                        {{ $canEditLandedCost ? '' : 'readonly' }}
+                                                    />
+                                                </td>
+                                                <td>
+                                                    <span class="landed-total">
+                                                        {{ number_format($landedTotal, 4) }}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            @if ($canApprove)
+                                <button type="submit" class="btn btn-primary">Approve Landed Cost</button>
+                            @else
+                                <div class="text-muted">
+                                    {{
+                                        ($totalExpense <= 0)
+                                            ? 'Add expenses to calculate landed cost before approving.'
+                                            : 'Landed cost editing disabled or already approved.'
+                                    }}
+                                </div>
+                            @endif
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                (function() {
+                    function updateRow(input) {
+                        const qty = parseFloat(input.dataset.qty) || 0;
+                        const unitCost = parseFloat(input.dataset.unitcost) || 0;
+                        const landedUnitCost = parseFloat(input.value) || 0;
+
+                        const landedTotal = landedUnitCost * qty;
+                        const allocatedExpense = landedTotal - (qty * unitCost);
+
+                        const row = input.closest('tr');
+                        const landedTotalEl = row.querySelector('.landed-total');
+                        const allocatedEl = row.querySelector('.allocated-expense');
+
+                        if (landedTotalEl) landedTotalEl.textContent = landedTotal.toFixed(4);
+                        if (allocatedEl) allocatedEl.textContent = allocatedExpense.toFixed(4);
+                    }
+
+                    document.addEventListener('input', function(e) {
+                        if (e.target && e.target.classList && e.target.classList.contains('landed-unit-cost-input')) {
+                            updateRow(e.target);
+                        }
+                    });
+                })();
+            </script>
+        @endif
     </div>
 </div>
