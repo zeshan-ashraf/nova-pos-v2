@@ -617,6 +617,28 @@
 </div>
 @endif
 
+<!-- Invoice validation message (replaces alert for unit price etc.) -->
+<div class="modal fade" id="invoiceValidationModal" tabindex="-1" role="dialog" aria-labelledby="invoiceValidationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-danger">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="invoiceValidationModalLabel">
+                    <i class="ri-error-warning-line mr-2"></i> Error
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p id="invoiceValidationModalMessage" class="mb-0"></p>
+            </div>
+            <div class="modal-footer border-top">
+                <button type="button" class="btn btn-primary" data-dismiss="modal">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Add Customer Modal -->
 <div class="modal fade" id="addCustomerModal" tabindex="-1" role="dialog" aria-labelledby="addCustomerModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-md" role="document">
@@ -835,7 +857,12 @@
             console.log('Form is already submitting, ignoring click');
             return false;
         }
-       
+
+        if (!validateInvoiceProductUnitPrices()) {
+            showInvoiceValidationModal('Unit price must be greater than zero for each selected product.');
+            return false;
+        }
+
         // Check HTML5 validation first and log which fields are invalid
         if (!$invoiceForm[0].checkValidity()) {
             console.log('HTML5 validation failed');
@@ -1299,9 +1326,45 @@
 
     // Handle unit price change
     $(document).on('input', '.unit-price', function() {
+        $(this).removeClass('is-invalid').closest('tr.product-row').removeClass('product-row-error');
         const rowIndex = $(this).data('row');
         calculateRowTotal(rowIndex);
     });
+
+    /**
+     * Each row with a product selected must have unit price > 0.
+     */
+    function validateInvoiceProductUnitPrices() {
+        $('#productTableBody tr.product-row').removeClass('product-row-error');
+        $('#productTableBody .unit-price').removeClass('is-invalid');
+        var firstInvalid = null;
+        $('#productTableBody tr.product-row').each(function() {
+            var $row = $(this);
+            var productId = $row.find('.product-select').val();
+            if (!productId) {
+                return;
+            }
+            var unit = parseFloat($row.find('.unit-price').val());
+            if (!unit || unit <= 0) {
+                $row.addClass('product-row-error');
+                $row.find('.unit-price').addClass('is-invalid');
+                if (!firstInvalid) {
+                    firstInvalid = $row.find('.unit-price').get(0);
+                }
+            }
+        });
+        if (firstInvalid) {
+            firstInvalid.focus();
+            return false;
+        }
+        return true;
+    }
+
+    function showInvoiceValidationModal(message) {
+        var text = message || 'Please check your entries.';
+        $('#invoiceValidationModalMessage').text(text);
+        $('#invoiceValidationModal').modal('show');
+    }
 
     // Handle quantity change
     $(document).on('input', '.quantity', function() {
@@ -1840,6 +1903,12 @@
             return false;
         }
 
+        if (!validateInvoiceProductUnitPrices()) {
+            e.preventDefault();
+            showInvoiceValidationModal('Unit price must be greater than zero for each selected product.');
+            return false;
+        }
+
         const paymentMethod1 = $('#payment_method_1').val();
         if (!paymentMethod1) {
             e.preventDefault();
@@ -1948,7 +2017,12 @@
                 console.log('Form is already submitting, ignoring click');
                 return false;
             }
-            
+
+            if (!validateInvoiceProductUnitPrices()) {
+                showInvoiceValidationModal('Unit price must be greater than zero for each selected product.');
+                return false;
+            }
+
             // Check HTML5 validation first
             if (!$invoiceForm[0].checkValidity()) {
                 // Find and log all invalid fields

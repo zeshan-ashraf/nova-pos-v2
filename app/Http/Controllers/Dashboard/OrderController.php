@@ -33,6 +33,7 @@ use App\Services\SupplierCreditService;
 use App\Services\PurchaseDeletionService;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Illuminate\Support\Facades\Validator;
 
 class OrderController extends Controller
 {
@@ -1354,6 +1355,37 @@ class OrderController extends Controller
     }
 
     /**
+     * Find an existing child-shop product row for a mother→child transfer sale.
+     * Preference order: (1) parent_product_id = mother product id, (2) same product_code in child shop,
+     * (3) same product_name (legacy). Aligns child rows with mother id 22 → child id 23, parent_product_id 22.
+     */
+    private function findChildShopProductForMotherSale(Shop $childShop, Product $motherProduct): ?Product
+    {
+        $byParent = Product::withoutGlobalScope('shop')
+            ->where('shop_id', $childShop->id)
+            ->where('parent_product_id', $motherProduct->id)
+            ->first();
+        if ($byParent) {
+            return $byParent;
+        }
+
+        if (! empty($motherProduct->product_code)) {
+            $byCode = Product::withoutGlobalScope('shop')
+                ->where('shop_id', $childShop->id)
+                ->where('product_code', $motherProduct->product_code)
+                ->first();
+            if ($byCode) {
+                return $byCode;
+            }
+        }
+
+        return Product::withoutGlobalScope('shop')
+            ->where('shop_id', $childShop->id)
+            ->where('product_name', $motherProduct->product_name)
+            ->first();
+    }
+
+    /**
      * Store a newly created invoice.
      */
     public function storeInvoice(Request $request, CustomerCreditService $creditService, SupplierCreditService $supplierCreditService)
@@ -1392,7 +1424,24 @@ class OrderController extends Controller
         ];
 
         try {
-            $validatedData = $request->validate($rules);
+            $validator = Validator::make($request->all(), $rules);
+            $validator->after(function ($validator) use ($request) {
+                foreach ($request->input('products', []) as $i => $product) {
+                    $pid = $product['product_id'] ?? null;
+                    if ($pid === null || $pid === '' || (int) $pid <= 0) {
+                        continue;
+                    }
+                    $unit = isset($product['unit_price']) ? (float) $product['unit_price'] : 0;
+                    if ($unit <= 0) {
+                        $validator->errors()->add(
+                            "products.$i.unit_price",
+                            'Unit price must be greater than zero for each selected product.'
+                        );
+                    }
+                }
+            });
+
+            $validatedData = $validator->validate();
 
             \Log::info('Invoice validation passed', ['products_count' => count($validatedData['products'])]);
 
@@ -1835,11 +1884,8 @@ class OrderController extends Controller
                         Product::where('id', $product['product_id'])
                             ->update(['product_store' => DB::raw('product_store - ' . $product['quantity'])]);
 
-                        // Check if child shop has this product (query child shop, so bypass shop scope)
-                        $childProduct = Product::withoutGlobalScope('shop')
-                            ->where('shop_id', $childShop->id)
-                            ->where('product_name', $motherProduct->product_name)
-                            ->first();
+                        // Check if child shop already has this SKU (by parent link, code, or name)
+                        $childProduct = $this->findChildShopProductForMotherSale($childShop, $motherProduct);
 
                         if ($childProduct) {
                             // Product mapping: ensure child product points to mother/master product.
