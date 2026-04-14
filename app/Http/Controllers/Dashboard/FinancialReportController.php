@@ -163,7 +163,7 @@ class FinancialReportController extends Controller
      * URL: /reports/financial/profit-loss
      *
      * Rules (no stock_logs; order_details only for COGS and Sales):
-     * - Sales = SUM(order_details.unitcost * order_details.quantity). Date filter: orders.created_at.
+     * - Sales = SUM(order_details.unitcost * order_details.quantity). Date filter: orders.order_date (same as orders list / revenue).
      * - COGS = SUM(order_details.quantity * order_details.cost_per_unit). No fallback, no ABS.
      * - Gross Profit = Total Sales - COGS.
      * - Net Profit = Gross Profit - Operating Expenses. (Discounts not shown on P&L.)
@@ -184,7 +184,7 @@ class FinancialReportController extends Controller
                 $join->on('orders.id', '=', 'order_details.order_id')
                     ->whereNull('order_details.deleted_at');
             })
-            ->whereBetween('orders.created_at', [$start, $end])
+            ->whereBetween('orders.order_date', [$start, $end])
             ->selectRaw("
                 SUM(order_details.unitcost * order_details.quantity) AS total_sales,
                 SUM(order_details.quantity * COALESCE(order_details.cost_per_unit, 0)) AS cogs
@@ -278,7 +278,7 @@ class FinancialReportController extends Controller
                     ->whereNull('order_details.deleted_at');
             })
             ->join('products', 'order_details.product_id', '=', 'products.id')
-            ->whereBetween('orders.created_at', [$start, $end])
+            ->whereBetween('orders.order_date', [$start, $end])
             ->select(
                 'orders.id as order_id',
                 'orders.invoice_no',
