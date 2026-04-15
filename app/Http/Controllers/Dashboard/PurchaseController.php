@@ -737,71 +737,73 @@ class PurchaseController extends Controller
         }
 
         try {
-<<<<<<< HEAD
-            // Reuse centralised deletion logic (stock + ledger + soft deletes).
-            app(\App\Services\PurchaseDeletionService::class)->deletePurchase($purchase->id);
-=======
-            DB::transaction(function () use ($purchase) {
-                // 1. Lock invoice (with relations for stock reversal and payment log ids)
-                $purchase = Purchase::with(['purchaseDetails.product', 'paymentLogs'])
-                    ->lockForUpdate()
-                    ->findOrFail($purchase->id);
-                if ($purchase->trashed()) {
-                    throw new \RuntimeException('This purchase invoice has already been deleted.');
-                }
+            // Prefer centralized deletion logic if defined, but if not fallback to expanded inline approach
+            if (class_exists(\App\Services\PurchaseDeletionService::class)) {
+                // This will handle all required logic: stock reversal, ledger, soft deletes.
+                app(\App\Services\PurchaseDeletionService::class)->deletePurchase($purchase->id);
+            } else {
+                // Fallback to explicit transactional deletion if the service isn't available.
+                DB::transaction(function () use ($purchase) {
+                    // 1. Lock invoice (with relations for stock reversal and payment log ids)
+                    $purchase = Purchase::with(['purchaseDetails.product', 'paymentLogs'])
+                        ->lockForUpdate()
+                        ->findOrFail($purchase->id);
+                    if ($purchase->trashed()) {
+                        throw new \RuntimeException('This purchase invoice has already been deleted.');
+                    }
 
-                $shouldReverseStock = ($purchase->purchase_status ?? '') === 'complete';
+                    $shouldReverseStock = ($purchase->purchase_status ?? '') === 'complete';
 
-                // 2. Reverse stock only after external purchase has been received.
-                if ($shouldReverseStock) {
-                    foreach ($purchase->purchaseDetails as $purchaseDetail) {
-                        $product = Product::withoutGlobalScope('shop')
-                            ->where('id', $purchaseDetail->product_id)
-                            ->lockForUpdate()
-                            ->first();
-                        if ($product && $purchaseDetail->quantity > 0) {
-                            $current = (int) $product->product_store;
-                            if ($current < $purchaseDetail->quantity) {
-                                throw new \RuntimeException(
-                                    'Cannot delete purchase: product "' . ($product->product_name ?? $product->id) . '" would have negative stock.'
-                                );
+                    // 2. Reverse stock only after external purchase has been received.
+                    if ($shouldReverseStock) {
+                        foreach ($purchase->purchaseDetails as $purchaseDetail) {
+                            $product = Product::withoutGlobalScope('shop')
+                                ->where('id', $purchaseDetail->product_id)
+                                ->lockForUpdate()
+                                ->first();
+                            if ($product && $purchaseDetail->quantity > 0) {
+                                $current = (int) $product->product_store;
+                                if ($current < $purchaseDetail->quantity) {
+                                    throw new \RuntimeException(
+                                        'Cannot delete purchase: product "' . ($product->product_name ?? $product->id) . '" would have negative stock.'
+                                    );
+                                }
+                                $product->decrement('product_store', $purchaseDetail->quantity);
                             }
-                            $product->decrement('product_store', $purchaseDetail->quantity);
                         }
                     }
-                }
 
-                // 3. Soft delete related: purchase_details
-                PurchaseDetail::where('purchase_id', $purchase->id)->delete();
+                    // 3. Soft delete related: purchase_details
+                    PurchaseDetail::where('purchase_id', $purchase->id)->delete();
 
-                // 4. Soft delete account_transactions related to this purchase (purchase + purchase_payment entries)
-                $paymentLogIds = $purchase->paymentLogs()->pluck('id')->toArray();
-                AccountTransaction::query()
-                    ->where(function ($q) use ($purchase, $paymentLogIds) {
-                        $q->where('source_type', AccountTransaction::SOURCE_PURCHASE)
-                            ->where('source_id', $purchase->id);
-                        if (count($paymentLogIds) > 0) {
-                            $q->orWhere('source_type', AccountTransaction::SOURCE_PURCHASE_PAYMENT)
-                                ->whereIn('source_id', $paymentLogIds);
-                        }
-                    })
-                    ->delete();
-
-                // 5. Soft delete purchase_payment_logs
-                PurchasePaymentLog::where('purchase_id', $purchase->id)->delete();
-
-                // 6. Soft delete stock_logs for this purchase (only if it had been received)
-                if ($shouldReverseStock) {
-                    StockLog::query()
-                        ->where('source_type', 'purchase')
-                        ->where('source_id', (string) $purchase->id)
+                    // 4. Soft delete account_transactions related to this purchase (purchase + purchase_payment entries)
+                    $paymentLogIds = $purchase->paymentLogs()->pluck('id')->toArray();
+                    AccountTransaction::query()
+                        ->where(function ($q) use ($purchase, $paymentLogIds) {
+                            $q->where('source_type', AccountTransaction::SOURCE_PURCHASE)
+                                ->where('source_id', $purchase->id);
+                            if (count($paymentLogIds) > 0) {
+                                $q->orWhere('source_type', AccountTransaction::SOURCE_PURCHASE_PAYMENT)
+                                    ->whereIn('source_id', $paymentLogIds);
+                            }
+                        })
                         ->delete();
-                }
 
-                // 7. Soft delete purchase
-                $purchase->delete();
-            });
->>>>>>> feature/landed-cost-purchase-system
+                    // 5. Soft delete purchase_payment_logs
+                    PurchasePaymentLog::where('purchase_id', $purchase->id)->delete();
+
+                    // 6. Soft delete stock_logs for this purchase (only if it had been received)
+                    if ($shouldReverseStock) {
+                        StockLog::query()
+                            ->where('source_type', 'purchase')
+                            ->where('source_id', (string) $purchase->id)
+                            ->delete();
+                    }
+
+                    // 7. Soft delete purchase
+                    $purchase->delete();
+                });
+            }
 
             return Redirect::route('purchases.index')->with('success', 'Purchase has been deleted successfully! Stock and payments have been reversed.');
         } catch (\Exception $e) {
