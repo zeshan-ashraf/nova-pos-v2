@@ -34,7 +34,7 @@
                         <div class="form-group row">
                             <div class="col-md-6">
                                 <label for="customer_id">Customer <span class="text-danger">*</span></label>
-                                <select class="form-control customer-select @error('customer_id') is-invalid @enderror" id="customer_id" name="customer_id" required>
+                                <select class="form-control payment-customer-select @error('customer_id') is-invalid @enderror" id="customer_id" name="customer_id" required>
                                     <option value="">Select customer</option>
                                     @foreach($customers ?? [] as $c)
                                         <option value="{{ $c->id }}" {{ old('customer_id', request('customer_id')) == $c->id ? 'selected' : '' }}>{{ $c->shopname ? ($c->name ? $c->shopname . ' (' . $c->name . ')' : $c->shopname) : ($c->name ?? '—') }}</option>
@@ -86,10 +86,68 @@
                 </div>
             </div>
 
+            @php
+                $dateRange = $dateRange ?? [];
+                $dateFilter = $dateRange['date_filter'] ?? 'all';
+            @endphp
+            <div class="card report-filter-card border-primary shadow-sm mt-4">
+                <div class="card-header border-0 py-2">
+                    <h6 class="mb-0 text-primary"><i class="ri-filter-3-line mr-1"></i> Filters</h6>
+                </div>
+                <div class="card-body pt-0">
+                    <form action="{{ route('customer-payments.create') }}" method="GET">
+                        <div class="row align-items-end">
+                            <div class="col-md-3 mb-2 mb-md-0">
+                                <label for="date_filter" class="form-label">Date Filter</label>
+                                <select class="form-control" name="date_filter" id="date_filter" onchange="toggleCustomerPaymentCustomDates()">
+                                    <option value="all" {{ $dateFilter === 'all' ? 'selected' : '' }}>All</option>
+                                    <option value="today" {{ $dateFilter === 'today' ? 'selected' : '' }}>Today</option>
+                                    <option value="yesterday" {{ $dateFilter === 'yesterday' ? 'selected' : '' }}>Yesterday</option>
+                                    <option value="this_week" {{ $dateFilter === 'this_week' ? 'selected' : '' }}>This Week</option>
+                                    <option value="last_week" {{ $dateFilter === 'last_week' ? 'selected' : '' }}>Last Week</option>
+                                    <option value="this_month" {{ $dateFilter === 'this_month' ? 'selected' : '' }}>This Month</option>
+                                    <option value="last_month" {{ $dateFilter === 'last_month' ? 'selected' : '' }}>Last Month</option>
+                                    <option value="this_year" {{ $dateFilter === 'this_year' ? 'selected' : '' }}>This Year</option>
+                                    <option value="last_year" {{ $dateFilter === 'last_year' ? 'selected' : '' }}>Last Year</option>
+                                    <option value="custom" {{ $dateFilter === 'custom' ? 'selected' : '' }}>Custom Range</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-2 mb-md-0">
+                                <label for="filter_customer_id" class="form-label">Customer</label>
+                                <select class="form-control filter-customer-select" id="filter_customer_id" name="customer_id">
+                                    <option value="">— All —</option>
+                                    @foreach($customers ?? [] as $c)
+                                        <option value="{{ $c->id }}" {{ request('customer_id') == $c->id ? 'selected' : '' }}>{{ $c->shopname ? ($c->name ? $c->shopname . ' (' . $c->name . ')' : $c->shopname) : ($c->name ?? '—') }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-2 mb-2 mb-md-0" id="filter_start_date_group" style="display: {{ $dateFilter === 'custom' ? 'block' : 'none' }};">
+                                <label for="start_date" class="form-label">Start Date</label>
+                                <input type="date" class="form-control" id="start_date" name="start_date" value="{{ $dateRange['start_date'] ?? '' }}">
+                            </div>
+                            <div class="col-md-2 mb-2 mb-md-0" id="filter_end_date_group" style="display: {{ $dateFilter === 'custom' ? 'block' : 'none' }};">
+                                <label for="end_date" class="form-label">End Date</label>
+                                <input type="date" class="form-control" id="end_date" name="end_date" value="{{ $dateRange['end_date'] ?? '' }}">
+                            </div>
+                            <div class="col-md-2 mb-2 mb-md-0 d-flex align-items-end flex-wrap">
+                                <button type="submit" class="btn btn-primary px-3 py-2 mr-2 mb-2 mb-md-0">
+                                    <i class="ri-search-line mr-1"></i> Filter
+                                </button>
+                                <a href="{{ route('customer-payments.create') }}" class="btn btn-outline-secondary px-3 py-2">Clear</a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             <div class="card mt-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h4 class="card-title mb-0">All Customer Payments</h4>
                     <form method="get" action="{{ route('customer-payments.create') }}" class="d-flex align-items-center">
+                        <input type="hidden" name="date_filter" value="{{ request('date_filter', 'all') }}">
+                        <input type="hidden" name="customer_id" value="{{ request('customer_id') }}">
+                        <input type="hidden" name="start_date" value="{{ request('start_date') }}">
+                        <input type="hidden" name="end_date" value="{{ request('end_date') }}">
                         <label class="mb-0 mr-2">Show</label>
                         <select name="row" class="form-control form-control-sm" style="width: auto;" onchange="this.form.submit()">
                             <option value="10" {{ request('row', 15) == 10 ? 'selected' : '' }}>10</option>
@@ -152,6 +210,12 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 (function() {
+    window.toggleCustomerPaymentCustomDates = function() {
+        var isCustom = document.getElementById('date_filter').value === 'custom';
+        document.getElementById('filter_start_date_group').style.display = isCustom ? 'block' : 'none';
+        document.getElementById('filter_end_date_group').style.display = isCustom ? 'block' : 'none';
+    };
+
     document.getElementById('payment_method').addEventListener('change', function() {
         var isBank = this.value === 'bank';
         document.getElementById('shop_bank_group').style.display = isBank ? 'flex' : 'none';
@@ -159,10 +223,10 @@
     });
 
     if (typeof $ !== 'undefined' && $.fn.select2) {
-        $('.customer-select').select2({
+        $('.payment-customer-select').select2({
             theme: 'bootstrap-5',
             placeholder: 'Search customer...',
-            allowClear: true,
+            allowClear: false,
             width: '100%',
             minimumResultsForSearch: 0
         }).on('select2:open', function() {
@@ -175,6 +239,14 @@
             requestAnimationFrame(function() { focusSearch(); });
             setTimeout(focusSearch, 50);
             setTimeout(focusSearch, 200);
+        });
+
+        $('.filter-customer-select').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'All customers',
+            allowClear: true,
+            width: '100%',
+            minimumResultsForSearch: 0
         });
     }
 

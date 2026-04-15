@@ -18,7 +18,7 @@ class CustomerPaymentController extends Controller
     /**
      * Show the form for recording a customer payment (reduces customer balance).
      */
-    public function create(LedgerBalanceService $balanceService)
+    public function create(Request $request, LedgerBalanceService $balanceService)
     {
         $authUser = auth()->user();
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
@@ -41,14 +41,82 @@ class CustomerPaymentController extends Controller
                 ->get();
         }
 
+        $row = (int) $request->input('row', 15);
+        if ($row < 1 || $row > 100) {
+            $row = 15;
+        }
+
+        $dateFilter = $request->input('date_filter', 'all');
+        $startDate = null;
+        $endDate = null;
+
+        if ($dateFilter !== 'all') {
+            switch ($dateFilter) {
+                case 'today':
+                    $startDate = Carbon::today();
+                    $endDate = Carbon::today();
+                    break;
+                case 'yesterday':
+                    $startDate = Carbon::yesterday();
+                    $endDate = Carbon::yesterday();
+                    break;
+                case 'this_week':
+                    $startDate = Carbon::now()->startOfWeek();
+                    $endDate = Carbon::now()->endOfWeek();
+                    break;
+                case 'last_week':
+                    $startDate = Carbon::now()->subWeek()->startOfWeek();
+                    $endDate = Carbon::now()->subWeek()->endOfWeek();
+                    break;
+                case 'this_month':
+                    $startDate = Carbon::now()->startOfMonth();
+                    $endDate = Carbon::now()->endOfMonth();
+                    break;
+                case 'last_month':
+                    $startDate = Carbon::now()->subMonth()->startOfMonth();
+                    $endDate = Carbon::now()->subMonth()->endOfMonth();
+                    break;
+                case 'this_year':
+                    $startDate = Carbon::now()->startOfYear();
+                    $endDate = Carbon::now()->endOfYear();
+                    break;
+                case 'last_year':
+                    $startDate = Carbon::now()->subYear()->startOfYear();
+                    $endDate = Carbon::now()->subYear()->endOfYear();
+                    break;
+                case 'custom':
+                    $startDateInput = $request->input('start_date');
+                    $endDateInput = $request->input('end_date');
+                    $startDate = $startDateInput ? Carbon::parse($startDateInput)->startOfDay() : Carbon::today()->startOfDay();
+                    $endDate = $endDateInput ? Carbon::parse($endDateInput)->endOfDay() : Carbon::today()->endOfDay();
+                    break;
+                default:
+                    $dateFilter = 'all';
+                    break;
+            }
+        }
+
         // All customer payments: rows with source_type = customer_payment and account_type = customer (one per payment)
         $paymentRowsQuery = AccountTransaction::query()
             ->where('source_type', AccountTransaction::SOURCE_CUSTOMER_PAYMENT)
             ->where('account_type', AccountTransaction::ACCOUNT_TYPE_CUSTOMER)
-            ->when($visibleShopIds->isNotEmpty(), fn ($q) => $q->whereIn('shop_id', $visibleShopIds))
+            ->when($visibleShopIds->isNotEmpty(), fn ($q) => $q->whereIn('shop_id', $visibleShopIds));
+
+        if ($request->filled('customer_id')) {
+            $paymentRowsQuery->where('account_ref_id', (int) $request->input('customer_id'));
+        }
+
+        if ($dateFilter !== 'all' && $startDate && $endDate) {
+            $paymentRowsQuery->whereBetween('transaction_date', [
+                $startDate->format('Y-m-d H:i:s'),
+                $endDate->format('Y-m-d H:i:s'),
+            ]);
+        }
+
+        $paymentRowsQuery
             ->orderBy('transaction_date', 'desc')
             ->orderBy('id', 'desc');
-        $paymentRows = $paymentRowsQuery->paginate(request('row', 15), ['*'], 'page');
+        $paymentRows = $paymentRowsQuery->paginate($row, ['*'], 'page');
 
         $customerIds = $paymentRows->pluck('account_ref_id')->unique()->filter()->values()->all();
         $customersById = $customerIds ? Customer::whereIn('id', $customerIds)->get()->keyBy('id') : collect();
@@ -85,6 +153,11 @@ class CustomerPaymentController extends Controller
             'customers' => $customers,
             'shopBanks' => $shopBanks,
             'payments' => $paymentRows,
+            'dateRange' => [
+                'date_filter' => $dateFilter,
+                'start_date' => $startDate?->format('Y-m-d'),
+                'end_date' => $endDate?->format('Y-m-d'),
+            ],
         ]);
     }
 
