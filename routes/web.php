@@ -65,8 +65,12 @@ Route::get('/', function () {
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth'])->name('dashboard');
     Route::get('/dashboard/kpis', [DashboardController::class, 'getKPIs'])->name('dashboard.kpis');
+    Route::get('/dashboard/activities', [DashboardController::class, 'getActivities'])->name('dashboard.activities');
+    Route::get('/dashboard/shop-performance', [DashboardController::class, 'getShopPerformance'])->name('dashboard.shop-performance');
+    Route::get('/dashboard/insights', [DashboardController::class, 'getInsights'])->name('dashboard.insights');
     Route::get('/super-admin/dashboard', [SuperAdminDashboardController::class, 'index'])->name('super-admin.dashboard');
     Route::get('/super-admin/dashboard/kpis', [SuperAdminDashboardController::class, 'kpis'])->name('super-admin.dashboard.kpis');
+    Route::get('/super-admin/dashboard/activities', [SuperAdminDashboardController::class, 'activities'])->name('super-admin.dashboard.activities');
 
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
     Route::get('/profile/edit', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -250,6 +254,13 @@ Route::middleware(['permission:purchases.menu'])->group(function () {
     Route::get('/purchases/{purchase_id}/content', [PurchaseController::class, 'showContent'])->name('purchases.showContent');
     Route::get('/purchases/{purchase_id}', [PurchaseController::class, 'show'])->name('purchases.show');
     Route::put('/purchases/update/status', [PurchaseController::class, 'updateStatus'])->name('purchases.updateStatus');
+
+    // Landed cost flow extensions (expenses + approve + receive)
+    Route::post('/purchases/{purchase_id}/expenses', [PurchaseController::class, 'storePurchaseExpense'])->name('purchases.expenses.store');
+    Route::put('/purchases/{purchase_id}/expenses/{activity_id}', [PurchaseController::class, 'updatePurchaseExpense'])->name('purchases.expenses.update');
+    Route::delete('/purchases/{purchase_id}/expenses/{activity_id}', [PurchaseController::class, 'deletePurchaseExpense'])->name('purchases.expenses.delete');
+    Route::post('/purchases/{purchase_id}/landed-cost/approve', [PurchaseController::class, 'approvePurchaseLandedCost'])->name('purchases.landed-cost.approve');
+
     Route::delete('/purchases/{purchase_id}', [PurchaseController::class, 'destroy'])->name('purchases.destroy');
     Route::get('/api/purchases/products/search', [PurchaseController::class, 'searchProducts'])->name('api.purchases.products.search');
 });

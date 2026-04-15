@@ -27,6 +27,8 @@ class Activity extends Model
         'date',
         'images',
         'activity_cost',
+        'purchase_id',
+        'allocation_locked',
         'payment_method',
         'shop_bank_id',
         'expense_id',
@@ -60,5 +62,10 @@ class Activity extends Model
     public function expense()
     {
         return $this->belongsTo(Expense::class, 'expense_id');
+    }
+
+    public function purchase()
+    {
+        return $this->belongsTo(Purchase::class, 'purchase_id', 'id');
     }
 }

@@ -6,6 +6,8 @@ use App\Http\Controllers\Dashboard\Traits\ReportTrait;
 use App\Models\Order;
 use App\Models\OrderDetails;
 use App\Models\Product;
+use App\Models\Purchase;
+use App\Models\Shop;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Support\ActiveShop;
@@ -116,6 +118,197 @@ class DashboardController extends Controller
             'net_profit_trend_pct'    => $trend($current['net_profit'], $previous['net_profit']),
             'profit_margin_trend_pct' => $previous['profit_margin'] !== null && $previous['profit_margin'] != 0 ? $trend($current['profit_margin'], $previous['profit_margin']) : null,
         ]);
+    }
+
+    public function getActivities(Request $request)
+    {
+        $orders = Order::withoutGlobalScopes()
+            ->latest()
+            ->limit(10)
+            ->get(['id', 'shop_id', 'total', 'created_at']);
+
+        $purchases = Purchase::withoutGlobalScopes()
+            ->latest()
+            ->limit(10)
+            ->get(['id', 'shop_id', 'total', 'created_at']);
+
+        $shopIds = $orders->pluck('shop_id')
+            ->merge($purchases->pluck('shop_id'))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $shopNames = Shop::withoutGlobalScopes()
+            ->whereIn('id', $shopIds)
+            ->pluck('name', 'id');
+
+        $activities = $orders->map(function ($order) use ($shopNames) {
+            return [
+                'type' => 'sale',
+                'shop' => $shopNames[$order->shop_id] ?? 'Unknown Shop',
+                'amount' => (float) $order->total,
+                'time' => optional($order->created_at)->toIso8601String(),
+            ];
+        })->merge(
+            $purchases->map(function ($purchase) use ($shopNames) {
+                return [
+                    'type' => 'purchase',
+                    'shop' => $shopNames[$purchase->shop_id] ?? 'Unknown Shop',
+                    'amount' => (float) $purchase->total,
+                    'time' => optional($purchase->created_at)->toIso8601String(),
+                ];
+            })
+        )->sortByDesc('time')
+            ->take(10)
+            ->values();
+
+        return response()->json($activities);
+    }
+
+    public function getShopPerformance(Request $request)
+    {
+        $request->validate([
+            'date_filter' => 'nullable|string|in:today,yesterday,this_week,last_week,this_month,last_month,this_year,last_year,custom',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'shops' => 'nullable',
+        ]);
+
+        $payload = $this->buildShopPerformanceRows($request);
+
+        return response()->json(['shops' => $payload]);
+    }
+
+    public function getInsights(Request $request)
+    {
+        $request->validate([
+            'date_filter' => 'nullable|string|in:today,yesterday,this_week,last_week,this_month,last_month,this_year,last_year,custom',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'shops' => 'nullable',
+        ]);
+
+        $rows = $this->buildShopPerformanceRows($request);
+        $default = ['name' => '-', 'value' => 0];
+
+        $topSelling = $rows->sortByDesc('sales')->first();
+        $highestProfit = $rows->sortByDesc('net')->first();
+        $bestMargin = $rows->sortByDesc('margin')->first();
+        $lowest = $rows->sortBy('net')->first();
+
+        return response()->json([
+            'top_selling' => $topSelling
+                ? ['name' => $topSelling['shop_name'], 'value' => $topSelling['sales']]
+                : $default,
+            'highest_profit' => $highestProfit
+                ? ['name' => $highestProfit['shop_name'], 'value' => $highestProfit['net']]
+                : $default,
+            'best_margin' => $bestMargin
+                ? ['name' => $bestMargin['shop_name'], 'value' => $bestMargin['margin']]
+                : $default,
+            'lowest' => $lowest
+                ? ['name' => $lowest['shop_name'], 'value' => $lowest['net']]
+                : $default,
+        ]);
+    }
+
+    private function parseShopIdsFromFilter($shopsInput)
+    {
+        $shopIds = collect();
+        if (is_array($shopsInput)) {
+            $shopIds = collect($shopsInput)->map(fn ($id) => (int) $id)->filter();
+        } elseif (is_string($shopsInput) && $shopsInput !== '' && $shopsInput !== 'all') {
+            $shopIds = collect([(int) $shopsInput])->filter();
+        } elseif (is_numeric($shopsInput)) {
+            $shopIds = collect([(int) $shopsInput])->filter();
+        }
+        return $shopIds->unique()->values();
+    }
+
+    private function buildShopPerformanceRows(Request $request)
+    {
+        $shopIds = $this->parseShopIdsFromFilter($request->input('shops'));
+        $dateRange = $this->getDateRange($request);
+        $startDate = $dateRange['start_date'];
+        $endDate = $dateRange['end_date'];
+
+        $ordersAggQuery = Order::withoutGlobalScopes()
+            ->selectRaw('shop_id, COALESCE(SUM(total), 0) as sales, COUNT(*) as orders_count, COALESCE(SUM(invoice_discount), 0) as invoice_discount')
+            ->whereNotNull('shop_id')
+            ->groupBy('shop_id');
+
+        if ($startDate) {
+            $ordersAggQuery->whereDate('order_date', '>=', $startDate);
+        }
+        if ($endDate) {
+            $ordersAggQuery->whereDate('order_date', '<=', $endDate);
+        }
+        if ($shopIds->isNotEmpty()) {
+            $ordersAggQuery->whereIn('shop_id', $shopIds);
+        }
+
+        $ordersAgg = $ordersAggQuery->get()->keyBy('shop_id');
+
+        $filteredOrdersForJoin = Order::withoutGlobalScopes()
+            ->select(['id', 'shop_id'])
+            ->whereNotNull('shop_id');
+
+        if ($startDate) {
+            $filteredOrdersForJoin->whereDate('order_date', '>=', $startDate);
+        }
+        if ($endDate) {
+            $filteredOrdersForJoin->whereDate('order_date', '<=', $endDate);
+        }
+        if ($shopIds->isNotEmpty()) {
+            $filteredOrdersForJoin->whereIn('shop_id', $shopIds);
+        }
+
+        $detailAgg = OrderDetails::withoutGlobalScopes()
+            ->joinSub($filteredOrdersForJoin, 'fo', function ($join) {
+                $join->on('order_details.order_id', '=', 'fo.id');
+            })
+            ->selectRaw('
+                fo.shop_id as shop_id,
+                COALESCE(SUM(order_details.quantity * COALESCE(NULLIF(order_details.cost_per_unit, 0), 0)), 0) as cogs,
+                COALESCE(SUM(COALESCE(order_details.item_discount, 0)), 0) as line_discount
+            ')
+            ->groupBy('fo.shop_id')
+            ->get()
+            ->keyBy('shop_id');
+
+        $shopsQuery = Shop::withoutGlobalScopes()->select(['id', 'name']);
+        if ($shopIds->isNotEmpty()) {
+            $shopsQuery->whereIn('id', $shopIds);
+        }
+        $shops = $shopsQuery->orderBy('name')->get();
+
+        return $shops->map(function ($shop) use ($ordersAgg, $detailAgg) {
+            $orderData = $ordersAgg->get($shop->id);
+            $detailData = $detailAgg->get($shop->id);
+
+            $sales = (float) ($orderData->sales ?? 0);
+            $orders = (int) ($orderData->orders_count ?? 0);
+            $invoiceDiscount = (float) ($orderData->invoice_discount ?? 0);
+            $lineDiscount = (float) ($detailData->line_discount ?? 0);
+            $cogs = (float) ($detailData->cogs ?? 0);
+            $gross = $sales - $cogs;
+            $discount = $invoiceDiscount + $lineDiscount;
+            $net = $gross - $discount;
+            $margin = $sales > 0 ? round(($net / $sales) * 100, 2) : 0;
+
+            return [
+                'shop_id' => (int) $shop->id,
+                'shop_name' => $shop->name,
+                'sales' => round($sales, 2),
+                'orders' => $orders,
+                'cogs' => round($cogs, 2),
+                'gross' => round($gross, 2),
+                'discount' => round($discount, 2),
+                'net' => round($net, 2),
+                'net_profit' => round($net, 2),
+                'margin' => $margin,
+            ];
+        })->values();
     }
 
     /**

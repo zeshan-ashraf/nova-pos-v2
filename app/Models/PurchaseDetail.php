@@ -15,6 +15,9 @@ class PurchaseDetail extends Model
         'product_id',
         'quantity',
         'unitcost',
+        'allocated_expense',
+        'landed_unit_cost',
+        'landed_total',
         'item_discount',
         'total',
     ];
