@@ -9,6 +9,42 @@
     $isInternalPurchase = $isInternalPurchase ?? false;
 @endphp
 <div class="container-fluid purchase-detail-content">
+    <style>
+        .purchase-detail-content .themed-card {
+            border: 0;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+        }
+        .purchase-detail-content .themed-card .card-header {
+            border-bottom: 0;
+            padding: 0.9rem 1.25rem;
+        }
+        .purchase-detail-content .purchase-expenses-card .card-header,
+        .purchase-detail-content .landed-cost-card .card-header {
+            color: #fff;
+        }
+        .purchase-detail-content .landed-cost-card .card-header {
+            background-color: #E08DB4;
+        }
+        .purchase-detail-content .section-subtitle {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-top: 2px;
+        }
+        .purchase-detail-content .themed-table thead {
+            background-color: #f8fafc;
+        }
+        .purchase-detail-content .themed-table thead th {
+            color: #334155;
+            letter-spacing: 0.03em;
+            font-weight: 600;
+            border-top: 0;
+        }
+        .purchase-detail-content .themed-table tbody tr:hover {
+            background-color: #f8fbff;
+        }
+    </style>
     <div class="row">
         <div class="col-lg-12">
             <div class="card">
@@ -145,9 +181,10 @@
 
         @if (!$in_modal && !$isInternalPurchase)
             <div class="col-lg-12 mt-3">
-                <div class="card">
-                    <div class="card-header">
-                        <h4 class="card-title mb-0">Purchase Expenses</h4>
+                <div class="card themed-card purchase-expenses-card">
+                    <div class="card-header bg-primary">
+                        <h4 class="card-title mb-0 text-white">Purchase Expenses</h4>
+                        <div class="section-subtitle text-white">Track and adjust additional costs for this purchase</div>
                     </div>
                     <div class="card-body">
                         @php
@@ -157,104 +194,6 @@
                         @if ($purchaseExpenses->isEmpty())
                             <div class="text-muted mb-3">No purchase expenses added yet.</div>
                         @endif
-
-                        <div class="table-responsive rounded mb-3">
-                            <table class="table mb-0">
-                                <thead class="bg-white text-uppercase">
-                                    <tr class="ligth ligth-data">
-                                        <th>No.</th>
-                                        <th>Expense</th>
-                                        <th>Amount</th>
-                                        <th>Date</th>
-                                        <th>Description</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="ligth-body">
-                                    @foreach ($purchaseExpenses as $expenseActivity)
-                                        <tr>
-                                            <td>{{ $loop->iteration }}</td>
-                                            <td>
-                                                {{ $expenseActivity->expense->expense_title ?? 'N/A' }}
-                                            </td>
-                                            <td>{{ number_format($expenseActivity->activity_cost ?? 0, 2) }}</td>
-                                            <td>{{ $expenseActivity->date }}</td>
-                                            <td>{{ $expenseActivity->description ?? '-' }}</td>
-                                            <td>
-                                                @if ($canEditExpenses)
-                                                    <div class="d-flex flex-wrap align-items-center" style="gap: 8px;">
-                                                        <form
-                                                            method="POST"
-                                                            action="{{ route('purchases.expenses.update', [$purchase->id, $expenseActivity->id]) }}"
-                                                            class="d-flex flex-wrap align-items-center"
-                                                            style="gap: 8px;"
-                                                        >
-                                                            @csrf
-                                                            @method('PUT')
-
-                                                            <select class="form-control form-control-sm" name="expense_id" style="min-width: 160px;">
-                                                                @foreach ($expenseCategories as $category)
-                                                                    <option
-                                                                        value="{{ $category->id }}"
-                                                                        {{ (string) $expenseActivity->expense_id === (string) $category->id ? 'selected' : '' }}
-                                                                    >
-                                                                        {{ $category->expense_title }}
-                                                                    </option>
-                                                                @endforeach
-                                                            </select>
-
-                                                            <input
-                                                                type="number"
-                                                                step="0.01"
-                                                                min="0"
-                                                                class="form-control form-control-sm"
-                                                                name="activity_cost"
-                                                                value="{{ $expenseActivity->activity_cost ?? 0 }}"
-                                                                style="width: 120px;"
-                                                            />
-
-                                                            <input
-                                                                type="date"
-                                                                class="form-control form-control-sm"
-                                                                name="date"
-                                                                value="{{ $expenseActivity->date }}"
-                                                                style="width: 160px;"
-                                                            />
-
-                                                            <input
-                                                                type="text"
-                                                                class="form-control form-control-sm"
-                                                                name="description"
-                                                                value="{{ $expenseActivity->description ?? '' }}"
-                                                                style="width: 200px;"
-                                                            />
-
-                                                            <button type="submit" class="btn btn-sm btn-primary">
-                                                                Update
-                                                            </button>
-                                                        </form>
-
-                                                        <form method="POST" action="{{ route('purchases.expenses.delete', [$purchase->id, $expenseActivity->id]) }}">
-                                                            @csrf
-                                                            @method('DELETE')
-                                                            <button
-                                                                type="submit"
-                                                                class="btn btn-sm btn-danger"
-                                                                onclick="return confirm('Delete this expense?')"
-                                                            >
-                                                                Delete
-                                                            </button>
-                                                        </form>
-                                                    </div>
-                                                @else
-                                                    <span class="badge badge-secondary">Locked</span>
-                                                @endif
-                                            </td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
 
                         @if ($canEditExpenses)
                             <form
@@ -297,14 +236,147 @@
                                 <button type="submit" class="btn btn-success mt-2">Add Expense</button>
                             </form>
                         @endif
+
+                        <div class="table-responsive rounded mb-3">
+                            <table class="table mb-0 themed-table">
+                                <thead class="text-uppercase">
+                                    <tr class="ligth ligth-data">
+                                        <th>No.</th>
+                                        <th>Expense</th>
+                                        <th>Amount</th>
+                                        <th>Date</th>
+                                        <th>Description</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="ligth-body">
+                                    @foreach ($purchaseExpenses as $expenseActivity)
+                                        <tr>
+                                            <td>{{ $loop->iteration }}</td>
+                                            <td>
+                                                {{ $expenseActivity->expense->expense_title ?? 'N/A' }}
+                                            </td>
+                                            <td>{{ number_format($expenseActivity->activity_cost ?? 0, 2) }}</td>
+                                            <td>{{ $expenseActivity->date }}</td>
+                                            <td>{{ $expenseActivity->description ?? '-' }}</td>
+                                            <td>
+                                                @if ($canEditExpenses)
+                                                    <div class="d-flex flex-wrap align-items-center" style="gap: 8px;">
+                                                        <button
+                                                            type="button"
+                                                            class="btn btn-sm btn-primary js-edit-expense-btn"
+                                                            data-toggle="modal"
+                                                            data-target="#editPurchaseExpenseModal"
+                                                            data-action="{{ route('purchases.expenses.update', [$purchase->id, $expenseActivity->id]) }}"
+                                                            data-expense-id="{{ $expenseActivity->expense_id }}"
+                                                            data-amount="{{ number_format((float) ($expenseActivity->activity_cost ?? 0), 2, '.', '') }}"
+                                                            data-date="{{ $expenseActivity->date }}"
+                                                            data-description="{{ e($expenseActivity->description ?? '') }}"
+                                                        >
+                                                            Update
+                                                        </button>
+
+                                                        <form method="POST" action="{{ route('purchases.expenses.delete', [$purchase->id, $expenseActivity->id]) }}">
+                                                            @csrf
+                                                            @method('DELETE')
+                                                            <button
+                                                                type="button"
+                                                                class="btn btn-sm btn-danger"
+                                                                data-toggle="modal"
+                                                                data-target="#deletePurchaseExpenseModal"
+                                                                data-action="{{ route('purchases.expenses.delete', [$purchase->id, $expenseActivity->id]) }}"
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                @else
+                                                    <span class="badge badge-secondary">Locked</span>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+
+                        @if ($canEditExpenses)
+                            <div class="modal fade" id="editPurchaseExpenseModal" tabindex="-1" role="dialog" aria-labelledby="editPurchaseExpenseModalLabel" aria-hidden="true">
+                                <div class="modal-dialog" role="document">
+                                    <div class="modal-content">
+                                        <form method="POST" id="editPurchaseExpenseForm">
+                                            @csrf
+                                            @method('PUT')
+                                            <div class="modal-header bg-primary">
+                                                <h5 class="modal-title text-white" id="editPurchaseExpenseModalLabel">Update Expense</h5>
+                                                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                                                    <span aria-hidden="true">&times;</span>
+                                                </button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <div class="form-group">
+                                                    <label for="edit_expense_id">Expense</label>
+                                                    <select class="form-control" id="edit_expense_id" name="expense_id" required>
+                                                        @foreach ($expenseCategories as $category)
+                                                            <option value="{{ $category->id }}">{{ $category->expense_title }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="edit_activity_cost">Amount</label>
+                                                    <input type="number" step="0.01" min="0" class="form-control" id="edit_activity_cost" name="activity_cost" required>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="edit_date">Date</label>
+                                                    <input type="date" class="form-control" id="edit_date" name="date" required>
+                                                </div>
+                                                <div class="form-group mb-0">
+                                                    <label for="edit_description">Description (optional)</label>
+                                                    <input type="text" class="form-control" id="edit_description" name="description">
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                                                <button type="submit" class="btn btn-primary">Update Expense</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="modal fade" id="deletePurchaseExpenseModal" tabindex="-1" role="dialog" aria-labelledby="deletePurchaseExpenseModalLabel" aria-hidden="true">
+                                <div class="modal-dialog modal-dialog-centered" role="document">
+                                    <div class="modal-content">
+                                        <form method="POST" id="deletePurchaseExpenseForm">
+                                            @csrf
+                                            @method('DELETE')
+                                            <div class="modal-header bg-danger">
+                                                <h5 class="modal-title text-white" id="deletePurchaseExpenseModalLabel">Confirm Delete</h5>
+                                                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                                                    <span aria-hidden="true">&times;</span>
+                                                </button>
+                                            </div>
+                                            <div class="modal-body">
+                                                Delete this expense?
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                                                <button type="submit" class="btn btn-danger">Delete</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        @endif
                     </div>
                 </div>
             </div>
 
             <div class="col-lg-12 mt-3">
-                <div class="card">
+                <div class="card themed-card landed-cost-card">
                     <div class="card-header">
-                        <h4 class="card-title mb-0">Landed Cost Review</h4>
+                        <h4 class="card-title mb-0 text-white">Landed Cost Review</h4>
+                        <div class="section-subtitle text-white">Review allocation before approving landed unit cost</div>
                     </div>
                     <div class="card-body">
                         @php
@@ -327,8 +399,8 @@
                             @csrf
 
                             <div class="table-responsive rounded mb-3">
-                                <table class="table mb-0" id="landedCostTable">
-                                    <thead class="bg-white text-uppercase">
+                                <table class="table mb-0 themed-table" id="landedCostTable">
+                                    <thead class="text-uppercase">
                                         <tr class="ligth ligth-data">
                                             <th>Product</th>
                                             <th>Qty</th>
@@ -357,7 +429,10 @@
 
                                             <tr>
                                                 <td>
-                                                    {{ $detail->product->product_name ?? 'N/A' }}
+                                                    <div>{{ $detail->product->product_name ?? 'N/A' }}</div>
+                                                    <div class="text-muted small">
+                                                        {{ $detail->product->product_code ?? '' }}
+                                                    </div>
                                                     <input type="hidden" name="purchase_detail_ids[]" value="{{ $detail->id }}">
                                                 </td>
                                                 <td>{{ $qty }}</td>
@@ -411,6 +486,30 @@
 
             <script>
                 (function() {
+                    document.addEventListener('click', function(e) {
+                        const trigger = e.target.closest('.js-edit-expense-btn');
+                        if (!trigger) return;
+
+                        const editForm = document.getElementById('editPurchaseExpenseForm');
+                        if (!editForm) return;
+
+                        editForm.setAttribute('action', trigger.getAttribute('data-action') || '');
+                        document.getElementById('edit_expense_id').value = trigger.getAttribute('data-expense-id') || '';
+                        document.getElementById('edit_activity_cost').value = trigger.getAttribute('data-amount') || '0';
+                        document.getElementById('edit_date').value = trigger.getAttribute('data-date') || '';
+                        document.getElementById('edit_description').value = trigger.getAttribute('data-description') || '';
+                    });
+
+                    document.addEventListener('click', function(e) {
+                        const deleteTrigger = e.target.closest('[data-target="#deletePurchaseExpenseModal"]');
+                        if (!deleteTrigger) return;
+
+                        const deleteForm = document.getElementById('deletePurchaseExpenseForm');
+                        if (!deleteForm) return;
+
+                        deleteForm.setAttribute('action', deleteTrigger.getAttribute('data-action') || '');
+                    });
+
                     function updateRow(input) {
                         const qty = parseFloat(input.dataset.qty) || 0;
                         const unitCost = parseFloat(input.dataset.unitcost) || 0;

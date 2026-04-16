@@ -858,8 +858,7 @@
             return false;
         }
 
-        if (!validateInvoiceProductUnitPrices()) {
-            showInvoiceValidationModal('Unit price must be greater than zero for each selected product.');
+        if (!validateInvoiceProductRowsStrict()) {
             return false;
         }
 
@@ -1360,6 +1359,80 @@
         return true;
     }
 
+    /**
+     * Strict row validation:
+     * Every existing invoice row must have:
+     * - Product (product_id)
+     * - Product code (product_code)
+     * - Quantity (> 0)
+     * - Unit Price (> 0)
+     *
+     * If a row is incomplete/empty, submission is blocked until user removes it
+     * using the delete row button.
+     */
+    function validateInvoiceProductRowsStrict() {
+        const $rows = $('#productTableBody tr.product-row');
+        const invalidRows = [];
+
+        // Clear previous row highlights
+        $rows.removeClass('product-row-error');
+        $rows.find('.unit-price, .quantity').removeClass('is-invalid');
+        $rows.find('.product-select').removeClass('is-invalid');
+
+        $rows.each(function() {
+            const $row = $(this);
+            const rowIndexRaw = $row.data('row-index');
+            const rowIndex = rowIndexRaw === undefined || rowIndexRaw === null ? null : parseInt(rowIndexRaw, 10);
+            const displayRow = rowIndex === null || Number.isNaN(rowIndex) ? '' : (rowIndex + 1);
+
+            const productId = ($row.find('.product-select').val() || '').toString().trim();
+            const productCode = ($row.find('.product-code-display').text() || '').toString().trim();
+            const quantityRaw = ($row.find('.quantity').val() || '').toString().trim();
+            const unitPriceRaw = ($row.find('.unit-price').val() || '').toString().trim();
+
+            const quantity = parseFloat(quantityRaw);
+            const unitPrice = parseFloat(unitPriceRaw);
+
+            const missingParts = [];
+            if (!productId) missingParts.push('Product');
+            if (!productCode || productCode === '-') missingParts.push('Code');
+            if (!quantityRaw || Number.isNaN(quantity) || quantity <= 0) missingParts.push('Quantity');
+            if (!unitPriceRaw || Number.isNaN(unitPrice) || unitPrice <= 0) missingParts.push('Unit Price');
+
+            if (missingParts.length > 0) {
+                invalidRows.push({ displayRow, missingParts });
+                $row.addClass('product-row-error');
+                $row.find('.unit-price, .quantity').addClass('is-invalid');
+                $row.find('.product-select').addClass('is-invalid');
+            }
+        });
+
+        if (invalidRows.length > 0) {
+            const rowList = invalidRows
+                .map(r => (r.displayRow !== '' ? r.displayRow : '—'))
+                .filter(Boolean)
+                .join(', ');
+
+            showInvoiceValidationModal(
+                `Empty/invalid rows detected (${rowList}). Please remove them using the delete button, or complete Product, Code, Quantity (>0) and Unit Price (>0) for each row.`
+            );
+
+            // Focus first invalid row
+            const firstInvalidRow = invalidRows[0];
+            if (firstInvalidRow && firstInvalidRow.displayRow !== '') {
+                const $first = $rows.filter(function() {
+                    const idx = parseInt($(this).data('row-index'), 10);
+                    return idx + 1 === firstInvalidRow.displayRow;
+                }).first();
+                const $focusEl = $first.find('.product-select').get(0) || $first.find('.unit-price').get(0);
+                if ($focusEl) $focusEl.focus();
+            }
+            return false;
+        }
+
+        return true;
+    }
+
     function showInvoiceValidationModal(message) {
         var text = message || 'Please check your entries.';
         $('#invoiceValidationModalMessage').text(text);
@@ -1856,7 +1929,7 @@
             console.log('Customer ID:', customerId);
             if (!customerId) {
                 e.preventDefault();
-                alert('Please select a customer');
+                showInvoiceValidationModal('Please select a customer');
                 return false;
             }
         } else if (selectedType === 'shop') {
@@ -1874,7 +1947,7 @@
         console.log('Customer ID:', customerId);
         if (!customerId) {
             e.preventDefault();
-            alert('Please select a customer');
+            showInvoiceValidationModal('Please select a customer');
             return false;
         }
         @endif
@@ -1887,25 +1960,8 @@
             return false;
         }
 
-        let hasProducts = false;
-        $('.product-select').each(function() {
-            const productId = $(this).val();
-            if (productId) {
-                console.log('Product found:', productId);
-                hasProducts = true;
-                return false;
-            }
-        });
-
-        if (!hasProducts) {
+        if (!validateInvoiceProductRowsStrict()) {
             e.preventDefault();
-            alert('Please add at least one product');
-            return false;
-        }
-
-        if (!validateInvoiceProductUnitPrices()) {
-            e.preventDefault();
-            showInvoiceValidationModal('Unit price must be greater than zero for each selected product.');
             return false;
         }
 
@@ -2018,8 +2074,7 @@
                 return false;
             }
 
-            if (!validateInvoiceProductUnitPrices()) {
-                showInvoiceValidationModal('Unit price must be greater than zero for each selected product.');
+            if (!validateInvoiceProductRowsStrict()) {
                 return false;
             }
 
