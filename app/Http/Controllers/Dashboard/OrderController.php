@@ -113,6 +113,16 @@ class OrderController extends Controller
             $ordersQuery->where('customer_id', $request->input('customer_id'));
         }
 
+        // Product filter: orders having selected product in order_details
+        $selectedProduct = null;
+        if ($request->filled('product_id')) {
+            $productId = (int) $request->input('product_id');
+            $ordersQuery->whereHas('orderDetails', function ($q) use ($productId) {
+                $q->where('product_id', $productId);
+            });
+            $selectedProduct = Product::withoutGlobalScope('shop')->find($productId);
+        }
+
         // General search (existing behavior)
         $search = $request->input('search');
         if ($search !== null && $search !== '') {
@@ -181,6 +191,7 @@ class OrderController extends Controller
             'dateRange' => $dateRange,
             'customers' => $customers,
             'orderStats' => $orderStats,
+            'selectedProduct' => $selectedProduct,
         ];
         if ($debugSql !== null) {
             $viewData['debugSql'] = $debugSql;
@@ -1253,20 +1264,16 @@ class OrderController extends Controller
         $search = $request->get('q', '');
         $page = $request->get('page', 1);
         $authUser = auth()->user();
-        
-        // For invoice/create page only: show products from user's shop_id only (exclude child shops)
-        $targetShopId = $authUser->shop_id;
+        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
 
         // Build base query with status and shop filtering (no selling_price restriction; null → 0 as unit price)
         $productsQuery = Product::where('status', 'active');
         
-        // Apply shop filtering - only user's specific shop_id (exclude child shops)
-        if ($targetShopId) {
-            // Only show products from the user's specific shop_id, not child shops
-            $productsQuery->where('shop_id', $targetShopId);
+        // Apply shop filtering - match user's visible shops (same scope as orders list)
+        if ($visibleShopIds->isNotEmpty()) {
+            $productsQuery->whereIn('shop_id', $visibleShopIds);
         } else {
-            // If no shop_id available, show no products
-            $productsQuery->whereRaw('1 = 0'); // Always false condition
+            $productsQuery->whereRaw('1 = 0'); // No visible shops
         }
         
         // Apply search filter (only if search term is provided)

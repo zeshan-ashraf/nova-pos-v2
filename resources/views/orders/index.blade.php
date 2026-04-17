@@ -63,9 +63,9 @@
                     <form action="{{ route('order.index') }}" method="get" id="orders-filter-form">
                         <input type="hidden" name="row" value="{{ request('row', '50') }}">
                         <input type="hidden" name="search" value="{{ request('search') }}">
-                        {{-- Row 1: Date filter, Customer, Invoice No --}}
+                        {{-- Row 1: Date filter, Customer, Product, Invoice No --}}
                         <div class="row align-items-end mb-3">
-                            <div class="col-md-4 mb-2 mb-md-0">
+                            <div class="col-md-3 mb-2 mb-md-0">
                                 <label for="date_filter" class="form-label">Date Filter</label>
                                 <select class="form-control" name="date_filter" id="date_filter" onchange="toggleOrderCustomDates()">
                                     <option value="all" {{ $dateFilter == 'all' ? 'selected' : '' }}>All</option>
@@ -80,7 +80,7 @@
                                     <option value="custom" {{ $dateFilter == 'custom' ? 'selected' : '' }}>Custom Range</option>
                                 </select>
                             </div>
-                            <div class="col-md-4 mb-2 mb-md-0">
+                            <div class="col-md-3 mb-2 mb-md-0">
                                 <label for="customer_id" class="form-label">Customer</label>
                                 <select name="customer_id" id="customer_id" class="form-control customer-select" style="width: 100%;">
                                     <option value="">— All —</option>
@@ -89,7 +89,18 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="col-md-4 mb-2 mb-md-0">
+                            <div class="col-md-3 mb-2 mb-md-0">
+                                <label for="product_id" class="form-label">Product</label>
+                                <select name="product_id" id="product_id" class="form-control product-filter-select" style="width: 100%;">
+                                    <option value="">— All —</option>
+                                    @if (!empty($selectedProduct))
+                                        <option value="{{ $selectedProduct->id }}" selected>
+                                            {{ ($selectedProduct->product_code ? $selectedProduct->product_code . ' - ' : '') . ($selectedProduct->product_name ?? ('Product #' . $selectedProduct->id)) }}
+                                        </option>
+                                    @endif
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-2 mb-md-0">
                                 <label for="invoice_no" class="form-label">Invoice No</label>
                                 <input type="text" class="form-control" name="invoice_no" id="invoice_no" placeholder="Partial match" value="{{ request('invoice_no') }}">
                             </div>
@@ -461,6 +472,35 @@ function formatCurrency(amount) {
             placeholder: '— All —',
             allowClear: true,
             width: '100%'
+        });
+
+        $('.product-filter-select').select2({
+            theme: 'bootstrap-5',
+            placeholder: '— All —',
+            allowClear: true,
+            width: '100%',
+            minimumInputLength: 2,
+            ajax: {
+                url: '{{ route("api.products.search") }}',
+                dataType: 'json',
+                delay: 250,
+                data: function (params) {
+                    return {
+                        q: params.term,
+                        page: params.page || 1
+                    };
+                },
+                processResults: function (data, params) {
+                    params.page = params.page || 1;
+                    return {
+                        results: (data.results || []).map(function(item) {
+                            return { id: item.id, text: item.text };
+                        }),
+                        pagination: data.pagination || { more: false }
+                    };
+                },
+                cache: true
+            }
         });
     });
 </script>
