@@ -32,18 +32,6 @@ class PurchaseApprovalService
                 return; // Idempotent
             }
 
-            $totalExpense = (float) Activity::query()
-                ->where('purchase_id', $purchaseId)
-                ->sum('activity_cost');
-
-            $hasAnyExpenses = Activity::query()
-                ->where('purchase_id', $purchaseId)
-                ->count() > 0;
-
-            if (!$hasAnyExpenses || $totalExpense <= 0) {
-                throw new \RuntimeException('Cannot approve: no purchase expenses calculated.');
-            }
-
             $details = PurchaseDetail::query()
                 ->where('purchase_id', $purchaseId)
                 ->get(['id', 'product_id', 'quantity', 'unitcost', 'landed_unit_cost']);

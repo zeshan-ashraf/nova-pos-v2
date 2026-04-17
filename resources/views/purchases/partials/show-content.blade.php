@@ -183,8 +183,7 @@
             <div class="col-lg-12 mt-3">
                 <div class="card themed-card purchase-expenses-card">
                     <div class="card-header bg-primary">
-                        <h4 class="card-title mb-0 text-white">Purchase Expenses</h4>
-                        <div class="section-subtitle text-white">Track and adjust additional costs for this purchase</div>
+                        <h4 class="card-title mb-0 text-white">Purchase Expenses <small>(Track and adjust additional costs for this purchase)</small></h4>
                     </div>
                     <div class="card-body">
                         @php
@@ -246,7 +245,7 @@
                                         <th>Amount</th>
                                         <th>Date</th>
                                         <th>Description</th>
-                                        <th>Actions</th>
+                                        <th class="text-center">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody class="ligth-body">
@@ -259,9 +258,9 @@
                                             <td>{{ number_format($expenseActivity->activity_cost ?? 0, 2) }}</td>
                                             <td>{{ $expenseActivity->date }}</td>
                                             <td>{{ $expenseActivity->description ?? '-' }}</td>
-                                            <td>
+                                            <td class="text-center align-middle">
                                                 @if ($canEditExpenses)
-                                                    <div class="d-flex flex-wrap align-items-center" style="gap: 8px;">
+                                                    <div class="d-flex flex-wrap align-items-center justify-content-center" style="gap: 8px;">
                                                         <button
                                                             type="button"
                                                             class="btn btn-sm btn-primary js-edit-expense-btn"
@@ -372,11 +371,10 @@
                 </div>
             </div>
 
-            <div class="col-lg-12 mt-3">
+            <div class="col-lg-12 mt-3" style="margin-bottom: 30px;">
                 <div class="card themed-card landed-cost-card">
                     <div class="card-header">
-                        <h4 class="card-title mb-0 text-white">Landed Cost Review</h4>
-                        <div class="section-subtitle text-white">Review allocation before approving landed unit cost</div>
+                        <h4 class="card-title mb-0 text-white">Landed Cost Review <small>(Review allocation before approving landed unit cost)</small></h4>
                     </div>
                     <div class="card-body">
                         @php
@@ -386,12 +384,12 @@
                                 && (($purchase->landed_cost_status ?? 'pending') !== 'approved');
 
                             $totalExpense = $purchaseExpenses->sum(fn ($a) => (float) ($a->activity_cost ?? 0));
-                            $canApprove = $canEditLandedCost && $totalExpense > 0;
+                            $canApprove = $canEditLandedCost;
                         @endphp
 
                         @if ($totalExpense <= 0)
                             <div class="text-muted mb-2">
-                                Add expenses to calculate landed cost before approving.
+                                No expenses added. You can approve without expense.
                             </div>
                         @endif
 
@@ -469,13 +467,13 @@
                             </div>
 
                             @if ($canApprove)
-                                <button type="submit" class="btn btn-primary">Approve Landed Cost</button>
+                                <button type="submit" class="btn btn-primary">
+                                    {{ $totalExpense <= 0 ? 'Approve without expense' : 'Approve Landed Cost' }}
+                                </button>
                             @else
                                 <div class="text-muted">
                                     {{
-                                        ($totalExpense <= 0)
-                                            ? 'Add expenses to calculate landed cost before approving.'
-                                            : 'Landed cost editing disabled or already approved.'
+                                        'Landed cost editing disabled or already approved.'
                                     }}
                                 </div>
                             @endif

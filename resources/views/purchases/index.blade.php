@@ -105,6 +105,11 @@
                                     <a class="btn btn-info mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Details" href="{{ route('purchases.show', $purchase->id) }}">
                                         Details
                                     </a>
+                                    @if(($purchase->landed_cost_status ?? 'pending') !== 'approved')
+                                    <a class="btn btn-warning mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Edit" href="{{ route('purchases.edit', $purchase->id) }}">
+                                        Edit
+                                    </a>
+                                    @endif
                                     @if(auth()->user()->can('purchases.delete'))
                                     <button type="button" class="btn btn-danger mr-2 border-none" data-toggle="tooltip" data-placement="top" title="" data-original-title="Delete" onclick="showDeleteModal({{ $purchase->id }})">
                                         <i class="ri-delete-bin-line mr-0"></i>

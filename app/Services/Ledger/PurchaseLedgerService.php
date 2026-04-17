@@ -232,6 +232,7 @@ class PurchaseLedgerService
     {
         $paymentLogIds = $purchase->paymentLogs()->pluck('id')->toArray();
 
+        // Soft-delete so historical rows remain in DB but balances exclude them (SoftDeletes on AccountTransaction).
         AccountTransaction::query()
             ->where('shop_id', $purchase->shop_id)
             ->where(function ($q) use ($purchase, $paymentLogIds) {
@@ -247,6 +248,43 @@ class PurchaseLedgerService
                 }
             })
             ->delete();
+    }
+
+    /**
+     * Recreate all purchase-related ledger rows after totals/payments/details change.
+     *
+     * We reverse first (see reverseForPurchase) because purchase debit, supplier AP, and cash/bank lines
+     * are keyed by amounts derived from the purchase; updating in place would risk duplicates or drift.
+     * Order: purchase debit → supplier credit (due) → first payment uses source "purchase"; further
+     * payments use source "purchase_payment" (matches store + later payment flows).
+     */
+    public function createForPurchase(Purchase $purchase): void
+    {
+        $purchase->loadMissing('paymentLogs');
+        $purchase->refresh();
+
+        $this->recordPurchaseDebit($purchase);
+        $this->recordPurchaseSupplierCredit($purchase);
+
+        $logs = $purchase->paymentLogs()->orderBy('id')->get();
+        $transactionDate = $purchase->purchase_date
+            ? Carbon::parse($purchase->purchase_date)->toDateString()
+            : now()->toDateString();
+
+        foreach ($logs as $index => $log) {
+            $amount = (float) ($log->amount_paid ?? 0);
+            if ($amount <= 0) {
+                continue;
+            }
+            if ($index === 0) {
+                $shopBankId = $log->shop_bank_id !== null && $log->shop_bank_id !== ''
+                    ? (string) $log->shop_bank_id
+                    : null;
+                $this->recordPurchasePayment($purchase, $amount, $shopBankId);
+            } else {
+                $this->recordPurchasePaymentLog($log, $transactionDate);
+            }
+        }
     }
 
     /** Guard: only one bank/cash entry per purchase (source_type=purchase, source_id=purchase.id). */

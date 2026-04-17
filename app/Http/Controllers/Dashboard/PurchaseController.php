@@ -24,6 +24,7 @@ use App\Services\Purchase\PurchaseApprovalService;
 use App\Services\Purchase\PurchaseExpenseService;
 use App\Services\Purchase\PurchaseLandedCostService;
 use App\Services\Purchase\PurchaseReceiveService;
+use App\Services\Purchase\PurchaseUpdateService;
 
 class PurchaseController extends Controller
 {
@@ -334,6 +335,107 @@ class PurchaseController extends Controller
             return back()->withErrors(['error' => 'Failed to create purchase: ' . $e->getMessage()])
                 ->withInput();
         }
+    }
+
+    /**
+     * Show the form for editing a purchase (only while landed cost is not approved).
+     */
+    public function edit(int $purchase_id)
+    {
+        $purchase = Purchase::with(['supplier', 'shop.banks'])->findOrFail($purchase_id);
+        $this->ensureShopAccess($purchase);
+
+        if (($purchase->landed_cost_status ?? '') === 'approved') {
+            abort(403, 'Approved purchase cannot be edited');
+        }
+        if (($purchase->purchase_status ?? '') === 'complete') {
+            abort(403, 'Cannot edit purchase after it has been received.');
+        }
+        if ((bool) ($purchase->is_system_generated ?? false)) {
+            abort(403, 'System-generated purchase cannot be edited here.');
+        }
+
+        $authUser = auth()->user();
+        $targetShopId = $authUser->shop_id;
+
+        $suppliersQuery = Supplier::query();
+        $productsQuery = Product::where(function ($query) {
+            $query->where('status', 'valid')
+                ->orWhere('status', 'active')
+                ->orWhere('status', 'ordered');
+        });
+
+        $shopBanks = [];
+        if ($targetShopId) {
+            $shopBanks = DB::table('bank_shop')
+                ->where('bank_shop.shop_id', $targetShopId)
+                ->join('banks', 'bank_shop.bank_id', '=', 'banks.id')
+                ->select('bank_shop.id', 'banks.name')
+                ->orderBy('banks.name')
+                ->get();
+        }
+
+        $purchaseDetails = PurchaseDetail::with('product')
+            ->where('purchase_id', $purchase_id)
+            ->orderBy('id')
+            ->get();
+
+        $purchase->load('paymentLogs');
+
+        return view('purchases.edit', [
+            'purchase' => $purchase,
+            'purchaseDetails' => $purchaseDetails,
+            'suppliers' => $suppliersQuery->orderBy('shopname')->get(),
+            'products' => $productsQuery->orderBy('product_name')->get(),
+            'shopBanks' => $shopBanks,
+        ]);
+    }
+
+    /**
+     * Update a pending purchase (lines + totals + payment). Ledger is reversed then recreated; landed cost recalculated.
+     */
+    public function update(Request $request, int $purchase_id, PurchaseUpdateService $purchaseUpdateService)
+    {
+        $purchase = Purchase::query()->findOrFail($purchase_id);
+        $this->ensureShopAccess($purchase);
+
+        if (($purchase->landed_cost_status ?? '') === 'approved') {
+            abort(403, 'Approved purchase cannot be edited');
+        }
+
+        $rules = [
+            'supplier_id' => 'required|numeric',
+            'purchase_date' => 'required|date',
+            'payment_status' => 'required|string|in:cash,bank,cheque,credit',
+            'pay' => 'numeric|nullable|min:0',
+            'shop_bank_id' => 'nullable|numeric|exists:bank_shop,id',
+            'vat' => 'numeric|nullable|min:0',
+            'invoice_discount' => 'numeric|nullable|min:0',
+            'products' => 'required|array|min:1',
+            'products.*.product_id' => 'required|numeric',
+            'products.*.quantity' => 'required|numeric|min:1',
+            'products.*.unit_price' => 'required|numeric|min:0',
+            'products.*.total' => 'required|numeric|min:0',
+            'products.*.item_discount' => 'nullable|numeric|min:0',
+            'comment' => 'nullable|string',
+        ];
+
+        $validatedData = $request->validate($rules);
+        $authUser = auth()->user();
+
+        $supplier = Supplier::findOrFail($validatedData['supplier_id']);
+        if ($supplier->shop_id !== $authUser->shop_id) {
+            return back()->withErrors(['supplier_id' => 'The selected supplier does not belong to your shop.'])
+                ->withInput();
+        }
+
+        try {
+            $purchaseUpdateService->updatePurchase($purchase, $validatedData, (int) $authUser->shop_id);
+        } catch (\Throwable $e) {
+            return back()->withErrors(['error' => $e->getMessage()])->withInput();
+        }
+
+        return Redirect::route('purchases.show', $purchase_id)->with('success', 'Purchase updated successfully.');
     }
 
     /**
