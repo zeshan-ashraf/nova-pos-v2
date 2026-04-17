@@ -196,6 +196,7 @@
 
                         @if ($canEditExpenses)
                             <form
+                                id="addPurchaseExpenseForm"
                                 method="POST"
                                 action="{{ route('purchases.expenses.store', $purchase->id) }}"
                                 class="mt-2"
@@ -232,7 +233,10 @@
                                         </div>
                                     </div>
                                 </div>
-                                <button type="submit" class="btn btn-success mt-2">Add Expense</button>
+                                <button type="submit" class="btn btn-success mt-2 d-inline-flex align-items-center" id="addPurchaseExpenseBtn">
+                                    <span class="js-add-expense-label">Add Expense</span>
+                                    <span class="js-add-expense-spinner spinner-border spinner-border-sm ml-2 d-none" role="status" aria-hidden="true"></span>
+                                </button>
                             </form>
                         @endif
 
@@ -484,6 +488,19 @@
 
             <script>
                 (function() {
+                    var addExpenseForm = document.getElementById('addPurchaseExpenseForm');
+                    if (addExpenseForm) {
+                        addExpenseForm.addEventListener('submit', function() {
+                            var btn = document.getElementById('addPurchaseExpenseBtn');
+                            if (!btn || btn.disabled) return;
+                            btn.disabled = true;
+                            var label = btn.querySelector('.js-add-expense-label');
+                            var spin = btn.querySelector('.js-add-expense-spinner');
+                            if (label) label.textContent = 'Adding…';
+                            if (spin) spin.classList.remove('d-none');
+                        });
+                    }
+
                     document.addEventListener('click', function(e) {
                         const trigger = e.target.closest('.js-edit-expense-btn');
                         if (!trigger) return;
