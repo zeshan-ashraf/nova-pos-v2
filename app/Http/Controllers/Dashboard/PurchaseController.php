@@ -44,6 +44,7 @@ class PurchaseController extends Controller
 
         $search = request('search');
         $purchasesQuery = Purchase::with(['supplier', 'shop.parent'])
+            ->withSum('activities', 'activity_cost')
             ->sortable()
             ->when($search, function ($query, $search) {
                 return $query->where('purchase_no', 'like', '%' . $search . '%')
