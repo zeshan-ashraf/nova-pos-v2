@@ -28,12 +28,8 @@ class PurchaseExpenseService
                 throw new \RuntimeException('Cannot edit expenses after purchase is received.');
             }
 
-            $allocationLocked = Activity::query()
-                ->where('purchase_id', $purchaseId)
-                ->where('allocation_locked', 1)
-                ->exists();
-            if ($allocationLocked) {
-                throw new \RuntimeException('Expenses are locked; landed cost is already being approved/approved.');
+            if (($purchase->landed_cost_status ?? 'pending') === 'approved') {
+                throw new \RuntimeException('Cannot add expenses after landed cost is approved.');
             }
 
             $activity = Activity::create([
@@ -74,8 +70,8 @@ class PurchaseExpenseService
                 throw new \RuntimeException('Cannot edit expenses after purchase is received.');
             }
 
-            if ((int) ($activity->allocation_locked ?? 0) === 1) {
-                throw new \RuntimeException('Expenses are locked; landed cost is already being approved/approved.');
+            if (($purchase->landed_cost_status ?? 'pending') === 'approved') {
+                throw new \RuntimeException('Cannot edit expenses after landed cost is approved.');
             }
 
             $activity->update([
@@ -109,8 +105,8 @@ class PurchaseExpenseService
                 throw new \RuntimeException('Cannot edit expenses after purchase is received.');
             }
 
-            if ((int) ($activity->allocation_locked ?? 0) === 1) {
-                throw new \RuntimeException('Expenses are locked; landed cost is already being approved/approved.');
+            if (($purchase->landed_cost_status ?? 'pending') === 'approved') {
+                throw new \RuntimeException('Cannot delete expenses after landed cost is approved.');
             }
 
             AccountTransaction::query()

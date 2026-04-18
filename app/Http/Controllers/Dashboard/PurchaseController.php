@@ -457,7 +457,8 @@ class PurchaseController extends Controller
             ->orderBy('date', 'desc')
             ->get();
 
-        $allocationLocked = $purchaseExpenses->where('allocation_locked', 1)->isNotEmpty();
+        // Lock UI when landed cost is approved. activity.allocation_locked can be stale if landed_cost_status was reverted in DB without clearing activities.
+        $allocationLocked = (($purchase->landed_cost_status ?? 'pending') === 'approved');
 
         $expenseCategories = Expense::query()
             ->when(auth()->user()?->shop_id, fn ($q) => $q->where('shop_id', auth()->user()->shop_id))
@@ -580,13 +581,8 @@ class PurchaseController extends Controller
             }
         }
 
-        // Prevent edits when allocation is locked.
-        $allocationLocked = Activity::query()
-            ->where('purchase_id', $purchase_id)
-            ->where('allocation_locked', 1)
-            ->exists();
-        if ($allocationLocked) {
-            return Redirect::back()->withErrors(['error' => 'Expenses are locked; landed cost is already being approved/approved.']);
+        if (($purchase->landed_cost_status ?? 'pending') === 'approved') {
+            return Redirect::back()->withErrors(['error' => 'Expenses are locked; landed cost is already approved.']);
         }
 
         try {
@@ -647,11 +643,12 @@ class PurchaseController extends Controller
             }
         }
 
+        if (($purchase->landed_cost_status ?? 'pending') === 'approved') {
+            return Redirect::back()->withErrors(['error' => 'Expenses are locked; landed cost is already approved.']);
+        }
+
         try {
-            $activity = Activity::query()->where('id', $activity_id)->where('purchase_id', $purchase_id)->firstOrFail();
-            if ((int) ($activity->allocation_locked ?? 0) === 1) {
-                return Redirect::back()->withErrors(['error' => 'Expenses are locked; landed cost is already being approved/approved.']);
-            }
+            Activity::query()->where('id', $activity_id)->where('purchase_id', $purchase_id)->firstOrFail();
 
             $expenseService->updateExpense($activity_id, $request->only([
                 'expense_id',
@@ -691,11 +688,12 @@ class PurchaseController extends Controller
             return Redirect::back()->withErrors(['error' => 'Cannot edit purchase after it has been received.']);
         }
 
+        if (($purchase->landed_cost_status ?? 'pending') === 'approved') {
+            return Redirect::back()->withErrors(['error' => 'Expenses are locked; landed cost is already approved.']);
+        }
+
         try {
-            $activity = Activity::query()->where('id', $activity_id)->where('purchase_id', $purchase_id)->firstOrFail();
-            if ((int) ($activity->allocation_locked ?? 0) === 1) {
-                return Redirect::back()->withErrors(['error' => 'Expenses are locked; landed cost is already being approved/approved.']);
-            }
+            Activity::query()->where('id', $activity_id)->where('purchase_id', $purchase_id)->firstOrFail();
 
             $expenseService->deleteExpense($activity_id);
             $landedCostService->calculate($purchase_id);

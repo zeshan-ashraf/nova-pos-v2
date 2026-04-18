@@ -188,6 +188,7 @@
                     <div class="card-body">
                         @php
                             $canEditExpenses = !$allocationLocked && ($purchase->purchase_status ?? '') === 'pending' && (($purchase->landed_cost_status ?? 'pending') !== 'approved');
+                            $purchaseExpensesTotal = $purchaseExpenses->sum(fn ($a) => (float) ($a->activity_cost ?? 0));
                         @endphp
 
                         @if ($purchaseExpenses->isEmpty())
@@ -300,6 +301,13 @@
                                         </tr>
                                     @endforeach
                                 </tbody>
+                                <tfoot>
+                                    <tr class="ligth-body">
+                                        <td colspan="2" class="text-right font-weight-bold text-uppercase">Total</td>
+                                        <td class="font-weight-bold">{{ number_format($purchaseExpensesTotal, 2) }}</td>
+                                        <td colspan="3"></td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
 
