@@ -20,6 +20,7 @@ class Kernel extends ConsoleKernel
      */
     protected function commands(): void
     {
+        // All PHP classes in app/Console/Commands are auto-registered (e.g. FixDuplicateStockLog → stock:fix-duplicate).
         $this->load(__DIR__.'/Commands');
 
         require base_path('routes/console.php');
