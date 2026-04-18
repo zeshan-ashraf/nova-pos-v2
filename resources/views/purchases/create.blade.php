@@ -332,8 +332,10 @@
 
                     <!-- Submit Button -->
                     <div class="mt-4">
-                        <button type="button" class="btn btn-primary btn-lg" id="createPurchaseBtn">
-                            <i class="ri-file-add-line"></i> Create Purchase
+                        <button type="button" class="btn btn-primary btn-lg d-inline-flex align-items-center" id="createPurchaseBtn">
+                            <i class="ri-file-add-line js-create-purchase-icon"></i>
+                            <span class="js-create-purchase-label ml-1">Create Purchase</span>
+                            <span class="js-create-purchase-spinner spinner-border spinner-border-sm ml-2 d-none" role="status" aria-hidden="true"></span>
                         </button>
                         <a href="{{ route('purchases.index') }}" class="btn btn-secondary btn-lg">Cancel</a>
                     </div>
@@ -775,9 +777,32 @@
         calculatePurchaseTotal();
     });
 
-    // Form submission
+    function setCreatePurchaseSubmitting($purchaseForm, active) {
+        const $btn = $('#createPurchaseBtn');
+        if (active) {
+            $purchaseForm.data('submitting', true);
+            $btn.prop('disabled', true);
+            $btn.find('.js-create-purchase-label').text('Creating…');
+            $btn.find('.js-create-purchase-spinner').removeClass('d-none');
+            $btn.find('.js-create-purchase-icon').addClass('d-none');
+        } else {
+            $purchaseForm.data('submitting', false);
+            $btn.prop('disabled', false);
+            $btn.find('.js-create-purchase-label').text('Create Purchase');
+            $btn.find('.js-create-purchase-spinner').addClass('d-none');
+            $btn.find('.js-create-purchase-icon').removeClass('d-none');
+        }
+    }
+
+    // Form submission (runs for Create button and Enter key)
     $('#purchaseForm').on('submit', function(e) {
-        // Validation
+        const $purchaseForm = $(this);
+
+        if ($purchaseForm.data('submitting')) {
+            e.preventDefault();
+            return false;
+        }
+
         const supplierId = $('#supplier_id').val();
         if (!supplierId) {
             e.preventDefault();
@@ -813,47 +838,25 @@
             return false;
         }
 
-        // Allow form submission
+        setCreatePurchaseSubmitting($purchaseForm, true);
         return true;
     });
 
-    // Handle Create Purchase button click
     $('#createPurchaseBtn').on('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        
+
         const $purchaseForm = $('#purchaseForm');
-        
-        // Check if form exists
-        if ($purchaseForm.length === 0) {
-            console.error('Purchase form not found!');
+        if ($purchaseForm.length === 0 || $purchaseForm.data('submitting')) {
             return false;
         }
-        
-        // Check if form is already submitting (prevent double submission)
-        if ($purchaseForm.data('submitting')) {
-            console.log('Form is already submitting, ignoring click');
-            return false;
-        }
-        
-        // Check HTML5 validation first
+
         if (!$purchaseForm[0].checkValidity()) {
-            console.log('HTML5 validation failed');
             $purchaseForm[0].reportValidity();
             return false;
         }
-        
-        // Manually trigger form submit
-        console.log('Manually triggering purchase form submit...');
-        $purchaseForm.data('submitting', true);
-        
-        // Trigger jQuery submit event (this will call our validation handler)
+
         $purchaseForm.submit();
-        
-        // Reset flag after a delay
-        setTimeout(function() {
-            $purchaseForm.data('submitting', false);
-        }, 1000);
     });
 
     // Handle Add Supplier Modal Form Submission - prevent form submit

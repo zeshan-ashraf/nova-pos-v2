@@ -119,20 +119,22 @@
                         <div class="row">
                             <div class="col-lg-12">
                                 <div class="d-flex align-items-center list-action">
-                                    <form action="{{ route('purchases.updateStatus') }}" method="POST" style="margin-bottom: 5px">
+                                    <form id="completePurchaseForm" action="{{ route('purchases.updateStatus') }}" method="POST" style="margin-bottom: 5px">
                                         @method('put')
                                         @csrf
                                         <input type="hidden" name="id" value="{{ $purchase->id }}">
                                         <button
                                             type="submit"
-                                            class="btn btn-success mr-2 border-none {{ $canReceive ? '' : 'opacity-50' }}"
+                                            id="completePurchaseBtn"
+                                            class="btn btn-success mr-2 border-none d-inline-flex align-items-center {{ $canReceive ? '' : 'opacity-50' }}"
                                             data-toggle="tooltip"
                                             data-placement="top"
                                             title=""
                                             data-original-title="{{ $canReceive ? 'Complete' : 'Approve landed cost first' }}"
                                             {{ $canReceive ? '' : 'disabled' }}
                                         >
-                                            Complete Purchase
+                                            <span class="js-complete-purchase-label">Complete Purchase</span>
+                                            <span class="js-complete-purchase-spinner spinner-border spinner-border-sm ml-2 d-none" role="status" aria-hidden="true"></span>
                                         </button>
 
                                         <a class="btn btn-danger mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Cancel" href="{{ route('purchases.pending') }}">Cancel</a>
@@ -405,7 +407,7 @@
                             </div>
                         @endif
 
-                        <form method="POST" action="{{ route('purchases.landed-cost.approve', $purchase->id) }}">
+                        <form id="approveLandedCostForm" method="POST" action="{{ route('purchases.landed-cost.approve', $purchase->id) }}">
                             @csrf
 
                             <div class="table-responsive rounded mb-3">
@@ -479,8 +481,9 @@
                             </div>
 
                             @if ($canApprove)
-                                <button type="submit" class="btn btn-primary">
-                                    {{ $totalExpense <= 0 ? 'Approve without expense' : 'Approve Landed Cost' }}
+                                <button type="submit" id="approveLandedCostBtn" class="btn btn-primary d-inline-flex align-items-center">
+                                    <span class="js-approve-landed-label">{{ $totalExpense <= 0 ? 'Approve without expense' : 'Approve Landed Cost' }}</span>
+                                    <span class="js-approve-landed-spinner spinner-border spinner-border-sm ml-2 d-none" role="status" aria-hidden="true"></span>
                                 </button>
                             @else
                                 <div class="text-muted">
@@ -505,6 +508,40 @@
                             var label = btn.querySelector('.js-add-expense-label');
                             var spin = btn.querySelector('.js-add-expense-spinner');
                             if (label) label.textContent = 'Adding…';
+                            if (spin) spin.classList.remove('d-none');
+                        });
+                    }
+
+                    var completePurchaseForm = document.getElementById('completePurchaseForm');
+                    var completePurchaseBtn = document.getElementById('completePurchaseBtn');
+                    if (completePurchaseForm && completePurchaseBtn) {
+                        completePurchaseForm.addEventListener('submit', function(e) {
+                            if (completePurchaseForm.getAttribute('data-submitting') === '1') {
+                                e.preventDefault();
+                                return;
+                            }
+                            completePurchaseForm.setAttribute('data-submitting', '1');
+                            completePurchaseBtn.disabled = true;
+                            var label = completePurchaseBtn.querySelector('.js-complete-purchase-label');
+                            var spin = completePurchaseBtn.querySelector('.js-complete-purchase-spinner');
+                            if (label) label.textContent = 'Completing…';
+                            if (spin) spin.classList.remove('d-none');
+                        });
+                    }
+
+                    var approveLandedCostForm = document.getElementById('approveLandedCostForm');
+                    var approveLandedCostBtn = document.getElementById('approveLandedCostBtn');
+                    if (approveLandedCostForm && approveLandedCostBtn) {
+                        approveLandedCostForm.addEventListener('submit', function(e) {
+                            if (approveLandedCostForm.getAttribute('data-submitting') === '1') {
+                                e.preventDefault();
+                                return;
+                            }
+                            approveLandedCostForm.setAttribute('data-submitting', '1');
+                            approveLandedCostBtn.disabled = true;
+                            var label = approveLandedCostBtn.querySelector('.js-approve-landed-label');
+                            var spin = approveLandedCostBtn.querySelector('.js-approve-landed-spinner');
+                            if (label) label.textContent = 'Approving…';
                             if (spin) spin.classList.remove('d-none');
                         });
                     }

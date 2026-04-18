@@ -371,8 +371,10 @@
 
                     <!-- Submit Button -->
                     <div class="mt-4">
-                        <button type="button" class="btn btn-primary btn-lg" id="updatePurchaseBtn">
-                            <i class="ri-save-line"></i> Update Purchase
+                        <button type="button" class="btn btn-primary btn-lg d-inline-flex align-items-center" id="updatePurchaseBtn">
+                            <i class="ri-save-line js-update-purchase-icon"></i>
+                            <span class="js-update-purchase-label ml-1">Update Purchase</span>
+                            <span class="js-update-purchase-spinner spinner-border spinner-border-sm ml-2 d-none" role="status" aria-hidden="true"></span>
                         </button>
                         <a href="{{ route('purchases.show', $purchase->id) }}" class="btn btn-secondary btn-lg">Cancel</a>
                     </div>
@@ -810,8 +812,32 @@
         calculatePurchaseTotal();
     });
 
-    // Form submission
+    function setUpdatePurchaseSubmitting($purchaseForm, active) {
+        const $btn = $('#updatePurchaseBtn');
+        if (active) {
+            $purchaseForm.data('submitting', true);
+            $btn.prop('disabled', true);
+            $btn.find('.js-update-purchase-label').text('Saving…');
+            $btn.find('.js-update-purchase-spinner').removeClass('d-none');
+            $btn.find('.js-update-purchase-icon').addClass('d-none');
+        } else {
+            $purchaseForm.data('submitting', false);
+            $btn.prop('disabled', false);
+            $btn.find('.js-update-purchase-label').text('Update Purchase');
+            $btn.find('.js-update-purchase-spinner').addClass('d-none');
+            $btn.find('.js-update-purchase-icon').removeClass('d-none');
+        }
+    }
+
+    // Form submission (runs for Update button and Enter key)
     $('#purchaseForm').on('submit', function(e) {
+        const $purchaseForm = $(this);
+
+        if ($purchaseForm.data('submitting')) {
+            e.preventDefault();
+            return false;
+        }
+
         const supplierId = $('#supplier_id').val();
         if (!supplierId) {
             e.preventDefault();
@@ -847,47 +873,25 @@
             return false;
         }
 
-        // Allow form submission
+        setUpdatePurchaseSubmitting($purchaseForm, true);
         return true;
     });
 
-    // Handle Update Purchase button click
     $('#updatePurchaseBtn').on('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        
+
         const $purchaseForm = $('#purchaseForm');
-        
-        // Check if form exists
-        if ($purchaseForm.length === 0) {
-            console.error('Purchase form not found!');
+        if ($purchaseForm.length === 0 || $purchaseForm.data('submitting')) {
             return false;
         }
-        
-        // Check if form is already submitting (prevent double submission)
-        if ($purchaseForm.data('submitting')) {
-            console.log('Form is already submitting, ignoring click');
-            return false;
-        }
-        
-        // Check HTML5 validation first
+
         if (!$purchaseForm[0].checkValidity()) {
-            console.log('HTML5 validation failed');
             $purchaseForm[0].reportValidity();
             return false;
         }
-        
-        // Manually trigger form submit
-        console.log('Manually triggering purchase form submit...');
-        $purchaseForm.data('submitting', true);
-        
-        // Trigger jQuery submit event (this will call our validation handler)
+
         $purchaseForm.submit();
-        
-        // Reset flag after a delay
-        setTimeout(function() {
-            $purchaseForm.data('submitting', false);
-        }, 1000);
     });
 
     // Handle Add Supplier Modal Form Submission - prevent form submit
