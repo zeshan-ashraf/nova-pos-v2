@@ -8,55 +8,108 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Reverses the stock impact of a single stock_log row and soft-deletes it.
+ * Reverses the stock impact of one or more stock_log rows and soft-deletes them.
  * Used to correct duplicate/erroneous stock_logs without hard-deleting audit history.
  */
 class FixDuplicateStockLog extends Command
 {
     protected $signature = 'stock:fix-duplicate
-                            {stock_log_id : Primary key of the stock_logs row to reverse and soft-delete}
+                            {stock_log_ids : One or more stock_logs IDs, comma-separated (e.g. 705 or 705,706)}
                             {--dry-run : Preview reversal without changing the database}';
 
-    protected $description = 'Reverse one stock_log\'s effect on product_store, then soft-delete that log (use --dry-run to preview).';
+    protected $description = 'Reverse stock_log effect(s) on product_store, then soft-delete those logs (use --dry-run to preview).';
 
     public function handle(): int
     {
-        $id = (int) $this->argument('stock_log_id');
-        if ($id < 1) {
-            $this->error('stock_log_id must be a positive integer.');
+        $raw = (string) $this->argument('stock_log_ids');
+        $ids = $this->parseIds($raw);
+        if ($ids === []) {
+            $this->error('Provide at least one positive integer stock_log_id (e.g. 705 or 705,706).');
 
             return Command::FAILURE;
         }
 
         $dryRun = (bool) $this->option('dry-run');
 
+        if (count($ids) > 1) {
+            $this->info('Processing '.count($ids).' stock log id(s): '.implode(', ', $ids));
+        }
+
+        $hadFailure = false;
+
+        foreach ($ids as $id) {
+            $result = $this->processStockLog($id, $dryRun);
+            if (! $result) {
+                $hadFailure = true;
+                if (! $dryRun) {
+                    $this->error("Stopped after failure on stock_log_id {$id} (earlier IDs may already be committed).");
+
+                    return Command::FAILURE;
+                }
+            }
+        }
+
+        if ($hadFailure && $dryRun) {
+            $this->error('Dry run completed with one or more failures (see above).');
+
+            return Command::FAILURE;
+        }
+
+        if ($dryRun) {
+            $this->info('Dry run complete — no changes were made.');
+        } else {
+            $this->info('Done: all requested stock_logs processed.');
+        }
+
+        return Command::SUCCESS;
+    }
+
+    /**
+     * @return int[] sorted unique positive integers
+     */
+    private function parseIds(string $raw): array
+    {
+        $parts = preg_split('/[\s,]+/', $raw, -1, PREG_SPLIT_NO_EMPTY);
+        $ids = [];
+        foreach ($parts as $part) {
+            $n = (int) trim($part);
+            if ($n > 0) {
+                $ids[$n] = $n;
+            }
+        }
+
+        return array_values($ids);
+    }
+
+    private function processStockLog(int $id, bool $dryRun): bool
+    {
         /** @var StockLog|null $log */
         $log = StockLog::query()->find($id);
         if ($log === null) {
             $this->error("Stock log id {$id} not found or already soft-deleted.");
 
-            return Command::FAILURE;
+            return false;
         }
 
         $product = Product::query()->find($log->product_id);
         if ($product === null) {
             $this->error("Product id {$log->product_id} not found for stock_log {$id}.");
 
-            return Command::FAILURE;
+            return false;
         }
 
         $qty = (int) $log->qty;
         if ($qty < 0) {
-            $this->error("Invalid stock_log.qty ({$log->qty}): expected non-negative integer.");
+            $this->error("Invalid stock_log.qty ({$log->qty}) for id {$id}: expected non-negative integer.");
 
-            return Command::FAILURE;
+            return false;
         }
 
         $direction = strtolower((string) ($log->direction ?? ''));
         if (! in_array($direction, ['in', 'out'], true)) {
-            $this->error("Invalid stock_log.direction \"{$log->direction}\": expected \"in\" or \"out\".");
+            $this->error("Invalid stock_log.direction \"{$log->direction}\" for id {$id}: expected \"in\" or \"out\".");
 
-            return Command::FAILURE;
+            return false;
         }
 
         $currentStore = (int) ($product->product_store ?? 0);
@@ -64,14 +117,14 @@ class FixDuplicateStockLog extends Command
 
         if ($newStore < 0) {
             $this->error(
-                "Reversal would make product_store negative (current={$currentStore}, qty={$qty}, direction={$direction}). Aborting."
+                "[{$id}] Reversal would make product_store negative (current={$currentStore}, qty={$qty}, direction={$direction}). Aborting."
             );
 
-            return Command::FAILURE;
+            return false;
         }
 
         $this->line('');
-        $this->info('--- Stock log reversal preview ---');
+        $this->info("--- Stock log id {$id} ---");
         $this->table(
             ['Field', 'Value'],
             [
@@ -86,20 +139,13 @@ class FixDuplicateStockLog extends Command
         );
 
         if ($dryRun) {
-            $this->info('Dry run complete — no changes were made.');
-
-            return Command::SUCCESS;
+            return true;
         }
 
         try {
-            DB::transaction(function () use ($id, $newStore) {
-                // Re-fetch with row lock inside the transaction.
+            DB::transaction(function () use ($id) {
                 /** @var StockLog $lockedLog */
                 $lockedLog = StockLog::query()->whereKey($id)->lockForUpdate()->firstOrFail();
-
-                if ($lockedLog->trashed()) {
-                    throw new \RuntimeException('Stock log was deleted before update could complete.');
-                }
 
                 /** @var Product $lockedProduct */
                 $lockedProduct = Product::query()
@@ -124,14 +170,14 @@ class FixDuplicateStockLog extends Command
                 $lockedLog->delete();
             });
         } catch (\Throwable $e) {
-            $this->error($e->getMessage());
+            $this->error("[{$id}] {$e->getMessage()}");
 
-            return Command::FAILURE;
+            return false;
         }
 
-        $this->info('Executed successfully: product_store updated and stock_log soft-deleted.');
+        $this->info("[{$id}] Executed: product_store updated and stock_log soft-deleted.");
 
-        return Command::SUCCESS;
+        return true;
     }
 
     /**
