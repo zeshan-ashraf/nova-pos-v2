@@ -68,6 +68,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard/activities', [DashboardController::class, 'getActivities'])->name('dashboard.activities');
     Route::get('/dashboard/shop-performance', [DashboardController::class, 'getShopPerformance'])->name('dashboard.shop-performance');
     Route::get('/dashboard/insights', [DashboardController::class, 'getInsights'])->name('dashboard.insights');
+    Route::get('/dashboard/inventory-snapshot', [DashboardController::class, 'getInventorySnapshot'])->name('dashboard.inventory-snapshot');
     Route::get('/super-admin/dashboard', [SuperAdminDashboardController::class, 'index'])->name('super-admin.dashboard');
     Route::get('/super-admin/dashboard/kpis', [SuperAdminDashboardController::class, 'kpis'])->name('super-admin.dashboard.kpis');
     Route::get('/super-admin/dashboard/activities', [SuperAdminDashboardController::class, 'activities'])->name('super-admin.dashboard.activities');

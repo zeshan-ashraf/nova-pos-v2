@@ -212,6 +212,59 @@ class DashboardController extends Controller
         ]);
     }
 
+    /**
+     * Current inventory snapshot per shop: stock value (qty × cost) and low-stock SKU count.
+     * Dates are accepted for filter-bar parity; values reflect current product rows (not point-in-time).
+     */
+    public function getInventorySnapshot(Request $request)
+    {
+        $request->validate([
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'shops' => 'nullable',
+        ]);
+
+        $shopIds = $this->parseShopIdsFromFilter($request->input('shops'));
+
+        $stockAgg = Product::withoutGlobalScopes()
+            ->selectRaw('shop_id, COALESCE(SUM(COALESCE(product_store, 0) * COALESCE(buying_price, 0)), 0) as stock_value')
+            ->whereNotNull('shop_id')
+            ->when($shopIds->isNotEmpty(), fn ($q) => $q->whereIn('shop_id', $shopIds))
+            ->groupBy('shop_id')
+            ->get()
+            ->keyBy('shop_id');
+
+        $lowAgg = Product::withoutGlobalScopes()
+            ->selectRaw('shop_id, COUNT(*) as low_stock')
+            ->whereNotNull('shop_id')
+            ->whereRaw('COALESCE(product_store, 0) <= COALESCE(low_stock_warning, 10)')
+            ->when($shopIds->isNotEmpty(), fn ($q) => $q->whereIn('shop_id', $shopIds))
+            ->groupBy('shop_id')
+            ->get()
+            ->keyBy('shop_id');
+
+        $shopsQuery = Shop::withoutGlobalScopes()->select(['id', 'name']);
+        if ($shopIds->isNotEmpty()) {
+            $shopsQuery->whereIn('id', $shopIds);
+        }
+        $shops = $shopsQuery->orderBy('name')->get();
+
+        $payload = $shops->map(function ($shop) use ($stockAgg, $lowAgg) {
+            $sv = $stockAgg->get($shop->id);
+
+            $lv = $lowAgg->get($shop->id);
+
+            return [
+                'shop_id' => (int) $shop->id,
+                'shop_name' => $shop->name,
+                'stock_value' => round((float) ($sv->stock_value ?? 0), 2),
+                'low_stock' => (int) ($lv->low_stock ?? 0),
+            ];
+        })->values();
+
+        return response()->json(['shops' => $payload]);
+    }
+
     private function parseShopIdsFromFilter($shopsInput)
     {
         $shopIds = collect();

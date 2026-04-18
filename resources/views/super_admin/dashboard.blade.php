@@ -67,7 +67,8 @@
     #shop-performance-table tbody tr {
         transition: background 0.2s ease;
     }
-    #shop-performance-table tbody tr:hover {
+    #shop-performance-table tbody tr:hover,
+    #inventory-snapshot-table tbody tr:hover {
         background: rgba(0,0,0,0.03);
     }
     #consolidated-kpis .card.kpi-up { animation: kpiPulseUp 0.5s ease; }
@@ -319,6 +320,50 @@
     </div>
     <div id="kpi-error-alert" class="alert alert-danger mt-2" style="display: none;" role="alert"></div>
 
+    {{-- 3️⃣ Top / Bottom Insight Cards --}}
+    <div class="row sa-dashboard-section">
+        <div class="col-12">
+            <h6 class="text-uppercase mb-2">Insights</h6>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card border h-100 bg-light-success">
+                <div class="card-body text-center">
+                    <div class="sa-dashboard-card-title"><i class="fas fa-trophy mr-1 text-warning"></i>Top Selling Shop</div>
+                    <div id="topSellingShop" class="sa-dashboard-metric-value h4 font-weight-bold text-success">-</div>
+                    <small id="topSellingValue" class="text-muted">PKR 0.00</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card border h-100 bg-light-success">
+                <div class="card-body text-center">
+                    <div class="sa-dashboard-card-title"><i class="fas fa-coins mr-1 text-success"></i>Highest Profit Shop</div>
+                    <div id="highestProfitShop" class="sa-dashboard-metric-value h4 font-weight-bold text-success">-</div>
+                    <small id="highestProfitValue" class="text-muted">PKR 0.00</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card border h-100 bg-light-success">
+                <div class="card-body text-center">
+                    <div class="sa-dashboard-card-title"><i class="fas fa-percentage mr-1 text-primary"></i>Best Margin Shop</div>
+                    <div id="bestMarginShop" class="sa-dashboard-metric-value h4 font-weight-bold text-primary">-</div>
+                    <small id="bestMarginValue" class="text-muted">0.00%</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card border h-100 bg-light-danger">
+                <div class="card-body text-center">
+                    <div class="sa-dashboard-card-title"><i class="fas fa-exclamation-triangle mr-1 text-danger"></i>Lowest Performing Shop</div>
+                    <div id="lowestShop" class="sa-dashboard-metric-value h4 font-weight-bold text-danger">-</div>
+                    <small id="lowestValue" class="text-muted">PKR 0.00</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- 4️⃣ Live Activity Ticker --}}
     <div class="row sa-dashboard-section">
         <div class="col-12">
             <div class="card border mb-3">
@@ -345,7 +390,7 @@
         </div>
     </div>
 
-    {{-- 3️⃣ Child Shop Comparison Table --}}
+    {{-- 5️⃣ Child Shop Comparison Table --}}
     <div class="row sa-dashboard-section">
         <div class="col-12">
             <div class="card border">
@@ -394,7 +439,7 @@
         </div>
     </div>
 
-    {{-- 4️⃣ Comparison Charts Section --}}
+    {{-- 6️⃣ Comparison Charts Section --}}
     <div class="row sa-dashboard-section">
         <div class="col-12">
             <h6 class="text-uppercase mb-2">Visual Comparisons</h6>
@@ -421,88 +466,6 @@
         </div>
     </div>
 
-    {{-- 5️⃣ Top / Bottom Insight Cards --}}
-    <div class="row sa-dashboard-section">
-        <div class="col-12">
-            <h6 class="text-uppercase mb-2">Insights</h6>
-        </div>
-        <div class="col-md-3 mb-3">
-            <div class="card border h-100 bg-light-success">
-                <div class="card-body text-center">
-                    <div class="sa-dashboard-card-title"><i class="fas fa-trophy mr-1 text-warning"></i>Top Selling Shop</div>
-                    <div id="topSellingShop" class="sa-dashboard-metric-value h4 font-weight-bold text-success">-</div>
-                    <small id="topSellingValue" class="text-muted">PKR 0.00</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 mb-3">
-            <div class="card border h-100 bg-light-success">
-                <div class="card-body text-center">
-                    <div class="sa-dashboard-card-title"><i class="fas fa-coins mr-1 text-success"></i>Highest Profit Shop</div>
-                    <div id="highestProfitShop" class="sa-dashboard-metric-value h4 font-weight-bold text-success">-</div>
-                    <small id="highestProfitValue" class="text-muted">PKR 0.00</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 mb-3">
-            <div class="card border h-100 bg-light-success">
-                <div class="card-body text-center">
-                    <div class="sa-dashboard-card-title"><i class="fas fa-percentage mr-1 text-primary"></i>Best Margin Shop</div>
-                    <div id="bestMarginShop" class="sa-dashboard-metric-value h4 font-weight-bold text-primary">-</div>
-                    <small id="bestMarginValue" class="text-muted">0.00%</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 mb-3">
-            <div class="card border h-100 bg-light-danger">
-                <div class="card-body text-center">
-                    <div class="sa-dashboard-card-title"><i class="fas fa-exclamation-triangle mr-1 text-danger"></i>Lowest Performing Shop</div>
-                    <div id="lowestShop" class="sa-dashboard-metric-value h4 font-weight-bold text-danger">-</div>
-                    <small id="lowestValue" class="text-muted">PKR 0.00</small>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    {{-- 6️⃣ Purchase Comparison Table --}}
-    <div class="row sa-dashboard-section">
-        <div class="col-12">
-            <div class="card border">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0 text-uppercase">Purchase Comparison</h6>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table mb-0 table-striped table-hover">
-                            <thead class="thead-light">
-                                <tr>
-                                    <th>Shop Name</th>
-                                    <th>Total Purchases</th>
-                                    <th>Purchase to Sales Ratio</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @forelse($shops ?? [] as $shop)
-                                    <tr>
-                                        <td>{{ $shop->name ?? 'Shop Name' }}</td>
-                                        <td>{{ number_format(0, 2) }}</td>
-                                        <td>{{ number_format(0, 2) }}%</td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="3" class="text-center text-muted py-4">
-                                            Purchase comparison will appear here once implemented.
-                                        </td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     {{-- 7️⃣ Inventory Snapshot Section --}}
     <div class="row sa-dashboard-section mb-4">
         <div class="col-12">
@@ -512,25 +475,25 @@
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table mb-0 table-striped table-hover">
+                        <table id="inventory-snapshot-table" class="table mb-0 table-striped table-hover">
                             <thead class="thead-light">
                                 <tr>
                                     <th>Shop Name</th>
-                                    <th>Stock Value</th>
-                                    <th>Low Stock Count</th>
+                                    <th class="text-right"><i class="fas fa-box-open mr-1 text-muted"></i>Stock Value</th>
+                                    <th class="text-right"><i class="fas fa-exclamation-circle mr-1 text-muted"></i>Low Stock Count</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @forelse($shops ?? [] as $shop)
                                     <tr>
                                         <td>{{ $shop->name ?? 'Shop Name' }}</td>
-                                        <td>{{ number_format(0, 2) }}</td>
-                                        <td>{{ number_format(0, 0) }}</td>
+                                        <td id="stock_{{ $shop->id }}" class="text-right">{{ number_format(0, 2) }}</td>
+                                        <td id="lowstock_{{ $shop->id }}" class="text-right">{{ number_format(0, 0) }}</td>
                                     </tr>
                                 @empty
                                     <tr>
                                         <td colspan="3" class="text-center text-muted py-4">
-                                            Inventory snapshot will appear here once implemented.
+                                            No shops to show.
                                         </td>
                                     </tr>
                                 @endforelse
@@ -563,6 +526,7 @@
     var lastActivityTime = null;
     var previousShopStats = {};
     var previousInsights = {};
+    var previousInventory = {};
     var salesChart = null;
     var profitChart = null;
     var previousChartData = {
@@ -1096,6 +1060,91 @@
         });
     }
 
+    function applyLowStockTone(selector, count) {
+        var el = $(selector);
+        if (!el.length) return;
+        el.removeClass('text-success text-danger text-warning');
+        var n = Number(count || 0);
+        if (n > 10) {
+            el.addClass('text-danger');
+        } else if (n >= 5) {
+            el.addClass('text-warning');
+        } else {
+            el.addClass('text-success');
+        }
+    }
+
+    function animateInventoryNumber(selector, newVal, isInteger) {
+        var el = $(selector);
+        if (!el.length) return;
+        var currentRaw = (el.text() || '0').replace(/,/g, '');
+        var start = parseFloat(currentRaw);
+        if (isNaN(start)) start = 0;
+        var end = Number(newVal);
+        $({ n: start }).animate({ n: end }, {
+            duration: 500,
+            step: function(now) {
+                if (isInteger) {
+                    el.text(Math.round(now).toLocaleString('en-US'));
+                } else {
+                    el.text(now.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                }
+            },
+            complete: function() {
+                if (isInteger) {
+                    el.text(Math.round(end).toLocaleString('en-US'));
+                } else {
+                    el.text(end.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                }
+            }
+        });
+    }
+
+    function updateInventoryCell(field, shop, prev) {
+        prev = prev || {};
+        var id = '#' + field + '_' + shop.shop_id;
+        var newVal = field === 'stock' ? shop.stock_value : shop.low_stock;
+        var oldVal = field === 'stock' ? prev.stock_value : prev.low_stock;
+        if (Number(newVal) === Number(oldVal)) {
+            if (field === 'lowstock') {
+                applyLowStockTone(id, newVal);
+            }
+            return;
+        }
+        animateInventoryNumber(id, newVal, field === 'lowstock');
+        var el = $(id);
+        if (field === 'lowstock') {
+            el.addClass('text-danger');
+        } else {
+            el.addClass('text-success');
+        }
+        setTimeout(function() {
+            el.removeClass('text-danger text-success');
+            if (field === 'lowstock') {
+                applyLowStockTone(id, newVal);
+            } else if (Number(newVal) > Number(oldVal)) {
+                el.addClass('text-success');
+            }
+        }, 800);
+    }
+
+    function fetchInventorySnapshot() {
+        var filters = {
+            start_date: $('#sa_start_date').val(),
+            end_date: $('#sa_end_date').val(),
+            shops: $('#sa_shops').val()
+        };
+        $.get('{{ route("dashboard.inventory-snapshot") }}', filters, function(res) {
+            if (!res || !Array.isArray(res.shops)) return;
+            res.shops.forEach(function(shop) {
+                var prev = previousInventory[shop.shop_id] || {};
+                updateInventoryCell('stock', shop, prev);
+                updateInventoryCell('lowstock', shop, prev);
+                previousInventory[shop.shop_id] = shop;
+            });
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         $('#activityTickerCollapse').on('shown.bs.collapse', function() {
             $('#activityTickerToggle i').removeClass('fa-chevron-down').addClass('fa-chevron-up');
@@ -1109,22 +1158,26 @@
         if (btn) btn.addEventListener('click', function() {
             previousShopStats = {};
             previousInsights = {};
+            previousInventory = {};
             previousChartData = { sales: [], profit: [] };
             fetchKPIs(true);
             fetchShopPerformance();
             fetchInsights();
             fetchChartData();
+            fetchInventorySnapshot();
         });
         fetchKPIs(true);
         fetchActivities();
         fetchShopPerformance();
         fetchInsights();
         fetchChartData();
+        fetchInventorySnapshot();
         setInterval(function() { fetchKPIs(false); }, 5000);
         setInterval(fetchActivities, 5000);
         setInterval(fetchShopPerformance, 5000);
         setInterval(fetchInsights, 5000);
         setInterval(fetchChartData, 5000);
+        setInterval(fetchInventorySnapshot, 5000);
     });
 
     window.toggleSaCustomDates = toggleSaCustomDates;
