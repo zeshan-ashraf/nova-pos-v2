@@ -51,7 +51,7 @@
 
         @php
             $dateRange = $dateRange ?? [];
-            $dateFilter = $dateRange['date_filter'] ?? 'all';
+            $dateFilter = $dateRange['date_filter'] ?? 'today';
         @endphp
         <!-- Filter Section (same UI as reports/sales/summary) -->
         <div class="col-lg-12 mb-3">

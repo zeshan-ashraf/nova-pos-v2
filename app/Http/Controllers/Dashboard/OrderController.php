@@ -46,7 +46,7 @@ class OrderController extends Controller
 
     /**
      * Display a listing of the resource.
-     * Filters: date (default All), invoice no (partial), total min/max, customer (Select2), search. Apply button.
+     * Filters: date (default Today), invoice no (partial), total min/max, customer (Select2), search. Apply button.
      */
     public function index(Request $request)
     {
@@ -59,8 +59,8 @@ class OrderController extends Controller
         $authUser = auth()->user();
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
 
-        // Date filter: default "all" (no date filter)
-        $dateFilter = $request->input('date_filter', 'all');
+        // Date filter: default "today" (explicit "all" shows every order)
+        $dateFilter = $request->input('date_filter', 'today');
         if ($dateFilter !== 'all') {
             $dateRange = $this->getDateRange($request);
         } else {
