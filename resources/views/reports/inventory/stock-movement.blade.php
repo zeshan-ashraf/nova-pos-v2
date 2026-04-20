@@ -189,6 +189,24 @@
         return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' });
     }
 
+    function escapeHtml(s) {
+        if (s === null || s === undefined) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function formatReferenceCell(row) {
+        var text = row.reference != null && row.reference !== '' ? String(row.reference) : '–';
+        var escText = escapeHtml(text);
+        if (row.reference_url) {
+            return '<a href="' + escapeHtml(row.reference_url) + '" target="_blank" rel="noopener noreferrer">' + escText + '</a>';
+        }
+        return escText;
+    }
+
     function renderTable(data) {
         reportBody.innerHTML = '';
         if (!data.data || data.data.length === 0) {
@@ -199,10 +217,10 @@
             const tr = document.createElement('tr');
             tr.innerHTML =
                 '<td>' + formatDate(row.date) + '</td>' +
-                '<td>' + (row.product_name || '–') + '</td>' +
-                '<td>' + (row.product_code || '–') + '</td>' +
-                '<td>' + (row.reference || '–') + '</td>' +
-                '<td>' + (row.movement_type || '–') + '</td>' +
+                '<td>' + escapeHtml(row.product_name || '–') + '</td>' +
+                '<td>' + escapeHtml(row.product_code || '–') + '</td>' +
+                '<td>' + formatReferenceCell(row) + '</td>' +
+                '<td>' + escapeHtml(row.movement_type || '–') + '</td>' +
                 '<td class="text-right">' + (row.qty_in > 0 ? row.qty_in : '–') + '</td>' +
                 '<td class="text-right">' + (row.qty_out > 0 ? row.qty_out : '–') + '</td>' +
                 '<td class="text-right">' + (row.balance ?? '–') + '</td>';

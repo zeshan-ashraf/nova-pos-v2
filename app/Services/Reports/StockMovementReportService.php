@@ -9,8 +9,8 @@ use Carbon\Carbon;
 /**
  * Stock Movement Report — READ-ONLY.
  *
- * Single source of truth: stock_logs table only. No joins to orders/purchases;
- * no stock writes, no accounting, no expenses.
+ * Single source of truth: stock_logs for quantities; optional LEFT JOINs only to resolve
+ * human-readable reference numbers and links (read-only). No stock writes, no accounting.
  *
  * Running balance: per (product_id, shop_id), chronological by created_at then id.
  * IN increases balance, OUT decreases. Balance is computed in SQL via window sum
@@ -64,6 +64,15 @@ class StockMovementReportService
                 sl.source_id,
                 ref_p.purchase_no AS ref_purchase_no,
                 ref_o.invoice_no AS ref_invoice_no,
+                ref_sr.return_no AS ref_sale_return_no,
+                ref_pr.return_no AS ref_purchase_return_no,
+                CASE sl.source_type
+                    WHEN 'sale' THEN COALESCE(NULLIF(TRIM(cust_o.shopname), ''), NULLIF(TRIM(cust_o.name), ''))
+                    WHEN 'purchase' THEN COALESCE(NULLIF(TRIM(supp_p.shopname), ''), NULLIF(TRIM(supp_p.name), ''))
+                    WHEN 'sale_return' THEN COALESCE(NULLIF(TRIM(cust_sr.shopname), ''), NULLIF(TRIM(cust_sr.name), ''))
+                    WHEN 'purchase_return' THEN COALESCE(NULLIF(TRIM(supp_pr.shopname), ''), NULLIF(TRIM(supp_pr.name), ''))
+                    ELSE NULL
+                END AS ref_party_name,
                 COALESCE(sl.qty, 0) AS qty,
                 CASE WHEN sl.direction = 'in' THEN COALESCE(sl.qty, 0) ELSE 0 END AS qty_in,
                 CASE WHEN sl.direction = 'out' THEN COALESCE(sl.qty, 0) ELSE 0 END AS qty_out,
@@ -78,6 +87,13 @@ class StockMovementReportService
             JOIN products p ON p.id = sl.product_id
             LEFT JOIN purchases ref_p ON sl.source_type = 'purchase' AND sl.source_id = ref_p.id
             LEFT JOIN orders ref_o ON sl.source_type = 'sale' AND sl.source_id = ref_o.id
+            LEFT JOIN sale_returns ref_sr ON sl.source_type = 'sale_return' AND sl.source_id = ref_sr.id
+            LEFT JOIN purchase_returns ref_pr ON sl.source_type = 'purchase_return' AND sl.source_id = ref_pr.id
+            LEFT JOIN customers cust_o ON cust_o.id = ref_o.customer_id
+            LEFT JOIN suppliers supp_p ON supp_p.id = ref_p.supplier_id
+            LEFT JOIN customers cust_sr ON cust_sr.id = ref_sr.customer_id
+            LEFT JOIN purchases pur_for_pr ON pur_for_pr.id = ref_pr.purchase_id
+            LEFT JOIN suppliers supp_pr ON supp_pr.id = pur_for_pr.supplier_id
             WHERE {$where}
             ORDER BY {$orderByClause}
             LIMIT ? OFFSET ?
@@ -104,8 +120,12 @@ class StockMovementReportService
                     $row->movement_type ?? null,
                     $row->source_id ?? null,
                     $row->ref_purchase_no ?? null,
-                    $row->ref_invoice_no ?? null
+                    $row->ref_invoice_no ?? null,
+                    $row->ref_sale_return_no ?? null,
+                    $row->ref_purchase_return_no ?? null,
+                    $row->ref_party_name ?? null
                 ),
+                'reference_url' => $this->referenceUrl($row->movement_type ?? null, $row->source_id ?? null),
                 'movement_type' => $row->movement_type ?? null,
                 'qty_in'        => (int) ($row->qty_in ?? 0),
                 'qty_out'       => (int) ($row->qty_out ?? 0),
@@ -158,6 +178,15 @@ class StockMovementReportService
                 sl.source_id,
                 ref_p.purchase_no AS ref_purchase_no,
                 ref_o.invoice_no AS ref_invoice_no,
+                ref_sr.return_no AS ref_sale_return_no,
+                ref_pr.return_no AS ref_purchase_return_no,
+                CASE sl.source_type
+                    WHEN 'sale' THEN COALESCE(NULLIF(TRIM(cust_o.shopname), ''), NULLIF(TRIM(cust_o.name), ''))
+                    WHEN 'purchase' THEN COALESCE(NULLIF(TRIM(supp_p.shopname), ''), NULLIF(TRIM(supp_p.name), ''))
+                    WHEN 'sale_return' THEN COALESCE(NULLIF(TRIM(cust_sr.shopname), ''), NULLIF(TRIM(cust_sr.name), ''))
+                    WHEN 'purchase_return' THEN COALESCE(NULLIF(TRIM(supp_pr.shopname), ''), NULLIF(TRIM(supp_pr.name), ''))
+                    ELSE NULL
+                END AS ref_party_name,
                 COALESCE(sl.qty, 0) AS qty,
                 CASE WHEN sl.direction = 'in' THEN COALESCE(sl.qty, 0) ELSE 0 END AS qty_in,
                 CASE WHEN sl.direction = 'out' THEN COALESCE(sl.qty, 0) ELSE 0 END AS qty_out
@@ -165,6 +194,13 @@ class StockMovementReportService
             JOIN products p ON p.id = sl.product_id
             LEFT JOIN purchases ref_p ON sl.source_type = 'purchase' AND sl.source_id = ref_p.id
             LEFT JOIN orders ref_o ON sl.source_type = 'sale' AND sl.source_id = ref_o.id
+            LEFT JOIN sale_returns ref_sr ON sl.source_type = 'sale_return' AND sl.source_id = ref_sr.id
+            LEFT JOIN purchase_returns ref_pr ON sl.source_type = 'purchase_return' AND sl.source_id = ref_pr.id
+            LEFT JOIN customers cust_o ON cust_o.id = ref_o.customer_id
+            LEFT JOIN suppliers supp_p ON supp_p.id = ref_p.supplier_id
+            LEFT JOIN customers cust_sr ON cust_sr.id = ref_sr.customer_id
+            LEFT JOIN purchases pur_for_pr ON pur_for_pr.id = ref_pr.purchase_id
+            LEFT JOIN suppliers supp_pr ON supp_pr.id = pur_for_pr.supplier_id
             WHERE {$where}
             ORDER BY {$orderByClause}
             LIMIT ? OFFSET ?
@@ -230,36 +266,88 @@ class StockMovementReportService
     }
 
     /**
-     * Human-readable reference: for purchase show purchase_no, for sale show invoice_no, else label (#id).
+     * Human-readable reference: document no., optionally followed by customer or supplier (middle dot).
      */
-    private function buildReference(?string $sourceType, ?string $sourceId, ?string $purchaseNo = null, ?string $invoiceNo = null): string
-    {
+    private function buildReference(
+        ?string $sourceType,
+        ?string $sourceId,
+        ?string $purchaseNo = null,
+        ?string $invoiceNo = null,
+        ?string $saleReturnNo = null,
+        ?string $purchaseReturnNo = null,
+        ?string $partyName = null
+    ): string {
         $type = $sourceType ?? '';
         $id = trim((string) $sourceId ?? '');
 
+        $base = null;
         if ($type === 'purchase' && $purchaseNo !== null && $purchaseNo !== '') {
-            return $purchaseNo;
-        }
-        if ($type === 'sale' && $invoiceNo !== null && $invoiceNo !== '') {
-            return $invoiceNo;
+            $base = $purchaseNo;
+        } elseif ($type === 'sale' && $invoiceNo !== null && $invoiceNo !== '') {
+            $base = $invoiceNo;
+        } elseif ($type === 'sale_return' && $saleReturnNo !== null && $saleReturnNo !== '') {
+            $base = $saleReturnNo;
+        } elseif ($type === 'purchase_return' && $purchaseReturnNo !== null && $purchaseReturnNo !== '') {
+            $base = $purchaseReturnNo;
         }
 
-        $labels = [
-            'opening'         => 'Opening',
-            'purchase'         => 'PO',
-            'sale'             => 'Invoice',
-            'purchase_return'  => 'Purchase Return',
-            'sale_return'      => 'Sale Return',
-            'adjustment'       => 'Adjustment',
-            'loss'             => 'Damage/Loss',
-            'expired'          => 'Expired',
-            'theft'            => 'Theft',
-        ];
+        if ($base === null) {
+            $labels = [
+                'opening'         => 'Opening',
+                'purchase'         => 'PO',
+                'sale'             => 'Invoice',
+                'purchase_return'  => 'Purchase Return',
+                'sale_return'      => 'Sale Return',
+                'adjustment'       => 'Adjustment',
+                'loss'             => 'Damage/Loss',
+                'expired'          => 'Expired',
+                'theft'            => 'Theft',
+            ];
 
-        $label = $labels[$type] ?? ucfirst(str_replace('_', ' ', $type));
-        if ($id !== '') {
-            return $label . ' #' . $id;
+            $label = $labels[$type] ?? ucfirst(str_replace('_', ' ', $type));
+            $base = $id !== '' ? $label . ' #' . $id : $label;
         }
-        return $label;
+
+        return $this->formatReferenceWithParty($base, $partyName);
+    }
+
+    /**
+     * Appends customer/supplier name after the document reference when present (e.g. "INV-001 · Acme Ltd").
+     */
+    private function formatReferenceWithParty(string $base, ?string $partyName): string
+    {
+        $party = trim((string) ($partyName ?? ''));
+        if ($party === '') {
+            return $base;
+        }
+
+        return $base . ' · ' . $party;
+    }
+
+    /**
+     * URL to open the related document in a new tab (sale order, purchase, sale/purchase return).
+     */
+    private function referenceUrl(?string $sourceType, $sourceId): ?string
+    {
+        $id = trim((string) ($sourceId ?? ''));
+        if ($id === '' || ! ctype_digit($id)) {
+            return null;
+        }
+        $nid = (int) $id;
+        if ($nid < 1) {
+            return null;
+        }
+
+        try {
+            return match ($sourceType) {
+                'sale' => route('order.orderDetails', ['order_id' => $nid]),
+                'purchase' => route('purchases.show', ['purchase_id' => $nid]),
+                'sale_return' => route('sale-returns.show', ['return_id' => $nid]),
+                'purchase_return' => route('purchase-returns.show', $nid),
+                default => null,
+            };
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 }
