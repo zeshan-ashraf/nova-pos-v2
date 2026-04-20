@@ -288,9 +288,19 @@
                                     <a class="btn btn-sm btn-warning mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Edit Invoice" href="{{ route('order.edit', $order->id) }}">
                                         Edit
                                     </a>
-                                    <a class="btn btn-sm btn-success mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Print" href="{{ route('order.invoiceDownload', $order->id) }}">
-                                        Print
-                                    </a>
+                                    <div class="btn-group mr-2">
+                                        <button type="button" class="btn btn-sm btn-success dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                            Print
+                                        </button>
+                                        <div class="dropdown-menu">
+                                            <a class="dropdown-item" href="{{ route('order.printA4', $order->id) }}" target="_blank">
+                                                <i class="fas fa-file-alt"></i> A4 Invoice
+                                            </a>
+                                            <a class="dropdown-item" href="{{ route('order.printReceipt', $order->id) }}" target="_blank">
+                                                <i class="fas fa-receipt"></i> Receipt (2.5")
+                                            </a>
+                                        </div>
+                                    </div>
                                     <button type="button" class="btn btn-sm btn-danger mr-2 border-none" data-toggle="tooltip" data-placement="top" title="" data-original-title="Delete" onclick="showDeleteModal({{ $order->id }})">
                                         <i class="ri-delete-bin-line mr-0"></i>
                                     </button>

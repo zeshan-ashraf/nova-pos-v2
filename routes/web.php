@@ -203,6 +203,8 @@ Route::middleware(['permission:orders.menu'])->group(function () {
     Route::get('/orders/details/{order_id}/content', [OrderController::class, 'orderDetailsContent'])->name('order.orderDetailsContent');
     Route::put('/orders/update/status', [OrderController::class, 'updateStatus'])->name('order.updateStatus');
     Route::get('/orders/invoice/download/{order_id}', [OrderController::class, 'invoiceDownload'])->name('order.invoiceDownload');
+    Route::get('/orders/invoice/print-a4/{order_id}', [OrderController::class, 'printA4'])->name('order.printA4');
+    Route::get('/orders/invoice/print-receipt/{order_id}', [OrderController::class, 'printReceipt'])->name('order.printReceipt');
 
     Route::get('/api/products/search', [OrderController::class, 'searchProducts'])->name('api.products.search');
     Route::get('/api/categories', [OrderController::class, 'getCategories'])->name('api.categories');

@@ -157,9 +157,19 @@
                     </div>
 
                     <div class="invoice-btn-section clearfix d-print-none">
-                        <a href="javascript:window.print()" class="btn btn-lg btn-print">
-                            Print Invoice
-                        </a>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-lg btn-print dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                Print
+                            </button>
+                            <div class="dropdown-menu">
+                                <a class="dropdown-item" href="#" id="printA4">
+                                    <i class="fas fa-file-alt"></i> A4 Invoice
+                                </a>
+                                <a class="dropdown-item" href="#" id="printReceipt">
+                                    <i class="fas fa-receipt"></i> Receipt (2.5")
+                                </a>
+                            </div>
+                        </div>
                         <a id="invoice_download_btn" class="btn btn-lg btn-download">
                             Download Invoice
                         </a>
@@ -174,21 +184,45 @@
     <script src="{{ asset('assets/invoice/js/jspdf.min.js') }}"></script>
     <script src="{{ asset('assets/invoice/js/html2canvas.js') }}"></script>
     <script src="{{ asset('assets/invoice/js/app.js') }}"></script>
+    <script>
+        $(function () {
+            const orderId = {{ $order->id }};
+            const $printDropdownToggle = $('.invoice-btn-section .dropdown-toggle');
+            const $printDropdownMenu = $('.invoice-btn-section .dropdown-menu');
+
+            // Fallback dropdown handling if Bootstrap dropdown JS is not loaded.
+            $printDropdownToggle.on('click', function (e) {
+                e.preventDefault();
+                $printDropdownMenu.toggleClass('show');
+            });
+
+            $(document).on('click', function (e) {
+                if (!$(e.target).closest('.invoice-btn-section .btn-group').length) {
+                    $printDropdownMenu.removeClass('show');
+                }
+            });
+
+            $('#printA4').click(function (e) {
+                e.preventDefault();
+                $printDropdownMenu.removeClass('show');
+                window.open('/orders/invoice/print-a4/' + orderId, '_blank');
+            });
+
+            $('#printReceipt').click(function (e) {
+                e.preventDefault();
+                $printDropdownMenu.removeClass('show');
+                window.open('/orders/invoice/print-receipt/' + orderId, '_blank');
+            });
+        });
+    </script>
     
     @if(isset($shouldPrint) && $shouldPrint)
     <script>
         $(document).ready(function() {
-            // Wait for page to fully render before triggering print
+            // Open A4 print automatically when invoice is flagged for printing.
             setTimeout(function() {
-                // Find and click the Print Invoice button programmatically
-                const $printButton = $('.btn-print');
-                if ($printButton.length > 0) {
-                    $printButton[0].click();
-                } else {
-                    // Fallback: if button not found, trigger print directly
-                    window.print();
-                }
-            }, 1000); // 1 second delay to ensure page is fully rendered
+                window.open('/orders/invoice/print-a4/{{ $order->id }}', '_blank');
+            }, 500);
         });
     </script>
     @endif

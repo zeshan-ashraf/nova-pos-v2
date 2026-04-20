@@ -493,6 +493,32 @@ class OrderController extends Controller
 
     public function invoiceDownload(Int $order_id)
     {
+        $invoiceData = $this->buildInvoiceViewData($order_id);
+
+        // Clear print session flags if they exist
+        $shouldPrint = request('print') == '1' || session('print_order_id') == $order_id;
+        if (session('print_order_id') == $order_id) {
+            session()->forget(['print_order_id', 'open_print_tab']);
+        }
+
+        return view('orders.invoice-order', [
+            ...$invoiceData,
+            'shouldPrint' => $shouldPrint,
+        ]);
+    }
+
+    public function printA4(int $order_id)
+    {
+        return view('orders.print_a4', $this->buildInvoiceViewData($order_id));
+    }
+
+    public function printReceipt(int $order_id)
+    {
+        return view('orders.print_receipt', $this->buildInvoiceViewData($order_id));
+    }
+
+    private function buildInvoiceViewData(int $order_id): array
+    {
         $order = Order::with(['customer', 'shop.banks'])->findOrFail($order_id);
         $this->ensureShopAccess($order);
 
@@ -508,24 +534,17 @@ class OrderController extends Controller
         }
 
         $orderDetails = OrderDetails::with('product')
-                        ->where('order_id', $order_id)
-                        ->orderBy('id', 'DESC')
-                        ->get();
+            ->where('order_id', $order_id)
+            ->orderBy('id', 'DESC')
+            ->get();
 
-        // Clear print session flags if they exist
-        $shouldPrint = request('print') == '1' || session('print_order_id') == $order_id;
-        if (session('print_order_id') == $order_id) {
-            session()->forget(['print_order_id', 'open_print_tab']);
-        }
-
-        return view('orders.invoice-order', [
+        return [
             'order' => $order,
             'orderDetails' => $orderDetails,
-            'shouldPrint' => $shouldPrint,
             'paymentBankName' => $paymentBankName,
             'salePayments' => $salePayments,
             'customerBalance' => $customerBalance,
-        ]);
+        ];
     }
 
     /**
