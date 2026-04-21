@@ -13,11 +13,18 @@ trait ReportTrait
      */
     protected function getDateRange(Request $request): array
     {
-        $dateFilter = $request->input('date_filter', 'today');
+        $dateFilter = $request->input('date_filter') ?? $request->input('date_range', 'today');
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
 
+        $launch = config('app.erp_launch_date', '2025-11-01');
+
         switch ($dateFilter) {
+            case 'all_time':
+                // Fixed ERP launch → today (ignore tampered start/end for this preset)
+                $startDate = $launch;
+                $endDate = Carbon::today()->format('Y-m-d');
+                break;
             case 'today':
                 $startDate = Carbon::today()->format('Y-m-d');
                 $endDate = Carbon::today()->format('Y-m-d');
@@ -61,6 +68,16 @@ trait ReportTrait
             default:
                 $startDate = Carbon::today()->format('Y-m-d');
                 $endDate = Carbon::today()->format('Y-m-d');
+        }
+
+        if (empty($startDate)) {
+            $startDate = Carbon::today()->format('Y-m-d');
+        }
+        if (empty($endDate)) {
+            $endDate = Carbon::today()->format('Y-m-d');
+        }
+        if (Carbon::parse($startDate)->gt(Carbon::parse($endDate))) {
+            [$startDate, $endDate] = [$endDate, $startDate];
         }
 
         return [

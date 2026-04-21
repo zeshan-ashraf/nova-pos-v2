@@ -25,6 +25,7 @@ class SuperAdminDashboardController extends Controller
 
         return view('super_admin.dashboard', [
             'shops' => $shops,
+            'erp_launch_date' => config('app.erp_launch_date', '2025-11-01'),
         ]);
     }
 
@@ -35,7 +36,7 @@ class SuperAdminDashboardController extends Controller
     public function kpis(Request $request)
     {
         $request->validate([
-            'date_filter' => 'nullable|string|in:today,yesterday,this_week,last_week,this_month,last_month,this_year,last_year,custom',
+            'date_filter' => 'nullable|string|in:today,yesterday,this_week,last_week,this_month,last_month,this_year,last_year,custom,all_time',
             'start_date'  => 'nullable|date',
             'end_date'    => 'nullable|date|after_or_equal:start_date',
             'shop_ids'    => 'nullable|array',

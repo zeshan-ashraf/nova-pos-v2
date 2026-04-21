@@ -4,9 +4,6 @@
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 <style>
-.sortable-th-link { color: #32BDEA !important; text-decoration: none; cursor: pointer; white-space: nowrap; font-weight: bold; }
-.sortable-th-link:hover { color: #2a9fc7 !important; text-decoration: underline; }
-.sortable-th-link i { color: #32BDEA !important; }
 .payables-action-cell .btn { font-size: 0.9rem; }
 .payables-action-cell .btn-icon { padding: 0.4rem 0.55rem; }
 .payables-action-cell .btn-action-text { padding: 0.45rem 0.75rem; }
@@ -268,7 +265,7 @@
                                     $nameDir = (isset($sortBy) && $sortBy === 'name' && isset($sortDir) && $sortDir === 'asc') ? 'desc' : 'asc';
                                     $nameUrl = route('payables.index', array_merge(request()->query(), ['sort' => 'name', 'dir' => $nameDir]));
                                 @endphp
-                                <a href="{{ $nameUrl }}" class="sortable-th-link">Name @if(isset($sortBy) && $sortBy === 'name')<i class="ri-arrow-{{ $sortDir === 'asc' ? 'up' : 'down' }}-line ml-1"></i>@endif</a>
+                                <a href="{{ $nameUrl }}" class="table-sortable-th">Name @if(isset($sortBy) && $sortBy === 'name')<i class="ri-arrow-{{ $sortDir === 'asc' ? 'up' : 'down' }}-line ml-1"></i>@endif</a>
                             </th>
                             <th>Phone</th>
                             <th>
@@ -276,7 +273,7 @@
                                     $balDir = (isset($sortBy) && $sortBy === 'balance' && isset($sortDir) && $sortDir === 'asc') ? 'desc' : 'asc';
                                     $balUrl = route('payables.index', array_merge(request()->query(), ['sort' => 'balance', 'dir' => $balDir]));
                                 @endphp
-                                <a href="{{ $balUrl }}" class="sortable-th-link">Balance @if(isset($sortBy) && $sortBy === 'balance')<i class="ri-arrow-{{ $sortDir === 'asc' ? 'up' : 'down' }}-line ml-1"></i>@endif</a>
+                                <a href="{{ $balUrl }}" class="table-sortable-th">Balance @if(isset($sortBy) && $sortBy === 'balance')<i class="ri-arrow-{{ $sortDir === 'asc' ? 'up' : 'down' }}-line ml-1"></i>@endif</a>
                             </th>
                             <th>Status</th>
                             <th class="text-center">Action</th>

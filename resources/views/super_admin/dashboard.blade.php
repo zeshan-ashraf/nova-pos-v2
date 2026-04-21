@@ -2,99 +2,380 @@
 
 @section('specificpagestyles')
 <style>
-    .sa-dashboard-section + .sa-dashboard-section {
-        margin-top: 1.5rem;
+    /*
+     * Super Admin dashboard — Materio-like: soft shadows, large radius, purple accent, airy spacing.
+     * Change theme: edit variables on .sa-dashboard-page
+     */
+    .sa-dashboard-page {
+        --sa-primary: #8C57FF;
+        --sa-primary-soft: rgba(140, 87, 255, 0.12);
+        --sa-page-bg: #f5f5f9;
+        --sa-card-bg: #ffffff;
+        --sa-text-muted: #8592a3;
+        --sa-text: #433c50;
+        --sa-radius: 14px;
+        --sa-radius-sm: 10px;
+        --sa-shadow: 0 2px 6px 0 rgba(67, 89, 113, 0.12);
+        --sa-shadow-lg: 0 4px 18px 0 rgba(67, 89, 113, 0.14);
+        background: var(--sa-page-bg);
+        margin: -0.5rem -1rem 0;
+        padding: 1.25rem 1rem 2rem;
     }
-    .sa-dashboard-card-title {
+    @media (min-width: 992px) {
+        .sa-dashboard-page { margin: -0.5rem -1.5rem 0; padding: 1.5rem 1.5rem 2.5rem; }
+    }
+
+    .sa-dashboard-page .sa-page-heading h4 {
+        color: var(--sa-text);
+        font-weight: 700;
+        font-size: 1.35rem;
+        letter-spacing: -0.02em;
+    }
+    .sa-dashboard-page .sa-page-heading p {
+        color: var(--sa-text-muted);
         font-size: 0.9rem;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        color: #6c757d;
-        margin-bottom: 0.25rem;
     }
-    .sa-dashboard-metric-value {
-        font-size: 1.4rem;
+
+    .sa-dashboard-section + .sa-dashboard-section {
+        margin-top: 1.75rem;
+    }
+    .sa-section-title {
+        font-size: 0.75rem;
         font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--sa-text-muted);
+        margin-bottom: 1rem !important;
     }
-    .sa-dashboard-subtext {
-        font-size: 0.8rem;
-        color: #6c757d;
+
+    .sa-dashboard-page .card:not(.report-filter-card):not(.sa-insight-tile) {
+        border: none !important;
+        border-radius: var(--sa-radius) !important;
+        background: var(--sa-card-bg);
+        box-shadow: var(--sa-shadow) !important;
+        overflow: hidden;
     }
-    .sa-dashboard-section .card.shadow-sm,
-    .container-fluid .sa-dashboard-section .card {
-        box-shadow: 0 10px 30px rgba(0,0,0,0.15) !important;
+    .sa-dashboard-page .card:not(.report-filter-card):not(.sa-insight-tile) .card-header {
+        background: transparent !important;
+        border-bottom: 1px solid rgba(67, 89, 113, 0.08) !important;
+        padding: 1rem 1.25rem !important;
+        font-weight: 600;
+        color: var(--sa-text);
     }
-    .hover-shadow:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 14px 40px rgba(0,0,0,0.18) !important;
-        transition: all 0.3s ease;
+    .sa-dashboard-page .card:not(.report-filter-card):not(.sa-insight-tile) .card-body {
+        padding: 1.25rem 1.35rem !important;
     }
-    .sa-dashboard-section .card.hover-shadow .sa-dashboard-card-title {
-        font-size: 0.95rem;
-        margin-bottom: 5px;
-    }
-    .sa-dashboard-section .card.hover-shadow .sa-dashboard-metric-value {
-        margin-bottom: 5px;
-    }
-    .kpi-trend { font-size: 0.85rem; margin-left: 4px; }
-    .kpi-trend.up { color: #28a745; }
-    .kpi-trend.down { color: #dc3545; }
-    .activity-item {
-        font-size: 14px;
-        padding: 4px 0;
-    }
-    .ticker-toggle-btn {
-        border: 0;
-        background: transparent;
-        color: #6c757d;
-        font-size: 14px;
-        cursor: pointer;
-    }
-    .bg-light-success { background-color: #e9f8ef; }
-    .bg-light-danger { background-color: #fdecea; }
-    .report-filter-card .card-header {
+
+    /* Filter box: keep original Bootstrap / app styling (not Materio card overrides) */
+    .sa-dashboard-page .report-filter-card .card-header {
         border: 0;
         padding-top: 0.5rem;
         padding-bottom: 0.5rem;
     }
-    .report-filter-card .card-body {
+    .sa-dashboard-page .report-filter-card .card-body {
         padding-top: 0;
     }
-    #shop-performance-table thead th {
-        background: #dfe4ea;
+
+    .sa-dashboard-card-title {
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: var(--sa-text-muted);
+        margin-bottom: 0.35rem;
+        text-transform: none;
+        letter-spacing: 0;
+    }
+    .sa-dashboard-metric-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--sa-text);
+        letter-spacing: -0.02em;
+    }
+    .sa-dashboard-subtext {
+        font-size: 0.8125rem;
+        color: var(--sa-text-muted);
+        margin-top: 0.35rem;
+    }
+
+    /* KPI icon badges (rounded squares) */
+    .sa-kpi-icon-badge {
+        width: 52px;
+        height: 52px;
+        border-radius: var(--sa-radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: auto;
+        margin-right: auto;
+        font-size: 1.25rem;
+    }
+    .sa-kpi-icon-badge--success { background: rgba(40, 199, 111, 0.12); color: #28c76f; }
+    .sa-kpi-icon-badge--warning { background: rgba(255, 159, 67, 0.15); color: #ff9f43; }
+    .sa-kpi-icon-badge--neutral { background: rgba(133, 146, 163, 0.12); color: #8592a3; }
+    .sa-kpi-icon-badge--info { background: rgba(0, 207, 232, 0.12); color: #00cfe8; }
+    .sa-kpi-icon-badge--danger { background: rgba(234, 84, 85, 0.12); color: #ea5455; }
+    .sa-kpi-icon-badge--primary { background: var(--sa-primary-soft); color: var(--sa-primary); }
+
+    /* Consolidated KPI row: compact, icon on the right, crisp border */
+    #consolidated-kpis > .col-12:first-child .sa-section-title {
+        margin-bottom: 0.65rem !important;
+    }
+    #consolidated-kpis .col.mb-3,
+    #consolidated-kpis .col-md-4.mb-3 {
+        margin-bottom: 0.65rem !important;
+    }
+    #consolidated-kpis .card.hover-shadow {
+        border: 1px solid rgba(30, 41, 59, 0.14) !important;
+        box-shadow:
+            0 1px 2px rgba(15, 23, 42, 0.05),
+            0 2px 10px rgba(67, 89, 113, 0.06) !important;
+    }
+    #consolidated-kpis .card.hover-shadow:hover {
+        border-color: rgba(30, 41, 59, 0.22) !important;
+    }
+    #consolidated-kpis .sa-kpi-card-body {
+        padding: 0.65rem 0.8rem 0.55rem !important;
+    }
+    #consolidated-kpis .sa-kpi-layout {
+        min-height: 3.25rem;
+    }
+    #consolidated-kpis .sa-kpi-icon-badge {
+        width: 42px;
+        height: 42px;
+        margin: 0 !important;
+        font-size: 1.05rem;
+        border-radius: 10px;
+        border: 1px solid rgba(30, 41, 59, 0.07);
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) inset;
+    }
+    #consolidated-kpis .sa-dashboard-card-title {
+        font-size: 0.78rem;
+        font-weight: 600;
+        margin-bottom: 0.2rem !important;
+        line-height: 1.25;
+    }
+    #consolidated-kpis .sa-dashboard-metric-value {
+        font-size: 1.28rem !important;
+        line-height: 1.2;
+    }
+    #consolidated-kpis .sa-dashboard-subtext {
+        margin-top: 0.2rem !important;
+        font-size: 0.72rem !important;
+        line-height: 1.3;
+    }
+
+    .sa-dashboard-page .hover-shadow {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .sa-dashboard-page .hover-shadow:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--sa-shadow-lg) !important;
+    }
+
+    .kpi-trend { font-size: 0.85rem; margin-left: 4px; font-weight: 600; }
+    .kpi-trend.up { color: #28c76f; }
+    .kpi-trend.down { color: #ea5455; }
+
+    .activity-item {
+        font-size: 0.875rem;
+        padding: 0.5rem 0.75rem;
+        border-radius: var(--sa-radius-sm);
+        margin-bottom: 0.35rem;
+        background: rgba(255, 255, 255, 0.6);
+    }
+    .sa-activity-card .ticker-toggle-btn {
+        border: 0;
+        background: rgba(67, 89, 113, 0.1);
+        color: var(--sa-text) !important;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .sa-activity-card .ticker-toggle-btn:hover {
+        background: rgba(67, 89, 113, 0.16);
+    }
+
+    /* Insights row — solid semantic tiles (Bootstrap-style), icon right, dark edge, no progress UI */
+    .sa-insight-tile {
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid rgba(0, 0, 0, 0.22) !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .sa-insight-tile:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
+    }
+    .sa-insight-tile--info {
+        background: #17a2b8;
+        color: #fff;
+    }
+    .sa-insight-tile--success {
+        background: #28a745;
+        color: #fff;
+    }
+    .sa-insight-tile--warning {
+        background: #ffc107;
+        color: #212529;
+        border-color: rgba(0, 0, 0, 0.28) !important;
+    }
+    .sa-insight-tile--danger {
+        background: #dc3545;
+        color: #fff;
+    }
+    .sa-insight-tile-body {
+        padding: 0.6rem 0.7rem 0.5rem !important;
+    }
+    .sa-insight-label {
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        opacity: 0.92;
+        margin-bottom: 0.25rem;
+        line-height: 1.2;
+    }
+    .sa-insight-tile--warning .sa-insight-label {
+        color: #343a40;
+        opacity: 0.88;
+    }
+    .sa-insight-name {
+        font-size: 1.05rem;
+        font-weight: 700;
+        line-height: 1.25;
+        margin-bottom: 0.15rem;
+        word-break: break-word;
+    }
+    .sa-insight-tile--warning .sa-insight-name {
+        color: #212529;
+    }
+    .sa-insight-meta {
+        font-size: 0.74rem;
+        font-weight: 500;
+        opacity: 0.9;
+        display: block;
+    }
+    .sa-insight-tile--warning .sa-insight-meta {
+        color: #495057;
+    }
+    .sa-insight-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        flex-shrink: 0;
+        background: rgba(255, 255, 255, 0.22);
+    }
+    .sa-insight-tile--warning .sa-insight-icon {
+        background: rgba(0, 0, 0, 0.1);
+        color: #212529;
+    }
+    @keyframes saInsightFlash {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.55; }
+    }
+    .sa-insight-meta.sa-insight-flash {
+        animation: saInsightFlash 0.75s ease;
+    }
+
+    /* Activity ticker — match other card headers (light bar, compact) */
+    .sa-activity-card .card-header {
+        background: #f5f5f9 !important;
+        border-bottom: 1px solid rgba(67, 89, 113, 0.1) !important;
+        color: var(--sa-text);
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
+    }
+    .sa-activity-card .card-header h6 {
+        color: var(--sa-text) !important;
         font-weight: 700;
     }
-    #shop-performance-table tbody tr {
-        transition: background 0.2s ease;
+
+    /* Tables inside cards */
+    .sa-dashboard-page .table-responsive {
+        border-radius: 0 0 var(--sa-radius) var(--sa-radius);
     }
-    #shop-performance-table tbody tr:hover,
-    #inventory-snapshot-table tbody tr:hover {
-        background: rgba(0,0,0,0.03);
+    #shop-performance-table thead th,
+    #inventory-snapshot-table thead th {
+        background: #f5f5f9 !important;
+        color: var(--sa-text-muted);
+        font-weight: 600;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        border-bottom: 1px solid rgba(67, 89, 113, 0.08) !important;
+        padding: 0.85rem 1rem !important;
     }
+    #shop-performance-table tbody td,
+    #inventory-snapshot-table tbody td {
+        padding: 0.75rem 1rem !important;
+        vertical-align: middle;
+        border-color: rgba(67, 89, 113, 0.06) !important;
+    }
+    #shop-performance-table tbody tr:hover td,
+    #shop-performance-table tbody tr:hover th,
+    #inventory-snapshot-table tbody tr:hover td,
+    #inventory-snapshot-table tbody tr:hover th {
+        background-color: rgba(140, 87, 255, 0.07) !important;
+    }
+
+    .sa-chart-wrap {
+        min-height: 260px;
+        position: relative;
+    }
+
+    .sa-icon-accent { color: var(--sa-primary) !important; }
+
+    /* Striped rows — align with app default (#eef3f8 odd); previous “soft” override hid stripes */
+    .content-page .sa-dashboard-page .table.table-striped:not(.table-borderless):not(.table-dark) tbody tr:nth-of-type(odd) td,
+    .content-page .sa-dashboard-page .table.table-striped:not(.table-borderless):not(.table-dark) tbody tr:nth-of-type(odd) th {
+        background-color: #eef3f8 !important;
+    }
+    .content-page .sa-dashboard-page .table.table-striped:not(.table-borderless):not(.table-dark) tbody tr:nth-of-type(even) td,
+    .content-page .sa-dashboard-page .table.table-striped:not(.table-borderless):not(.table-dark) tbody tr:nth-of-type(even) th {
+        background-color: #fff !important;
+    }
+    .content-page .sa-dashboard-page .table.table-striped:not(.table-borderless):not(.table-dark) tbody tr:hover td,
+    .content-page .sa-dashboard-page .table.table-striped:not(.table-borderless):not(.table-dark) tbody tr:hover th {
+        background-color: rgba(140, 87, 255, 0.1) !important;
+    }
+
+    .sa-dashboard-page #kpi-error-alert {
+        border: none;
+        border-radius: var(--sa-radius-sm);
+        box-shadow: var(--sa-shadow);
+    }
+
     #consolidated-kpis .card.kpi-up { animation: kpiPulseUp 0.5s ease; }
     #consolidated-kpis .card.kpi-down { animation: kpiPulseDown 0.5s ease; }
     @keyframes kpiPulseUp {
-        0% { box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
-        50% { box-shadow: 0 10px 30px rgba(40,167,69,0.35); }
-        100% { box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
+        0% { box-shadow: var(--sa-shadow); }
+        50% { box-shadow: 0 4px 20px rgba(40, 199, 111, 0.25); }
+        100% { box-shadow: var(--sa-shadow); }
     }
     @keyframes kpiPulseDown {
-        0% { box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
-        50% { box-shadow: 0 10px 30px rgba(220,53,69,0.25); }
-        100% { box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
+        0% { box-shadow: var(--sa-shadow); }
+        50% { box-shadow: 0 4px 20px rgba(234, 84, 85, 0.22); }
+        100% { box-shadow: var(--sa-shadow); }
     }
 </style>
 @endsection
 
 @section('container')
-<div class="container-fluid">
+<div class="sa-dashboard-page">
+<div class="container-fluid px-2 px-lg-3">
     <div class="row">
         <div class="col-12">
-            <div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
-                <div>
-                    <h4 class="mb-1">Super Admin Comparison Dashboard</h4>
-                    <p class="text-muted mb-0">Executive overview across all child shops (view-only)</p>
-                </div>
+            <div class="sa-page-heading mb-4">
+                <h4 class="mb-1">Super Admin Comparison Dashboard</h4>
+                <p class="mb-0">Executive overview across all child shops (view-only)</p>
             </div>
         </div>
     </div>
@@ -110,7 +391,7 @@
                     <form id="sa_filter_form" class="form-row align-items-end">
                         <div class="form-group col-md-3">
                             <label for="sa_date_range" class="mb-1">Date Filter</label>
-                            <select id="sa_date_range" class="form-control" name="date_filter" onchange="toggleSaCustomDates()">
+                            <select id="sa_date_range" class="form-control" name="date_filter">
                                 <option value="today" selected>Today</option>
                                 <option value="yesterday">Yesterday</option>
                                 <option value="this_week">This Week</option>
@@ -119,6 +400,7 @@
                                 <option value="last_month">Last Month</option>
                                 <option value="this_year">This Year</option>
                                 <option value="last_year">Last Year</option>
+                                <option value="all_time">From Start to Today</option>
                                 <option value="custom">Custom Range</option>
                             </select>
                         </div>
@@ -150,108 +432,191 @@
         </div>
     </div>
 
-    {{-- 2️⃣ Consolidated KPI Cards (All Shops Combined) --}}
+    {{-- 2️⃣ Insights — solid color tiles (above consolidated KPIs) --}}
+    <div class="row sa-dashboard-section sa-insights-row">
+        <div class="col-12">
+            <h6 class="sa-section-title mb-2">Insights</h6>
+        </div>
+        <div class="col-6 col-lg-3 mb-2">
+            <div class="card sa-insight-tile sa-insight-tile--info h-100 border-0">
+                <div class="card-body sa-insight-tile-body">
+                    <div class="d-flex align-items-start justify-content-between gap-2">
+                        <div class="text-left flex-grow-1 min-w-0 pr-1">
+                            <div class="sa-insight-label">Top selling shop</div>
+                            <div id="topSellingShop" class="sa-insight-name text-white">-</div>
+                            <small id="topSellingValue" class="sa-insight-meta text-white">PKR 0.00</small>
+                        </div>
+                        <div class="sa-insight-icon text-white" aria-hidden="true"><i class="fas fa-trophy"></i></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3 mb-2">
+            <div class="card sa-insight-tile sa-insight-tile--success h-100 border-0">
+                <div class="card-body sa-insight-tile-body">
+                    <div class="d-flex align-items-start justify-content-between gap-2">
+                        <div class="text-left flex-grow-1 min-w-0 pr-1">
+                            <div class="sa-insight-label">Highest profit shop</div>
+                            <div id="highestProfitShop" class="sa-insight-name text-white">-</div>
+                            <small id="highestProfitValue" class="sa-insight-meta text-white">PKR 0.00</small>
+                        </div>
+                        <div class="sa-insight-icon text-white" aria-hidden="true"><i class="fas fa-coins"></i></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3 mb-2">
+            <div class="card sa-insight-tile sa-insight-tile--warning h-100 border-0">
+                <div class="card-body sa-insight-tile-body">
+                    <div class="d-flex align-items-start justify-content-between gap-2">
+                        <div class="text-left flex-grow-1 min-w-0 pr-1">
+                            <div class="sa-insight-label">Best margin shop</div>
+                            <div id="bestMarginShop" class="sa-insight-name">-</div>
+                            <small id="bestMarginValue" class="sa-insight-meta">0.00%</small>
+                        </div>
+                        <div class="sa-insight-icon" aria-hidden="true"><i class="fas fa-percentage"></i></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3 mb-2">
+            <div class="card sa-insight-tile sa-insight-tile--danger h-100 border-0">
+                <div class="card-body sa-insight-tile-body">
+                    <div class="d-flex align-items-start justify-content-between gap-2">
+                        <div class="text-left flex-grow-1 min-w-0 pr-1">
+                            <div class="sa-insight-label">Lowest performing</div>
+                            <div id="lowestShop" class="sa-insight-name text-white">-</div>
+                            <small id="lowestValue" class="sa-insight-meta text-white">PKR 0.00</small>
+                        </div>
+                        <div class="sa-insight-icon text-white" aria-hidden="true"><i class="fas fa-exclamation-triangle"></i></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- 3️⃣ Consolidated KPI Cards (All Shops Combined) --}}
     <div id="consolidated-kpis" class="row sa-dashboard-section">
         <div class="col-12">
-            <h6 class="text-uppercase mb-3 font-weight-bold">Consolidated KPIs (All Selected Shops)</h6>
+            <h6 class="sa-section-title">Consolidated KPIs (All Selected Shops)</h6>
         </div>
 
         <!-- Total Sales -->
         <div class="col-12 col-sm-6 col-lg mb-3">
-            <div class="card h-100 shadow-sm border-0 hover-shadow" id="card-totalSales">
-                <div class="card-body text-center position-relative">
+            <div class="card h-100 hover-shadow" id="card-totalSales">
+                <div class="card-body sa-kpi-card-body position-relative">
                     <div id="kpi-spinner-totalSales" class="position-absolute top-50 start-50 translate-middle">
                         <span class="spinner-border spinner-border-sm text-success" role="status"></span>
                     </div>
-                    <div class="d-flex justify-content-center mb-2">
-                        <i class="fas fa-dollar-sign fa-2x text-success"></i>
+                    <div class="sa-kpi-layout d-flex align-items-start justify-content-between gap-2">
+                        <div class="sa-kpi-main text-left flex-grow-1 min-w-0">
+                            <div class="sa-dashboard-card-title">Total Sales</div>
+                            <div class="d-flex align-items-baseline flex-wrap">
+                                <span id="totalSales" class="sa-dashboard-metric-value font-weight-bold text-success mb-0">…</span>
+                                <span id="totalSalesTrend" class="kpi-trend" style="display:none;"></span>
+                            </div>
+                            <div class="sa-dashboard-subtext text-muted mb-0">All shops, selected period</div>
+                        </div>
+                        <div class="sa-kpi-icon-badge sa-kpi-icon-badge--success flex-shrink-0" aria-hidden="true">
+                            <i class="fas fa-dollar-sign"></i>
+                        </div>
                     </div>
-                    <div class="sa-dashboard-card-title font-weight-bold">Total Sales</div>
-                    <div class="d-flex justify-content-center align-items-center flex-wrap">
-                        <span id="totalSales" class="sa-dashboard-metric-value h3 font-weight-bold text-success">…</span>
-                        <span id="totalSalesTrend" class="kpi-trend" style="display:none;"></span>
-                    </div>
-                    <div class="sa-dashboard-subtext text-muted">All shops, selected period</div>
                 </div>
             </div>
         </div>
 
         <!-- Total COGS -->
         <div class="col-12 col-sm-6 col-lg mb-3">
-            <div class="card h-100 shadow-sm border-0 hover-shadow" id="card-totalCOGS">
-                <div class="card-body text-center position-relative">
+            <div class="card h-100 hover-shadow" id="card-totalCOGS">
+                <div class="card-body sa-kpi-card-body position-relative">
                     <div id="kpi-spinner-totalCOGS" class="position-absolute top-50 start-50 translate-middle">
                         <span class="spinner-border spinner-border-sm text-warning" role="status"></span>
                     </div>
-                    <div class="d-flex justify-content-center mb-2">
-                        <i class="fas fa-boxes fa-2x text-warning"></i>
+                    <div class="sa-kpi-layout d-flex align-items-start justify-content-between gap-2">
+                        <div class="sa-kpi-main text-left flex-grow-1 min-w-0">
+                            <div class="sa-dashboard-card-title">Total COGS</div>
+                            <div class="d-flex align-items-baseline flex-wrap">
+                                <span id="totalCOGS" class="sa-dashboard-metric-value font-weight-bold text-warning mb-0">…</span>
+                                <span id="totalCOGSTrend" class="kpi-trend" style="display:none;"></span>
+                            </div>
+                            <div class="sa-dashboard-subtext text-muted mb-0">Cost of goods sold</div>
+                        </div>
+                        <div class="sa-kpi-icon-badge sa-kpi-icon-badge--warning flex-shrink-0" aria-hidden="true">
+                            <i class="fas fa-boxes"></i>
+                        </div>
                     </div>
-                    <div class="sa-dashboard-card-title font-weight-bold">Total COGS</div>
-                    <div class="d-flex justify-content-center align-items-center flex-wrap">
-                        <span id="totalCOGS" class="sa-dashboard-metric-value h3 font-weight-bold text-warning">…</span>
-                        <span id="totalCOGSTrend" class="kpi-trend" style="display:none;"></span>
-                    </div>
-                    <div class="sa-dashboard-subtext text-muted">Cost of goods sold</div>
                 </div>
             </div>
         </div>
 
         <!-- Total Purchases -->
         <div class="col-12 col-sm-6 col-lg mb-3">
-            <div class="card h-100 shadow-sm border-0 hover-shadow" id="card-totalPurchases">
-                <div class="card-body text-center position-relative">
+            <div class="card h-100 hover-shadow" id="card-totalPurchases">
+                <div class="card-body sa-kpi-card-body position-relative">
                     <div id="kpi-spinner-totalPurchases" class="position-absolute top-50 start-50 translate-middle">
                         <span class="spinner-border spinner-border-sm text-secondary" role="status"></span>
                     </div>
-                    <div class="d-flex justify-content-center mb-2">
-                        <i class="fas fa-shopping-cart fa-2x text-secondary"></i>
+                    <div class="sa-kpi-layout d-flex align-items-start justify-content-between gap-2">
+                        <div class="sa-kpi-main text-left flex-grow-1 min-w-0">
+                            <div class="sa-dashboard-card-title">Total Purchases</div>
+                            <div class="d-flex align-items-baseline flex-wrap">
+                                <span id="totalPurchases" class="sa-dashboard-metric-value font-weight-bold text-secondary mb-0">…</span>
+                                <span id="totalPurchasesTrend" class="kpi-trend" style="display:none;"></span>
+                            </div>
+                            <div class="sa-dashboard-subtext text-muted mb-0">Selected period</div>
+                        </div>
+                        <div class="sa-kpi-icon-badge sa-kpi-icon-badge--neutral flex-shrink-0" aria-hidden="true">
+                            <i class="fas fa-shopping-cart"></i>
+                        </div>
                     </div>
-                    <div class="sa-dashboard-card-title font-weight-bold">Total Purchases</div>
-                    <div class="d-flex justify-content-center align-items-center flex-wrap">
-                        <span id="totalPurchases" class="sa-dashboard-metric-value h3 font-weight-bold text-secondary">…</span>
-                        <span id="totalPurchasesTrend" class="kpi-trend" style="display:none;"></span>
-                    </div>
-                    <div class="sa-dashboard-subtext text-muted">Selected period</div>
                 </div>
             </div>
         </div>
 
         <!-- Total Discounts -->
         <div class="col-12 col-sm-6 col-lg mb-3">
-            <div class="card h-100 shadow-sm border-0 hover-shadow" id="card-totalDiscounts">
-                <div class="card-body text-center position-relative">
+            <div class="card h-100 hover-shadow" id="card-totalDiscounts">
+                <div class="card-body sa-kpi-card-body position-relative">
                     <div id="kpi-spinner-totalDiscounts" class="position-absolute top-50 start-50 translate-middle">
                         <span class="spinner-border spinner-border-sm text-info" role="status"></span>
                     </div>
-                    <div class="d-flex justify-content-center mb-2">
-                        <i class="fas fa-tag fa-2x text-info"></i>
+                    <div class="sa-kpi-layout d-flex align-items-start justify-content-between gap-2">
+                        <div class="sa-kpi-main text-left flex-grow-1 min-w-0">
+                            <div class="sa-dashboard-card-title">Total Discounts</div>
+                            <div class="d-flex align-items-baseline flex-wrap">
+                                <span id="totalDiscounts" class="sa-dashboard-metric-value font-weight-bold text-info mb-0">…</span>
+                                <span id="totalDiscountsTrend" class="kpi-trend" style="display:none;"></span>
+                            </div>
+                            <div class="sa-dashboard-subtext text-muted mb-0">Invoice + line discounts</div>
+                        </div>
+                        <div class="sa-kpi-icon-badge sa-kpi-icon-badge--info flex-shrink-0" aria-hidden="true">
+                            <i class="fas fa-tag"></i>
+                        </div>
                     </div>
-                    <div class="sa-dashboard-card-title font-weight-bold">Total Discounts</div>
-                    <div class="d-flex justify-content-center align-items-center flex-wrap">
-                        <span id="totalDiscounts" class="sa-dashboard-metric-value h3 font-weight-bold text-info">…</span>
-                        <span id="totalDiscountsTrend" class="kpi-trend" style="display:none;"></span>
-                    </div>
-                    <div class="sa-dashboard-subtext text-muted">Invoice + line discounts</div>
                 </div>
             </div>
         </div>
 
         <!-- Total Expense -->
         <div class="col-12 col-sm-6 col-lg mb-3">
-            <div class="card h-100 shadow-sm border-0 hover-shadow" id="card-totalExpense">
-                <div class="card-body text-center position-relative">
+            <div class="card h-100 hover-shadow" id="card-totalExpense">
+                <div class="card-body sa-kpi-card-body position-relative">
                     <div id="kpi-spinner-totalExpense" class="position-absolute top-50 start-50 translate-middle">
                         <span class="spinner-border spinner-border-sm text-danger" role="status"></span>
                     </div>
-                    <div class="d-flex justify-content-center mb-2">
-                        <i class="fas fa-money-bill-wave fa-2x text-danger"></i>
+                    <div class="sa-kpi-layout d-flex align-items-start justify-content-between gap-2">
+                        <div class="sa-kpi-main text-left flex-grow-1 min-w-0">
+                            <div class="sa-dashboard-card-title">Total Expense</div>
+                            <div class="d-flex align-items-baseline flex-wrap">
+                                <span id="totalExpense" class="sa-dashboard-metric-value font-weight-bold text-danger mb-0">…</span>
+                                <span id="totalExpenseTrend" class="kpi-trend" style="display:none;"></span>
+                            </div>
+                            <div class="sa-dashboard-subtext text-muted mb-0">Selected period</div>
+                        </div>
+                        <div class="sa-kpi-icon-badge sa-kpi-icon-badge--danger flex-shrink-0" aria-hidden="true">
+                            <i class="fas fa-money-bill-wave"></i>
+                        </div>
                     </div>
-                    <div class="sa-dashboard-card-title font-weight-bold">Total Expense</div>
-                    <div class="d-flex justify-content-center align-items-center flex-wrap">
-                        <span id="totalExpense" class="sa-dashboard-metric-value h3 font-weight-bold text-danger">…</span>
-                        <span id="totalExpenseTrend" class="kpi-trend" style="display:none;"></span>
-                    </div>
-                    <div class="sa-dashboard-subtext text-muted">Selected period</div>
                 </div>
             </div>
         </div>
@@ -260,115 +625,84 @@
         <div class="w-100"></div>
         <!-- Gross Profit -->
         <div class="col-12 col-md-4 mb-3">
-            <div class="card h-100 shadow-sm border-0 hover-shadow" id="card-grossProfit">
-                <div class="card-body text-center position-relative">
+            <div class="card h-100 hover-shadow" id="card-grossProfit">
+                <div class="card-body sa-kpi-card-body position-relative">
                     <div id="kpi-spinner-grossProfit" class="position-absolute top-50 start-50 translate-middle">
                         <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
                     </div>
-                    <div class="d-flex justify-content-center mb-2">
-                        <i class="fas fa-chart-line fa-2x text-primary"></i>
+                    <div class="sa-kpi-layout d-flex align-items-start justify-content-between gap-2">
+                        <div class="sa-kpi-main text-left flex-grow-1 min-w-0">
+                            <div class="sa-dashboard-card-title">Gross Profit</div>
+                            <div class="d-flex align-items-baseline flex-wrap">
+                                <span id="grossProfit" class="sa-dashboard-metric-value font-weight-bold text-primary mb-0">…</span>
+                                <span id="grossProfitTrend" class="kpi-trend" style="display:none;"></span>
+                            </div>
+                            <div class="sa-dashboard-subtext text-muted mb-0">Sales − COGS</div>
+                        </div>
+                        <div class="sa-kpi-icon-badge sa-kpi-icon-badge--primary flex-shrink-0" aria-hidden="true">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
                     </div>
-                    <div class="sa-dashboard-card-title font-weight-bold">Gross Profit</div>
-                    <div class="d-flex justify-content-center align-items-center flex-wrap">
-                        <span id="grossProfit" class="sa-dashboard-metric-value h3 font-weight-bold text-primary">…</span>
-                        <span id="grossProfitTrend" class="kpi-trend" style="display:none;"></span>
-                    </div>
-                    <div class="sa-dashboard-subtext text-muted">Sales − COGS</div>
                 </div>
             </div>
         </div>
 
         <!-- Net Profit -->
         <div class="col-12 col-md-4 mb-3">
-            <div class="card h-100 shadow-sm border-0 hover-shadow" id="card-netProfit">
-                <div class="card-body text-center position-relative">
+            <div class="card h-100 hover-shadow" id="card-netProfit">
+                <div class="card-body sa-kpi-card-body position-relative">
                     <div id="kpi-spinner-netProfit" class="position-absolute top-50 start-50 translate-middle">
                         <span class="spinner-border spinner-border-sm text-success" role="status"></span>
                     </div>
-                    <div class="d-flex justify-content-center mb-2">
-                        <i class="fas fa-coins fa-2x text-success"></i>
+                    <div class="sa-kpi-layout d-flex align-items-start justify-content-between gap-2">
+                        <div class="sa-kpi-main text-left flex-grow-1 min-w-0">
+                            <div class="sa-dashboard-card-title">Net Profit</div>
+                            <div class="d-flex align-items-baseline flex-wrap">
+                                <span id="netProfit" class="sa-dashboard-metric-value font-weight-bold text-success mb-0">…</span>
+                                <span id="netProfitTrend" class="kpi-trend" style="display:none;"></span>
+                            </div>
+                            <div class="sa-dashboard-subtext text-muted mb-0">After discounts</div>
+                        </div>
+                        <div class="sa-kpi-icon-badge sa-kpi-icon-badge--success flex-shrink-0" aria-hidden="true">
+                            <i class="fas fa-coins"></i>
+                        </div>
                     </div>
-                    <div class="sa-dashboard-card-title font-weight-bold">Net Profit</div>
-                    <div class="d-flex justify-content-center align-items-center flex-wrap">
-                        <span id="netProfit" class="sa-dashboard-metric-value h3 font-weight-bold text-success">…</span>
-                        <span id="netProfitTrend" class="kpi-trend" style="display:none;"></span>
-                    </div>
-                    <div class="sa-dashboard-subtext text-muted">After discounts</div>
                 </div>
             </div>
         </div>
 
         <!-- Profit Margin % -->
         <div class="col-12 col-md-4 mb-3">
-            <div class="card h-100 shadow-sm border-0 hover-shadow" id="card-profitMargin">
-                <div class="card-body text-center position-relative">
+            <div class="card h-100 hover-shadow" id="card-profitMargin">
+                <div class="card-body sa-kpi-card-body position-relative">
                     <div id="kpi-spinner-profitMargin" class="position-absolute top-50 start-50 translate-middle">
                         <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
                     </div>
-                    <div class="d-flex justify-content-center mb-2">
-                        <i class="fas fa-percentage fa-2x text-primary"></i>
+                    <div class="sa-kpi-layout d-flex align-items-start justify-content-between gap-2">
+                        <div class="sa-kpi-main text-left flex-grow-1 min-w-0">
+                            <div class="sa-dashboard-card-title">Profit Margin %</div>
+                            <div class="d-flex align-items-baseline flex-wrap">
+                                <span id="profitMargin" class="sa-dashboard-metric-value font-weight-bold text-primary mb-0">…</span>
+                                <span id="profitMarginTrend" class="kpi-trend" style="display:none;"></span>
+                            </div>
+                            <div class="sa-dashboard-subtext text-muted mb-0">Net profit ÷ sales</div>
+                        </div>
+                        <div class="sa-kpi-icon-badge sa-kpi-icon-badge--primary flex-shrink-0" aria-hidden="true">
+                            <i class="fas fa-percentage"></i>
+                        </div>
                     </div>
-                    <div class="sa-dashboard-card-title font-weight-bold">Profit Margin %</div>
-                    <div class="d-flex justify-content-center align-items-center flex-wrap">
-                        <span id="profitMargin" class="sa-dashboard-metric-value h3 font-weight-bold text-primary">…</span>
-                        <span id="profitMarginTrend" class="kpi-trend" style="display:none;"></span>
-                    </div>
-                    <div class="sa-dashboard-subtext text-muted">Net profit ÷ sales</div>
                 </div>
             </div>
         </div>
     </div>
     <div id="kpi-error-alert" class="alert alert-danger mt-2" style="display: none;" role="alert"></div>
 
-    {{-- 3️⃣ Top / Bottom Insight Cards --}}
-    <div class="row sa-dashboard-section">
-        <div class="col-12">
-            <h6 class="text-uppercase mb-2">Insights</h6>
-        </div>
-        <div class="col-md-3 mb-3">
-            <div class="card border h-100 bg-light-success">
-                <div class="card-body text-center">
-                    <div class="sa-dashboard-card-title"><i class="fas fa-trophy mr-1 text-warning"></i>Top Selling Shop</div>
-                    <div id="topSellingShop" class="sa-dashboard-metric-value h4 font-weight-bold text-success">-</div>
-                    <small id="topSellingValue" class="text-muted">PKR 0.00</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 mb-3">
-            <div class="card border h-100 bg-light-success">
-                <div class="card-body text-center">
-                    <div class="sa-dashboard-card-title"><i class="fas fa-coins mr-1 text-success"></i>Highest Profit Shop</div>
-                    <div id="highestProfitShop" class="sa-dashboard-metric-value h4 font-weight-bold text-success">-</div>
-                    <small id="highestProfitValue" class="text-muted">PKR 0.00</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 mb-3">
-            <div class="card border h-100 bg-light-success">
-                <div class="card-body text-center">
-                    <div class="sa-dashboard-card-title"><i class="fas fa-percentage mr-1 text-primary"></i>Best Margin Shop</div>
-                    <div id="bestMarginShop" class="sa-dashboard-metric-value h4 font-weight-bold text-primary">-</div>
-                    <small id="bestMarginValue" class="text-muted">0.00%</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 mb-3">
-            <div class="card border h-100 bg-light-danger">
-                <div class="card-body text-center">
-                    <div class="sa-dashboard-card-title"><i class="fas fa-exclamation-triangle mr-1 text-danger"></i>Lowest Performing Shop</div>
-                    <div id="lowestShop" class="sa-dashboard-metric-value h4 font-weight-bold text-danger">-</div>
-                    <small id="lowestValue" class="text-muted">PKR 0.00</small>
-                </div>
-            </div>
-        </div>
-    </div>
-
     {{-- 4️⃣ Live Activity Ticker --}}
     <div class="row sa-dashboard-section">
         <div class="col-12">
-            <div class="card border mb-3">
-                <div class="card-header d-flex justify-content-between align-items-center py-2" style="background-color: #FF7E41;">
-                    <h6 class="mb-0 text-uppercase text-white">Live Activity Ticker</h6>
+            <div class="card sa-activity-card mb-2">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 text-uppercase">Live Activity Ticker</h6>
                     <button
                         type="button"
                         id="activityTickerToggle"
@@ -378,7 +712,7 @@
                         aria-expanded="true"
                         aria-controls="activityTickerCollapse"
                     >
-                        <i class="fas fa-chevron-up text-white"></i>
+                        <i class="fas fa-chevron-up"></i>
                     </button>
                 </div>
                 <div id="activityTickerCollapse" class="collapse show">
@@ -393,9 +727,9 @@
     {{-- 5️⃣ Child Shop Comparison Table --}}
     <div class="row sa-dashboard-section">
         <div class="col-12">
-            <div class="card border">
+            <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0 text-uppercase">Child Shop Performance Comparison</h6>
+                    <h6 class="mb-0">Child Shop Performance Comparison</h6>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -442,24 +776,24 @@
     {{-- 6️⃣ Comparison Charts Section --}}
     <div class="row sa-dashboard-section">
         <div class="col-12">
-            <h6 class="text-uppercase mb-2">Visual Comparisons</h6>
+            <h6 class="sa-section-title">Visual Comparisons</h6>
         </div>
         <div class="col-lg-6 mb-3">
-            <div class="card border h-100">
+            <div class="card h-100">
                 <div class="card-header">
-                    <h6 class="mb-0 text-uppercase">Sales Comparison</h6>
+                    <h6 class="mb-0">Sales Comparison</h6>
                 </div>
-                <div class="card-body">
+                <div class="card-body sa-chart-wrap">
                     <canvas id="salesComparisonChart" height="160"></canvas>
                 </div>
             </div>
         </div>
         <div class="col-lg-6 mb-3">
-            <div class="card border h-100">
+            <div class="card h-100">
                 <div class="card-header">
-                    <h6 class="mb-0 text-uppercase">Net Profit Comparison</h6>
+                    <h6 class="mb-0">Net Profit Comparison</h6>
                 </div>
-                <div class="card-body">
+                <div class="card-body sa-chart-wrap">
                     <canvas id="profitComparisonChart" height="160"></canvas>
                 </div>
             </div>
@@ -469,9 +803,9 @@
     {{-- 7️⃣ Inventory Snapshot Section --}}
     <div class="row sa-dashboard-section mb-4">
         <div class="col-12">
-            <div class="card border">
+            <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0 text-uppercase">Inventory Snapshot</h6>
+                    <h6 class="mb-0">Inventory Snapshot</h6>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -504,6 +838,7 @@
             </div>
         </div>
     </div>
+</div>
 </div>
 @endsection
 
@@ -648,6 +983,8 @@
         }
     }
 
+    var SA_ERP_LAUNCH = @json($erp_launch_date ?? config('app.erp_launch_date', '2025-11-01'));
+
     function toggleSaCustomDates() {
         var dateFilterEl = document.getElementById('sa_date_range');
         var startGroup = document.getElementById('sa_start_date_group');
@@ -655,12 +992,33 @@
         var startInput = document.getElementById('sa_start_date');
         var endInput = document.getElementById('sa_end_date');
         if (!dateFilterEl || !startGroup || !endGroup) return;
-        if (dateFilterEl.value === 'custom') {
+
+        var v = dateFilterEl.value;
+
+        if (v === 'all_time') {
+            var launch = SA_ERP_LAUNCH || '2025-11-01';
+            var today = new Date().toISOString().slice(0, 10);
             startGroup.style.display = 'block';
             endGroup.style.display = 'block';
-            var today = new Date().toISOString().slice(0, 10);
-            if (startInput && !startInput.value) startInput.value = today;
-            if (endInput && !endInput.value) endInput.value = today;
+            if (startInput) startInput.value = launch;
+            if (endInput) endInput.value = today;
+            $('#sa_start_date, #sa_end_date').prop('readonly', true);
+            fetchKPIs(true);
+            fetchShopPerformance();
+            fetchInsights();
+            fetchChartData();
+            fetchInventorySnapshot();
+            return;
+        }
+
+        $('#sa_start_date, #sa_end_date').prop('readonly', false);
+
+        if (v === 'custom') {
+            startGroup.style.display = 'block';
+            endGroup.style.display = 'block';
+            var todayStr = new Date().toISOString().slice(0, 10);
+            if (startInput && !startInput.value) startInput.value = todayStr;
+            if (endInput && !endInput.value) endInput.value = todayStr;
         } else {
             startGroup.style.display = 'none';
             endGroup.style.display = 'none';
@@ -894,16 +1252,29 @@
                 datasets: [{
                     label: 'Sales',
                     data: data,
-                    backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                    borderRadius: 6
+                    backgroundColor: 'rgba(140, 87, 255, 0.75)',
+                    borderRadius: 8,
+                    borderSkipped: false
                 }]
             },
             options: {
                 indexAxis: 'y',
                 animation: { duration: 800 },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(67, 89, 113, 0.08)' },
+                        ticks: { color: '#8592a3', font: { size: 11 } }
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: { color: '#433c50', font: { size: 11 } }
+                    }
+                },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
+                        backgroundColor: 'rgba(67, 89, 113, 0.92)',
+                        cornerRadius: 8,
                         callbacks: {
                             label: function(context) { return chartCurrency(context.parsed.x); }
                         }
@@ -920,7 +1291,7 @@
         previousChartData.profit = data.slice();
 
         var colors = data.map(function(val) {
-            return Number(val) >= 0 ? 'rgba(40,167,69,0.6)' : 'rgba(220,53,69,0.6)';
+            return Number(val) >= 0 ? 'rgba(40, 199, 111, 0.75)' : 'rgba(234, 84, 85, 0.75)';
         });
 
         if (profitChart) {
@@ -942,14 +1313,27 @@
                     label: 'Net Profit',
                     data: data,
                     backgroundColor: colors,
-                    borderRadius: 6
+                    borderRadius: 8,
+                    borderSkipped: false
                 }]
             },
             options: {
                 animation: { duration: 800 },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#433c50', font: { size: 11 }, maxRotation: 45 }
+                    },
+                    y: {
+                        grid: { color: 'rgba(67, 89, 113, 0.08)' },
+                        ticks: { color: '#8592a3', font: { size: 11 } }
+                    }
+                },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
+                        backgroundColor: 'rgba(67, 89, 113, 0.92)',
+                        cornerRadius: 8,
                         callbacks: {
                             label: function(context) { return chartCurrency(context.parsed.y); }
                         }
@@ -1036,8 +1420,8 @@
         animateInsightValue('#' + prefix + 'Value', Number(newData.value || 0), prefix === 'bestMargin');
 
         var el = $('#' + prefix + 'Value');
-        el.addClass('text-warning');
-        setTimeout(function() { el.removeClass('text-warning'); }, 800);
+        el.addClass('sa-insight-flash');
+        setTimeout(function() { el.removeClass('sa-insight-flash'); }, 800);
     }
 
     function fetchInsights() {
@@ -1130,6 +1514,7 @@
 
     function fetchInventorySnapshot() {
         var filters = {
+            date_filter: $('#sa_date_range').val(),
             start_date: $('#sa_start_date').val(),
             end_date: $('#sa_end_date').val(),
             shops: $('#sa_shops').val()
@@ -1146,6 +1531,8 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
+        $('#sa_date_range').on('change', toggleSaCustomDates);
+
         $('#activityTickerCollapse').on('shown.bs.collapse', function() {
             $('#activityTickerToggle i').removeClass('fa-chevron-down').addClass('fa-chevron-up');
         });

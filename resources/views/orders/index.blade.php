@@ -4,12 +4,242 @@
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 <style>
-.sortable-th-link { text-decoration: none; cursor: pointer; white-space: nowrap; }
-.sortable-th-link:hover { text-decoration: underline; }
 /* Keep filter dropdowns inside columns to prevent overlap */
 #orders-filter-form .form-control,
 #orders-filter-form .select2-container { max-width: 100%; box-sizing: border-box; }
 #orders-filter-form .row [class^="col-"] { min-width: 0; }
+
+/* Orders list KPI — fixed max width so tiles don’t stretch across half the viewport */
+.orders-page-kpis .orders-kpi-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0.75rem 1rem;
+}
+.orders-page-kpis .orders-kpi-col {
+    flex: 0 1 auto;
+    width: 100%;
+    max-width: 100%;
+}
+/* Two cards per row (strip column-gap is 1rem) */
+@media (min-width: 576px) and (max-width: 991.98px) {
+    .orders-page-kpis .orders-kpi-col {
+        flex: 1 1 calc((100% - 1rem) / 2);
+        min-width: 0;
+        max-width: calc((100% - 1rem) / 2);
+    }
+}
+/* Four KPIs in one row, equal width */
+@media (min-width: 992px) {
+    .orders-page-kpis .orders-kpi-strip {
+        flex-wrap: nowrap;
+    }
+    .orders-page-kpis .orders-kpi-col {
+        flex: 1 1 0;
+        min-width: 0;
+        max-width: none;
+    }
+}
+
+/* Orders list KPI tiles — crisp edge: slate border + soft lift (no dark fill) */
+.orders-page-kpis .orders-kpi-card {
+    position: relative;
+    border: 1px solid rgba(30, 41, 59, 0.16);
+    border-radius: 14px;
+    background: #fff;
+    width: 100%;
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.9) inset,
+        0 1px 2px rgba(15, 23, 42, 0.05),
+        0 4px 12px rgba(67, 89, 113, 0.07);
+    overflow: hidden;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.orders-page-kpis .orders-kpi-card:hover {
+    border-color: rgba(30, 41, 59, 0.26);
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.9) inset,
+        0 2px 4px rgba(15, 23, 42, 0.06),
+        0 8px 20px rgba(67, 89, 113, 0.1);
+}
+.orders-page-kpis .orders-kpi-card .card-body {
+    padding: 0.85rem 1rem 0.75rem;
+}
+.orders-page-kpis .orders-kpi-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    margin-bottom: 0.5rem;
+}
+.orders-page-kpis .orders-kpi-main {
+    flex: 1;
+    min-width: 0;
+}
+.orders-page-kpis .orders-kpi-icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    border: 1px solid rgba(30, 41, 59, 0.08);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) inset;
+}
+.orders-page-kpis .orders-kpi-card--primary .orders-kpi-icon-wrap {
+    background: rgba(13, 110, 253, 0.1);
+    color: #0a58ca;
+    border-color: rgba(13, 110, 253, 0.22);
+}
+.orders-page-kpis .orders-kpi-card--success .orders-kpi-icon-wrap {
+    background: rgba(25, 135, 84, 0.1);
+    color: #146c43;
+    border-color: rgba(25, 135, 84, 0.22);
+}
+.orders-page-kpis .orders-kpi-card--info .orders-kpi-icon-wrap {
+    background: rgba(13, 202, 240, 0.12);
+    color: #0aa2c0;
+    border-color: rgba(13, 202, 240, 0.28);
+}
+.orders-page-kpis .orders-kpi-card--warning .orders-kpi-icon-wrap {
+    background: rgba(255, 193, 7, 0.15);
+    color: #cc9a06;
+    border-color: rgba(255, 193, 7, 0.35);
+}
+.orders-page-kpis .orders-kpi-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1.15;
+    color: #1e293b;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    word-break: break-word;
+}
+.orders-page-kpis .orders-kpi-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #566a7f;
+    margin-bottom: 0.25rem;
+    line-height: 1.3;
+}
+.orders-page-kpis .orders-kpi-meta {
+    font-size: 0.78rem;
+    color: #8592a3;
+    line-height: 1.35;
+    max-width: 36em;
+}
+.orders-page-kpis .orders-kpi-accent {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    border-radius: 0 0 14px 14px;
+}
+.orders-page-kpis .orders-kpi-card--primary .orders-kpi-accent {
+    background: linear-gradient(90deg, #0d6efd, #4dabf7);
+}
+.orders-page-kpis .orders-kpi-card--success .orders-kpi-accent {
+    background: linear-gradient(90deg, #198754, #51cf66);
+}
+.orders-page-kpis .orders-kpi-card--info .orders-kpi-accent {
+    background: linear-gradient(90deg, #17a2b8, #3dd5f3);
+}
+.orders-page-kpis .orders-kpi-card--warning .orders-kpi-accent {
+    background: linear-gradient(90deg, #ffc107, #ffda6a);
+}
+
+/* Per-customer row — AdminLTE-style small boxes (solid fill + ghost icon; no footer) */
+.orders-by-customer-section .orders-customer-card-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0.75rem 1rem;
+}
+.orders-by-customer-section .orders-customer-card-col {
+    flex: 1 1 220px;
+    min-width: min(200px, 100%);
+    max-width: 100%;
+}
+@media (min-width: 768px) {
+    .orders-by-customer-section .orders-customer-card-col {
+        max-width: min(320px, 100%);
+    }
+}
+.orders-by-customer-section .orders-customer-box {
+    position: relative;
+    display: block;
+    width: 100%;
+    border-radius: 0.25rem;
+    overflow: hidden;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.12);
+    text-decoration: none;
+    color: #fff;
+    transition: filter 0.15s ease, box-shadow 0.15s ease;
+}
+.orders-by-customer-section a.orders-customer-box:hover {
+    text-decoration: none;
+    filter: brightness(1.07);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+.orders-by-customer-section .orders-customer-box-body {
+    position: relative;
+    padding: 0.65rem 1rem 0.85rem;
+    z-index: 1;
+}
+.orders-by-customer-section .orders-customer-box-bgicon {
+    position: absolute;
+    right: 0.35rem;
+    top: 0.35rem;
+    font-size: 4.25rem;
+    line-height: 1;
+    opacity: 0.2;
+    color: inherit;
+    z-index: 0;
+    pointer-events: none;
+}
+.orders-by-customer-section .orders-customer-box-value {
+    position: relative;
+    z-index: 1;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 0.35rem;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
+}
+.orders-by-customer-section .orders-customer-box-title {
+    position: relative;
+    z-index: 1;
+    font-size: 0.95rem;
+    font-weight: 600;
+    line-height: 1.3;
+    word-break: break-word;
+    opacity: 0.95;
+}
+.orders-by-customer-section .orders-customer-box-meta {
+    position: relative;
+    z-index: 1;
+    font-size: 0.8rem;
+    opacity: 0.88;
+    margin-top: 0.25rem;
+}
+/* Classic dashboard palette (cycles); walk-in uses neutral */
+.orders-by-customer-section .orders-customer-box--info { background-color: #17a2b8; }
+.orders-by-customer-section .orders-customer-box--success { background-color: #28a745; }
+/* Amber: dark text for contrast (AdminLTE-style) */
+.orders-by-customer-section .orders-customer-box--warning {
+    background-color: #ffc107;
+    color: #212529;
+    text-shadow: none;
+}
+.orders-by-customer-section .orders-customer-box--warning .orders-customer-box-value {
+    text-shadow: none;
+}
+.orders-by-customer-section .orders-customer-box--danger { background-color: #dc3545; }
+.orders-by-customer-section .orders-customer-box--secondary { background-color: #6c757d; }
 </style>
 @endsection
 
@@ -184,34 +414,129 @@
 
         {{-- Stats (after filters, same filter applies) --}}
         @php
-            $stats = $orderStats ?? ['total_orders' => 0, 'total_amount' => 0];
+            $stats = $orderStats ?? [
+                'total_orders' => 0,
+                'total_amount' => 0,
+                'avg_order_value' => 0,
+                'largest_order' => 0,
+            ];
         @endphp
-        <div class="col-lg-12">
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <div class="card border shadow-none summary-kpi-card card-primary">
-                        <div class="card-body py-3 d-flex align-items-center">
-                            <i class="fas fa-shopping-cart text-primary mr-3" style="font-size: 1.75rem;"></i>
-                            <div class="flex-grow-1">
-                                <div class="text-muted" style="font-size: 1rem; padding-bottom: 10px;">Total Orders</div>
-                                <div class="font-weight-bold" style="font-size: 1.5rem;">{{ number_format($stats['total_orders']) }}</div>
+        <div class="col-lg-12 mb-3 orders-page-kpis">
+            <div class="orders-kpi-strip">
+                <div class="orders-kpi-col">
+                    <div class="card orders-kpi-card orders-kpi-card--primary h-100">
+                        <div class="card-body">
+                            <div class="orders-kpi-top">
+                                <div class="orders-kpi-icon-wrap" aria-hidden="true">
+                                    <i class="fas fa-shopping-cart"></i>
+                                </div>
+                                <div class="orders-kpi-main">
+                                    <div class="orders-kpi-value">{{ number_format($stats['total_orders']) }}</div>
+                                </div>
                             </div>
+                            <div class="orders-kpi-label">Total orders</div>
+                            <div class="orders-kpi-meta">Matching current filters</div>
                         </div>
+                        <div class="orders-kpi-accent" aria-hidden="true"></div>
                     </div>
                 </div>
-                <div class="col-md-6">
-                    <div class="card border shadow-none summary-kpi-card card-success">
-                        <div class="card-body py-3 d-flex align-items-center">
-                            <i class="fas fa-money-bill-wave text-success mr-3" style="font-size: 1.75rem;"></i>
-                            <div class="flex-grow-1">
-                                <div class="text-muted" style="font-size: 1rem; padding-bottom: 10px;">Total Amount</div>
-                                <div class="font-weight-bold" style="font-size: 1.5rem;">{{ number_format($stats['total_amount'], 2) }}</div>
+                <div class="orders-kpi-col">
+                    <div class="card orders-kpi-card orders-kpi-card--success h-100">
+                        <div class="card-body">
+                            <div class="orders-kpi-top">
+                                <div class="orders-kpi-icon-wrap" aria-hidden="true">
+                                    <i class="fas fa-money-bill-wave"></i>
+                                </div>
+                                <div class="orders-kpi-main">
+                                    <div class="orders-kpi-value">{{ number_format($stats['total_amount'], 2) }}</div>
+                                </div>
                             </div>
+                            <div class="orders-kpi-label">Total amount</div>
+                            <div class="orders-kpi-meta">Sum of invoice totals</div>
                         </div>
+                        <div class="orders-kpi-accent" aria-hidden="true"></div>
+                    </div>
+                </div>
+                <div class="orders-kpi-col">
+                    <div class="card orders-kpi-card orders-kpi-card--info h-100">
+                        <div class="card-body">
+                            <div class="orders-kpi-top">
+                                <div class="orders-kpi-icon-wrap" aria-hidden="true">
+                                    <i class="fas fa-balance-scale"></i>
+                                </div>
+                                <div class="orders-kpi-main">
+                                    <div class="orders-kpi-value">{{ number_format($stats['avg_order_value'], 2) }}</div>
+                                </div>
+                            </div>
+                            <div class="orders-kpi-label">Avg order value</div>
+                            <div class="orders-kpi-meta">Total amount ÷ order count</div>
+                        </div>
+                        <div class="orders-kpi-accent" aria-hidden="true"></div>
+                    </div>
+                </div>
+                <div class="orders-kpi-col">
+                    <div class="card orders-kpi-card orders-kpi-card--warning h-100">
+                        <div class="card-body">
+                            <div class="orders-kpi-top">
+                                <div class="orders-kpi-icon-wrap" aria-hidden="true">
+                                    <i class="fas fa-arrow-up"></i>
+                                </div>
+                                <div class="orders-kpi-main">
+                                    <div class="orders-kpi-value">{{ number_format($stats['largest_order'], 2) }}</div>
+                                </div>
+                            </div>
+                            <div class="orders-kpi-label">Largest order</div>
+                            <div class="orders-kpi-meta">Max invoice total in range</div>
+                        </div>
+                        <div class="orders-kpi-accent" aria-hidden="true"></div>
                     </div>
                 </div>
             </div>
         </div>
+
+        @php
+            $customerOrderTotals = $customer_order_totals ?? collect();
+        @endphp
+        @if ($customerOrderTotals->isNotEmpty())
+            <div class="col-lg-12 mb-3 orders-by-customer-section">
+                <h6 class="mb-2 font-weight-semibold text-secondary">
+                    <i class="ri-user-3-line mr-1"></i> Totals by customer
+                </h6>
+                <p class="small text-muted mb-2">Same filters as above; click a card to filter the list by that customer.</p>
+                <div class="orders-customer-card-strip">
+                    @foreach ($customerOrderTotals as $custRow)
+                        @php
+                            $cid = $custRow['customer_id'] ?? null;
+                            $filterUrl = $cid !== null
+                                ? route('order.index', array_merge(request()->except('page'), ['customer_id' => $cid]))
+                                : null;
+                            $palette = ['orders-customer-box--info', 'orders-customer-box--success', 'orders-customer-box--warning', 'orders-customer-box--danger'];
+                            $boxClass = $cid === null ? 'orders-customer-box--secondary' : $palette[$loop->index % 4];
+                            $bgIcons = ['fa-user', 'fa-shopping-cart', 'fa-store', 'fa-file-invoice'];
+                            $bgIcon = $cid === null ? 'fa-walking' : $bgIcons[$loop->index % 4];
+                        @endphp
+                        <div class="orders-customer-card-col">
+                            @if ($filterUrl)
+                                <a href="{{ $filterUrl }}" class="orders-customer-box {{ $boxClass }} h-100">
+                            @else
+                                <div class="orders-customer-box {{ $boxClass }} h-100">
+                            @endif
+                                    <div class="orders-customer-box-body">
+                                        <div class="orders-customer-box-bgicon" aria-hidden="true"><i class="fas {{ $bgIcon }}"></i></div>
+                                        <div class="orders-customer-box-value">{{ number_format($custRow['total_sum'] ?? 0, 2) }}</div>
+                                        <div class="orders-customer-box-title">{{ $custRow['name'] }}</div>
+                                        <div class="orders-customer-box-meta">{{ number_format($custRow['order_count'] ?? 0) }} {{ ($custRow['order_count'] ?? 0) === 1 ? 'order' : 'orders' }}</div>
+                                    </div>
+                            @if ($filterUrl)
+                                </a>
+                            @else
+                                </div>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endif
 
         <div class="col-lg-12">
             <div class="table-responsive rounded mb-3">
@@ -226,7 +551,7 @@
                                     $dir = (request('sort') === $col && request('direction') === 'asc') ? 'desc' : 'asc';
                                     $url = route('order.index', array_merge(request()->query(), ['sort' => $col, 'direction' => $dir]));
                                 @endphp
-                                <a href="{{ $url }}" class="sortable-th-link text-dark">{{ $label }} @if(request('sort') === $col)<i class="ri-arrow-{{ request('direction') === 'asc' ? 'up' : 'down' }}-line ml-1"></i>@endif</a>
+                                <a href="{{ $url }}" class="table-sortable-th">{{ $label }} @if(request('sort') === $col)<i class="ri-arrow-{{ request('direction') === 'asc' ? 'up' : 'down' }}-line ml-1"></i>@endif</a>
                             </th>
                             <th>
                                 @php
@@ -234,7 +559,7 @@
                                     $dir = (request('sort') === $col && request('direction') === 'asc') ? 'desc' : 'asc';
                                     $url = route('order.index', array_merge(request()->query(), ['sort' => $col, 'direction' => $dir]));
                                 @endphp
-                                <a href="{{ $url }}" class="sortable-th-link text-dark">{{ $label }} @if(request('sort') === $col)<i class="ri-arrow-{{ request('direction') === 'asc' ? 'up' : 'down' }}-line ml-1"></i>@endif</a>
+                                <a href="{{ $url }}" class="table-sortable-th">{{ $label }} @if(request('sort') === $col)<i class="ri-arrow-{{ request('direction') === 'asc' ? 'up' : 'down' }}-line ml-1"></i>@endif</a>
                             </th>
                             <th>
                                 @php
@@ -242,7 +567,7 @@
                                     $dir = (request('sort') === $col && request('direction') === 'asc') ? 'desc' : 'asc';
                                     $url = route('order.index', array_merge(request()->query(), ['sort' => $col, 'direction' => $dir]));
                                 @endphp
-                                <a href="{{ $url }}" class="sortable-th-link text-dark">{{ $label }} @if(request('sort') === $col)<i class="ri-arrow-{{ request('direction') === 'asc' ? 'up' : 'down' }}-line ml-1"></i>@endif</a>
+                                <a href="{{ $url }}" class="table-sortable-th">{{ $label }} @if(request('sort') === $col)<i class="ri-arrow-{{ request('direction') === 'asc' ? 'up' : 'down' }}-line ml-1"></i>@endif</a>
                             </th>
                             <th>
                                 @php
@@ -250,7 +575,7 @@
                                     $dir = (request('sort') === $col && request('direction') === 'asc') ? 'desc' : 'asc';
                                     $url = route('order.index', array_merge(request()->query(), ['sort' => $col, 'direction' => $dir]));
                                 @endphp
-                                <a href="{{ $url }}" class="sortable-th-link text-dark">{{ $label }} @if(request('sort') === $col)<i class="ri-arrow-{{ request('direction') === 'asc' ? 'up' : 'down' }}-line ml-1"></i>@endif</a>
+                                <a href="{{ $url }}" class="table-sortable-th">{{ $label }} @if(request('sort') === $col)<i class="ri-arrow-{{ request('direction') === 'asc' ? 'up' : 'down' }}-line ml-1"></i>@endif</a>
                             </th>
                             <th>Payment</th>
                             <th>Status</th>

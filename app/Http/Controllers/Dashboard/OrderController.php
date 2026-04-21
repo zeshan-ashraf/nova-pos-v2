@@ -154,10 +154,60 @@ class OrderController extends Controller
         }
 
         // Stats for filtered orders (same filters as list)
+        $totalOrders = (clone $ordersQuery)->count();
+        $totalAmount = (float) (clone $ordersQuery)->sum('total');
+        $largestOrder = (float) ((clone $ordersQuery)->max('total') ?? 0);
+        $avgOrderValue = $totalOrders > 0 ? $totalAmount / $totalOrders : 0.0;
+
         $orderStats = [
-            'total_orders' => (clone $ordersQuery)->count(),
-            'total_amount' => (float) (clone $ordersQuery)->sum('total'),
+            'total_orders' => $totalOrders,
+            'total_amount' => $totalAmount,
+            'avg_order_value' => $avgOrderValue,
+            'largest_order' => $largestOrder,
         ];
+
+        // Per-customer totals (same filters) — card grid on orders index
+        $customerOrderTotals = collect();
+        $byCustomer = (clone $ordersQuery)
+            ->reorder()
+            ->whereNotNull('orders.customer_id')
+            ->selectRaw('orders.customer_id, SUM(orders.total) AS total_sum, COUNT(*) AS order_count')
+            ->groupBy('orders.customer_id')
+            ->orderByDesc('total_sum')
+            ->get();
+
+        if ($byCustomer->isNotEmpty()) {
+            $ids = $byCustomer->pluck('customer_id')->unique()->values();
+            $nameMap = Customer::query()
+                ->whereIn('id', $ids)
+                ->pluck('name', 'id');
+            $customerOrderTotals = $byCustomer->map(function ($row) use ($nameMap) {
+                $id = (int) $row->customer_id;
+
+                return [
+                    'customer_id' => $id,
+                    'name' => $nameMap[$id] ?? ('Customer #'.$id),
+                    'total_sum' => (float) $row->total_sum,
+                    'order_count' => (int) $row->order_count,
+                ];
+            })->values();
+        }
+
+        $walkInAgg = (clone $ordersQuery)
+            ->reorder()
+            ->whereNull('orders.customer_id')
+            ->selectRaw('COUNT(*) AS c, COALESCE(SUM(orders.total), 0) AS s')
+            ->first();
+        if ($walkInAgg && (int) $walkInAgg->c > 0) {
+            $customerOrderTotals->push([
+                'customer_id' => null,
+                'name' => 'Walk-in / no customer',
+                'total_sum' => (float) $walkInAgg->s,
+                'order_count' => (int) $walkInAgg->c,
+            ]);
+        }
+
+        $customerOrderTotals = $customerOrderTotals->sortByDesc('total_sum')->values();
 
         // Customers for dropdown (visible shops only)
         $customers = Customer::query()
@@ -191,6 +241,7 @@ class OrderController extends Controller
             'dateRange' => $dateRange,
             'customers' => $customers,
             'orderStats' => $orderStats,
+            'customer_order_totals' => $customerOrderTotals,
             'selectedProduct' => $selectedProduct,
         ];
         if ($debugSql !== null) {

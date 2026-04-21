@@ -19,6 +19,27 @@
         @endif
 
         <style>
+            :root {
+                --color-table-sortable-header: #FF7E41;
+            }
+            a.table-sortable-th {
+                color: var(--color-table-sortable-header) !important;
+                text-decoration: none;
+                cursor: pointer;
+                white-space: nowrap;
+            }
+            a.table-sortable-th:hover {
+                color: var(--color-table-sortable-header) !important;
+                text-decoration: underline;
+                opacity: 0.92;
+            }
+            a.table-sortable-th i {
+                color: var(--color-table-sortable-header) !important;
+            }
+            a.table-sortable-th + i {
+                color: var(--color-table-sortable-header) !important;
+            }
+
             .iq-top-navbar .navbar {
                 min-height: 64px;
                 padding-top: 8px;
@@ -106,6 +127,32 @@
             .summary-kpi-card.card-danger { border-left-color: #dc3545; }
             .summary-kpi-card.card-secondary { border-left-color: #6c757d; }
             .summary-kpi-card.card-dark { border-left-color: #212529; }
+
+            .table .ligth th {
+                background-color: #a7e7fc !important;
+            }
+            /* Alternate row background: list tables + DataTables (tr.odd) */
+            .content-page .table:not(.table-borderless):not(.table-dark) tbody tr:nth-of-type(odd) td,
+            .content-page .table:not(.table-borderless):not(.table-dark) tbody tr:nth-of-type(odd) th {
+                background-color: #eef3f8 !important;
+            }
+            .content-page table.dataTable:not(.table-dark) tbody tr.odd td,
+            .content-page table.dataTable:not(.table-dark) tbody tr.odd th {
+                background-color: #eef3f8 !important;
+            }
+            /* Row hover — odd rows need :hover matched to zebra specificity or odd color wins */
+            .content-page .table tbody tr:hover td,
+            .content-page .table tbody tr:hover th {
+                background-color: #ffd8c9 !important;
+            }
+            .content-page .table:not(.table-borderless):not(.table-dark) tbody tr:nth-of-type(odd):hover td,
+            .content-page .table:not(.table-borderless):not(.table-dark) tbody tr:nth-of-type(odd):hover th {
+                background-color: #ffd8c9 !important;
+            }
+            .content-page table.dataTable:not(.table-dark) tbody tr.odd:hover td,
+            .content-page table.dataTable:not(.table-dark) tbody tr.odd:hover th {
+                background-color: #ffd8c9 !important;
+            }
         </style>
 
         @yield('specificpagestyles')

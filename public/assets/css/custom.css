@@ -1,5 +1,35 @@
 /* Custom General CSS - Applied to all pages except login and dashboard */
 
+/*
+ * Sortable column headers (@sortablelink, manual links) — change hue app-wide:
+ *   --color-table-sortable-header
+ */
+:root {
+    --color-table-sortable-header: #FF7E41;
+}
+
+a.table-sortable-th {
+    color: var(--color-table-sortable-header) !important;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+a.table-sortable-th:hover {
+    color: var(--color-table-sortable-header) !important;
+    text-decoration: underline;
+    opacity: 0.92;
+}
+
+a.table-sortable-th i {
+    color: var(--color-table-sortable-header) !important;
+}
+
+/* @sortablelink places the FA icon after </a> — sibling of the link */
+a.table-sortable-th + i {
+    color: var(--color-table-sortable-header) !important;
+}
+
 /* Card body padding */
 .card-body {
     padding: 10px;
@@ -19,6 +49,39 @@
 /* Table cell padding */
 .table td {
     padding: 2px 4px !important;
+}
+
+/* Table header row (theme class name: ligth) */
+.table .ligth th {
+    background-color: #a7e7fc !important;
+}
+
+/*
+ * Alternate row background (list pages use "table mb-0" without table-striped).
+ * jQuery DataTables uses tr.odd / tr.even (not :nth-of-type). backend.css also
+ * resets .table-striped odd rows to #fff — override on cells so tint shows.
+ */
+.content-page .table:not(.table-borderless):not(.table-dark) tbody tr:nth-of-type(odd) td,
+.content-page .table:not(.table-borderless):not(.table-dark) tbody tr:nth-of-type(odd) th {
+    background-color: #eef3f8 !important;
+}
+.content-page table.dataTable:not(.table-dark) tbody tr.odd td,
+.content-page table.dataTable:not(.table-dark) tbody tr.odd th {
+    background-color: #eef3f8 !important;
+}
+
+/* Row hover — generic (even rows). Odd rows need :hover with same specificity as rules above. */
+.content-page .table tbody tr:hover td,
+.content-page .table tbody tr:hover th {
+    background-color: #ffd8c9 !important;
+}
+.content-page .table:not(.table-borderless):not(.table-dark) tbody tr:nth-of-type(odd):hover td,
+.content-page .table:not(.table-borderless):not(.table-dark) tbody tr:nth-of-type(odd):hover th {
+    background-color: #ffd8c9 !important;
+}
+.content-page table.dataTable:not(.table-dark) tbody tr.odd:hover td,
+.content-page table.dataTable:not(.table-dark) tbody tr.odd:hover th {
+    background-color: #ffd8c9 !important;
 }
 
 /* Body Font Size */

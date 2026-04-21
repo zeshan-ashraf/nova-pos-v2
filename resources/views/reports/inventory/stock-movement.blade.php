@@ -112,9 +112,9 @@
                         <table class="table table-striped table-sm">
                             <thead>
                                 <tr>
-                                    <th><a href="#" class="sortable-col text-decoration-none text-primary" data-sort="date" title="Sort by Date">Date <i class="sort-arrow ml-1"></i></a></th>
-                                    <th><a href="#" class="sortable-col text-decoration-none text-primary" data-sort="product_name" title="Sort by Product">Product <i class="sort-arrow ml-1"></i></a></th>
-                                    <th><a href="#" class="sortable-col text-decoration-none text-primary" data-sort="product_code" title="Sort by Code">Code <i class="sort-arrow ml-1"></i></a></th>
+                                    <th><a href="#" class="table-sortable-th text-decoration-none" data-sort="date" title="Sort by Date">Date <i class="sort-arrow ml-1"></i></a></th>
+                                    <th><a href="#" class="table-sortable-th text-decoration-none" data-sort="product_name" title="Sort by Product">Product <i class="sort-arrow ml-1"></i></a></th>
+                                    <th><a href="#" class="table-sortable-th text-decoration-none" data-sort="product_code" title="Sort by Code">Code <i class="sort-arrow ml-1"></i></a></th>
                                     <th>Reference</th>
                                     <th>Type</th>
                                     <th class="text-right">Qty IN</th>
@@ -153,11 +153,11 @@
     function updateSortArrows() {
         var sort = document.getElementById('sortParam').value;
         var order = document.getElementById('orderParam').value;
-        document.querySelectorAll('.sortable-col .sort-arrow').forEach(function(i) {
+        document.querySelectorAll('.table-sortable-th .sort-arrow').forEach(function(i) {
             i.className = 'sort-arrow ml-1';
             i.setAttribute('class', 'sort-arrow ml-1');
         });
-        document.querySelectorAll('.sortable-col').forEach(function(a) {
+        document.querySelectorAll('.table-sortable-th').forEach(function(a) {
             if (a.getAttribute('data-sort') === sort) {
                 var arrow = a.querySelector('.sort-arrow');
                 if (arrow) {
@@ -288,7 +288,7 @@
     }
     window.toggleCustomDates = toggleCustomDates;
 
-    document.querySelectorAll('.sortable-col').forEach(function(a) {
+    document.querySelectorAll('.table-sortable-th').forEach(function(a) {
         a.addEventListener('click', function(e) {
             e.preventDefault();
             setSort(a.getAttribute('data-sort'));

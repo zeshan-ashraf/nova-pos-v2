@@ -63,7 +63,7 @@ class DashboardController extends Controller
     public function getKPIs(Request $request)
     {
         $request->validate([
-            'date_filter' => 'nullable|string|in:today,yesterday,this_week,last_week,this_month,last_month,this_year,last_year,custom',
+            'date_filter' => 'nullable|string|in:today,yesterday,this_week,last_week,this_month,last_month,this_year,last_year,custom,all_time',
             'start_date'  => 'nullable|date',
             'end_date'    => 'nullable|date|after_or_equal:start_date',
             'shop_ids'    => 'nullable|array',
@@ -168,7 +168,7 @@ class DashboardController extends Controller
     public function getShopPerformance(Request $request)
     {
         $request->validate([
-            'date_filter' => 'nullable|string|in:today,yesterday,this_week,last_week,this_month,last_month,this_year,last_year,custom',
+            'date_filter' => 'nullable|string|in:today,yesterday,this_week,last_week,this_month,last_month,this_year,last_year,custom,all_time',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'shops' => 'nullable',
@@ -182,7 +182,7 @@ class DashboardController extends Controller
     public function getInsights(Request $request)
     {
         $request->validate([
-            'date_filter' => 'nullable|string|in:today,yesterday,this_week,last_week,this_month,last_month,this_year,last_year,custom',
+            'date_filter' => 'nullable|string|in:today,yesterday,this_week,last_week,this_month,last_month,this_year,last_year,custom,all_time',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'shops' => 'nullable',
@@ -219,6 +219,7 @@ class DashboardController extends Controller
     public function getInventorySnapshot(Request $request)
     {
         $request->validate([
+            'date_filter' => 'nullable|string|in:today,yesterday,this_week,last_week,this_month,last_month,this_year,last_year,custom,all_time',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'shops' => 'nullable',
