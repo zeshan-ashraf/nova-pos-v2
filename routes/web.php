@@ -70,9 +70,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard/insights', [DashboardController::class, 'getInsights'])->name('dashboard.insights');
     Route::get('/dashboard/inventory-snapshot', [DashboardController::class, 'getInventorySnapshot'])->name('dashboard.inventory-snapshot');
     Route::get('/dashboard/business-pulse', [DashboardController::class, 'getBusinessPulse'])->name('dashboard.business-pulse');
-    Route::get('/super-admin/dashboard', [SuperAdminDashboardController::class, 'index'])->name('super-admin.dashboard');
-    Route::get('/super-admin/dashboard/kpis', [SuperAdminDashboardController::class, 'kpis'])->name('super-admin.dashboard.kpis');
-    Route::get('/super-admin/dashboard/activities', [SuperAdminDashboardController::class, 'activities'])->name('super-admin.dashboard.activities');
+    Route::middleware(['mother_shop.super_admin'])->group(function () {
+        Route::get('/super-admin/dashboard', [SuperAdminDashboardController::class, 'index'])->name('super-admin.dashboard');
+        Route::get('/super-admin/dashboard/kpis', [SuperAdminDashboardController::class, 'kpis'])->name('super-admin.dashboard.kpis');
+        Route::get('/super-admin/dashboard/activities', [SuperAdminDashboardController::class, 'activities'])->name('super-admin.dashboard.activities');
+    });
 
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
     Route::get('/profile/edit', [ProfileController::class, 'edit'])->name('profile.edit');

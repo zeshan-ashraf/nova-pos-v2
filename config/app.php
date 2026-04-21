@@ -67,6 +67,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Super Dashboard (mother shop) — extra emails allowed besides SuperAdmin role
+    |--------------------------------------------------------------------------
+    | Comma-separated. Users must still belong to a shop with is_parent = true.
+    */
+    'mother_shop_super_admin_emails' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', (string) env('MOTHER_SHOP_SUPER_ADMIN_EMAILS', 'admin@gmail.com'))
+    ))),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |
