@@ -349,7 +349,7 @@
             document.getElementById('adjustment_type').value = '';
             document.getElementById('adjust-qty').value = '';
             var now = new Date();
-            document.getElementById('adjust-date').value = now.toISOString().slice(0, 10);
+            document.getElementById('adjust-date').value = now.toLocaleDateString('en-CA');
             document.getElementById('adjust-time').value = now.toTimeString().slice(0, 5);
             document.getElementById('adjust-reason').value = '';
             document.getElementById('adjust-confirm').checked = false;

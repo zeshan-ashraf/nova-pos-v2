@@ -1103,7 +1103,7 @@
 
         if (v === 'all_time') {
             var launch = SA_ERP_LAUNCH || '2025-11-01';
-            var today = new Date().toISOString().slice(0, 10);
+            var today = new Date().toLocaleDateString('en-CA');
             startGroup.style.display = 'block';
             endGroup.style.display = 'block';
             if (startInput) startInput.value = launch;
@@ -1124,7 +1124,7 @@
         if (v === 'custom') {
             startGroup.style.display = 'block';
             endGroup.style.display = 'block';
-            var todayStr = new Date().toISOString().slice(0, 10);
+            var todayStr = new Date().toLocaleDateString('en-CA');
             if (startInput && !startInput.value) startInput.value = todayStr;
             if (endInput && !endInput.value) endInput.value = todayStr;
         } else {

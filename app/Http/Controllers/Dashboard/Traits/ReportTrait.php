@@ -23,58 +23,58 @@ trait ReportTrait
             case 'all_time':
                 // Fixed ERP launch → today (ignore tampered start/end for this preset)
                 $startDate = $launch;
-                $endDate = Carbon::today()->format('Y-m-d');
+                $endDate = today()->format('Y-m-d');
                 break;
             case 'today':
-                $startDate = Carbon::today()->format('Y-m-d');
-                $endDate = Carbon::today()->format('Y-m-d');
+                $startDate = today()->format('Y-m-d');
+                $endDate = today()->format('Y-m-d');
                 break;
             case 'yesterday':
-                $startDate = Carbon::yesterday()->format('Y-m-d');
-                $endDate = Carbon::yesterday()->format('Y-m-d');
+                $startDate = yesterday()->format('Y-m-d');
+                $endDate = yesterday()->format('Y-m-d');
                 break;
             case 'this_week':
-                $startDate = Carbon::now()->startOfWeek()->format('Y-m-d');
-                $endDate = Carbon::now()->endOfWeek()->format('Y-m-d');
+                $startDate = now()->startOfWeek()->format('Y-m-d');
+                $endDate = now()->endOfWeek()->format('Y-m-d');
                 break;
             case 'last_week':
-                $startDate = Carbon::now()->subWeek()->startOfWeek()->format('Y-m-d');
-                $endDate = Carbon::now()->subWeek()->endOfWeek()->format('Y-m-d');
+                $startDate = now()->subWeek()->startOfWeek()->format('Y-m-d');
+                $endDate = now()->subWeek()->endOfWeek()->format('Y-m-d');
                 break;
             case 'this_month':
-                $startDate = Carbon::now()->startOfMonth()->format('Y-m-d');
-                $endDate = Carbon::now()->endOfMonth()->format('Y-m-d');
+                $startDate = now()->startOfMonth()->format('Y-m-d');
+                $endDate = now()->endOfMonth()->format('Y-m-d');
                 break;
             case 'last_month':
-                $startDate = Carbon::now()->subMonth()->startOfMonth()->format('Y-m-d');
-                $endDate = Carbon::now()->subMonth()->endOfMonth()->format('Y-m-d');
+                $startDate = now()->subMonth()->startOfMonth()->format('Y-m-d');
+                $endDate = now()->subMonth()->endOfMonth()->format('Y-m-d');
                 break;
             case 'this_year':
-                $startDate = Carbon::now()->startOfYear()->format('Y-m-d');
-                $endDate = Carbon::now()->endOfYear()->format('Y-m-d');
+                $startDate = now()->startOfYear()->format('Y-m-d');
+                $endDate = now()->endOfYear()->format('Y-m-d');
                 break;
             case 'last_year':
-                $startDate = Carbon::now()->subYear()->startOfYear()->format('Y-m-d');
-                $endDate = Carbon::now()->subYear()->endOfYear()->format('Y-m-d');
+                $startDate = now()->subYear()->startOfYear()->format('Y-m-d');
+                $endDate = now()->subYear()->endOfYear()->format('Y-m-d');
                 break;
             case 'custom':
                 if (!$startDate) {
-                    $startDate = Carbon::today()->format('Y-m-d');
+                    $startDate = today()->format('Y-m-d');
                 }
                 if (!$endDate) {
-                    $endDate = Carbon::today()->format('Y-m-d');
+                    $endDate = today()->format('Y-m-d');
                 }
                 break;
             default:
-                $startDate = Carbon::today()->format('Y-m-d');
-                $endDate = Carbon::today()->format('Y-m-d');
+                $startDate = today()->format('Y-m-d');
+                $endDate = today()->format('Y-m-d');
         }
 
         if (empty($startDate)) {
-            $startDate = Carbon::today()->format('Y-m-d');
+            $startDate = today()->format('Y-m-d');
         }
         if (empty($endDate)) {
-            $endDate = Carbon::today()->format('Y-m-d');
+            $endDate = today()->format('Y-m-d');
         }
         if (Carbon::parse($startDate)->gt(Carbon::parse($endDate))) {
             [$startDate, $endDate] = [$endDate, $startDate];

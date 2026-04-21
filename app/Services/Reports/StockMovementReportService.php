@@ -115,7 +115,7 @@ class StockMovementReportService
                 'shop_id'       => $row->shop_id !== null ? (int) $row->shop_id : null,
                 'product_name'  => $row->product_name ?? null,
                 'product_code'  => $row->product_code ?? null,
-                'date'          => Carbon::parse($row->date)->toIso8601String(),
+                'date'          => Carbon::parse($row->date)->timezone(config('app.timezone'))->toIso8601String(),
                 'reference'     => $this->buildReference(
                     $row->movement_type ?? null,
                     $row->source_id ?? null,

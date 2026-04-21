@@ -147,7 +147,9 @@ class DashboardController extends Controller
                 'type' => 'sale',
                 'shop' => $shopNames[$order->shop_id] ?? 'Unknown Shop',
                 'amount' => (float) $order->total,
-                'time' => optional($order->created_at)->toIso8601String(),
+                'time' => $order->created_at
+                    ? $order->created_at->timezone(config('app.timezone'))->toIso8601String()
+                    : null,
             ];
         })->merge(
             $purchases->map(function ($purchase) use ($shopNames) {
@@ -155,7 +157,9 @@ class DashboardController extends Controller
                     'type' => 'purchase',
                     'shop' => $shopNames[$purchase->shop_id] ?? 'Unknown Shop',
                     'amount' => (float) $purchase->total,
-                    'time' => optional($purchase->created_at)->toIso8601String(),
+                    'time' => $purchase->created_at
+                        ? $purchase->created_at->timezone(config('app.timezone'))->toIso8601String()
+                        : null,
                 ];
             })
         )->sortByDesc('time')
