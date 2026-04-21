@@ -622,7 +622,7 @@
                                                 <i class="fas fa-file-alt"></i> A4 Invoice
                                             </a>
                                             <a class="dropdown-item" href="{{ route('order.printReceipt', $order->id) }}" target="_blank">
-                                                <i class="fas fa-receipt"></i> Receipt (2.5")
+                                                <i class="fas fa-receipt"></i> Receipt (3.5")
                                             </a>
                                         </div>
                                     </div>

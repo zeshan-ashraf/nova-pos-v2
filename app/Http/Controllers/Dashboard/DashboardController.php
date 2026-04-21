@@ -266,6 +266,139 @@ class DashboardController extends Controller
         return response()->json(['shops' => $payload]);
     }
 
+    public function getBusinessPulse(Request $request)
+    {
+        $request->validate([
+            'date_filter' => 'nullable|string|in:today,yesterday,this_week,last_week,this_month,last_month,this_year,last_year,custom,all_time',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'shops' => 'nullable',
+        ]);
+
+        $shopIds = $this->parseShopIdsFromFilter($request->input('shops'));
+        $dateRange = $this->getDateRange($request);
+        $startDate = $dateRange['start_date'];
+        $endDate = $dateRange['end_date'];
+
+        $ordersBase = Order::withoutGlobalScopes()
+            ->whereNotNull('shop_id')
+            ->when($shopIds->isNotEmpty(), fn ($q) => $q->whereIn('shop_id', $shopIds))
+            ->when($startDate, fn ($q) => $q->whereDate('order_date', '>=', $startDate))
+            ->when($endDate, fn ($q) => $q->whereDate('order_date', '<=', $endDate));
+
+        $miniSales = (float) (clone $ordersBase)->sum('total');
+        $miniOrders = (int) (clone $ordersBase)->count();
+        $invoiceDiscount = (float) (clone $ordersBase)->sum('invoice_discount');
+
+        $detailsAgg = OrderDetails::withoutGlobalScopes()
+            ->joinSub((clone $ordersBase)->select(['id', 'shop_id']), 'fo', function ($join) {
+                $join->on('order_details.order_id', '=', 'fo.id');
+            })
+            ->selectRaw('
+                COALESCE(SUM(order_details.quantity * COALESCE(NULLIF(order_details.cost_per_unit, 0), 0)), 0) as cogs,
+                COALESCE(SUM(COALESCE(order_details.item_discount, 0)), 0) as line_discount
+            ')
+            ->first();
+
+        $miniCogs = (float) ($detailsAgg->cogs ?? 0);
+        $lineDiscount = (float) ($detailsAgg->line_discount ?? 0);
+        $miniProfit = $miniSales - $miniCogs - ($invoiceDiscount + $lineDiscount);
+
+        $topShopAgg = (clone $ordersBase)
+            ->reorder()
+            ->selectRaw('shop_id, COALESCE(SUM(total), 0) as sales')
+            ->groupBy('shop_id')
+            ->orderByDesc('sales')
+            ->first();
+
+        $topShopName = '-';
+        $topShopSales = 0.0;
+        if ($topShopAgg && !empty($topShopAgg->shop_id)) {
+            $topShopName = (string) (Shop::withoutGlobalScopes()->where('id', $topShopAgg->shop_id)->value('name') ?? '-');
+            $topShopSales = (float) ($topShopAgg->sales ?? 0);
+        }
+
+        $lowStockCount = (int) Product::withoutGlobalScopes()
+            ->whereNotNull('shop_id')
+            ->when($shopIds->isNotEmpty(), fn ($q) => $q->whereIn('shop_id', $shopIds))
+            ->whereRaw('COALESCE(product_store, 0) <= COALESCE(low_stock_warning, 10)')
+            ->count();
+
+        $lossRows = (clone $ordersBase)
+            ->reorder()
+            ->select(['id', 'shop_id']);
+        $lossSales = (clone $ordersBase)
+            ->reorder()
+            ->selectRaw('shop_id, COALESCE(SUM(total), 0) as sales, COALESCE(SUM(invoice_discount), 0) as invoice_discount')
+            ->groupBy('shop_id')
+            ->get()
+            ->keyBy('shop_id');
+        $lossDetail = OrderDetails::withoutGlobalScopes()
+            ->joinSub((clone $lossRows)->select(['id', 'shop_id']), 'lo', function ($join) {
+                $join->on('order_details.order_id', '=', 'lo.id');
+            })
+            ->selectRaw('
+                lo.shop_id as shop_id,
+                COALESCE(SUM(order_details.quantity * COALESCE(NULLIF(order_details.cost_per_unit, 0), 0)), 0) as cogs,
+                COALESCE(SUM(COALESCE(order_details.item_discount, 0)), 0) as line_discount
+            ')
+            ->groupBy('lo.shop_id')
+            ->get()
+            ->keyBy('shop_id');
+        $lossShopCount = $lossSales->keys()->merge($lossDetail->keys())->unique()->filter(function ($shopId) use ($lossSales, $lossDetail) {
+            $sales = (float) ($lossSales->get($shopId)->sales ?? 0);
+            $invoiceDisc = (float) ($lossSales->get($shopId)->invoice_discount ?? 0);
+            $cogs = (float) ($lossDetail->get($shopId)->cogs ?? 0);
+            $lineDisc = (float) ($lossDetail->get($shopId)->line_discount ?? 0);
+            $net = $sales - $cogs - ($invoiceDisc + $lineDisc);
+            return $net < 0;
+        })->count();
+
+        $todayStart = now()->startOfDay();
+        $todayEnd = now()->endOfDay();
+        $yesterdayStart = now()->subDay()->startOfDay();
+        $yesterdayEnd = now()->subDay()->endOfDay();
+
+        $salesBase = Order::withoutGlobalScopes()
+            ->whereNotNull('shop_id')
+            ->when($shopIds->isNotEmpty(), fn ($q) => $q->whereIn('shop_id', $shopIds));
+
+        $todaySales = (float) (clone $salesBase)
+            ->whereBetween('order_date', [$todayStart, $todayEnd])
+            ->sum('total');
+        $yesterdaySales = (float) (clone $salesBase)
+            ->whereBetween('order_date', [$yesterdayStart, $yesterdayEnd])
+            ->sum('total');
+
+        if ($yesterdaySales > 0) {
+            $salesChangePct = (($todaySales - $yesterdaySales) / $yesterdaySales) * 100;
+        } else {
+            $salesChangePct = $todaySales > 0 ? 100 : 0;
+        }
+        $salesDirection = $salesChangePct > 0 ? 'up' : ($salesChangePct < 0 ? 'down' : 'same');
+
+        return response()->json([
+            'mini' => [
+                'sales' => round($miniSales, 2),
+                'orders' => $miniOrders,
+                'profit' => round($miniProfit, 2),
+            ],
+            'alerts' => [
+                $lowStockCount . ' products low in stock',
+                $lossShopCount . ' shops in loss today',
+            ],
+            'sales_change' => [
+                'percentage' => round($salesChangePct, 1),
+                'direction' => $salesDirection,
+            ],
+            'top_shop' => [
+                'name' => $topShopName,
+                'sales' => round($topShopSales, 2),
+            ],
+            'updated_at' => now()->format('Y-m-d H:i:s'),
+        ]);
+    }
+
     private function parseShopIdsFromFilter($shopsInput)
     {
         $shopIds = collect();

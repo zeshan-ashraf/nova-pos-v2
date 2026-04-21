@@ -55,7 +55,7 @@
         box-shadow: var(--sa-shadow) !important;
         overflow: hidden;
     }
-    .sa-dashboard-page .card:not(.report-filter-card):not(.sa-insight-tile) .card-header {
+    .sa-dashboard-page .card:not(.report-filter-card):not(.sa-insight-tile):not(.sa-activity-card):not(.sa-pulse-card):not(.sa-shop-performance-card):not(.sa-sales-compare-card):not(.sa-profit-compare-card):not(.sa-inventory-card) .card-header {
         background: transparent !important;
         border-bottom: 1px solid rgba(67, 89, 113, 0.08) !important;
         padding: 1rem 1.25rem !important;
@@ -177,9 +177,9 @@
 
     .activity-item {
         font-size: 0.875rem;
-        padding: 0.5rem 0.75rem;
+        padding: 4px 12px;
         border-radius: var(--sa-radius-sm);
-        margin-bottom: 0.35rem;
+        margin-bottom: 0;
         background: rgba(255, 255, 255, 0.6);
     }
     .sa-activity-card .ticker-toggle-btn {
@@ -285,17 +285,103 @@
         animation: saInsightFlash 0.75s ease;
     }
 
-    /* Activity ticker — match other card headers (light bar, compact) */
+    /* Activity ticker — compact heading with custom title bar color */
     .sa-activity-card .card-header {
-        background: #f5f5f9 !important;
+        background:rgb(255, 195, 135) !important;
         border-bottom: 1px solid rgba(67, 89, 113, 0.1) !important;
         color: var(--sa-text);
-        padding-top: 0.5rem !important;
-        padding-bottom: 0.5rem !important;
+        padding-top: 0.3rem !important;
+        padding-bottom: 0.3rem !important;
     }
     .sa-activity-card .card-header h6 {
         color: var(--sa-text) !important;
         font-weight: 700;
+    }
+    .sa-pulse-card .card-header {
+        background: linear-gradient(135deg, #ffe4e6 0%, #fecdd3 100%) !important;
+        border-bottom: 1px solid rgba(190, 24, 93, 0.2) !important;
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
+    }
+    .sa-pulse-card .card-header h6 {
+        color: #7f1d1d !important;
+        font-weight: 700;
+    }
+    .sa-pulse-card .card-body {
+        padding: 0.85rem 1rem !important;
+    }
+    .sa-shop-performance-card .card-header {
+        background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%) !important;
+        border-bottom: 1px solid rgba(2, 132, 199, 0.2) !important;
+    }
+    .sa-shop-performance-card .card-header h6 {
+        color: #0c4a6e !important;
+        font-weight: 700;
+    }
+    .sa-sales-compare-card .card-header {
+        background: linear-gradient(135deg, #e0f7ef 0%, #bbf7d0 100%) !important;
+        border-bottom: 1px solid rgba(22, 163, 74, 0.24) !important;
+    }
+    .sa-sales-compare-card .card-header h6 {
+        color: #14532d !important;
+        font-weight: 700;
+    }
+    .sa-profit-compare-card .card-header {
+        background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%) !important;
+        border-bottom: 1px solid rgba(109, 40, 217, 0.24) !important;
+    }
+    .sa-profit-compare-card .card-header h6 {
+        color: #4c1d95 !important;
+        font-weight: 700;
+    }
+    .sa-inventory-card .card-header {
+        background: linear-gradient(135deg, #fff7d6 0%, #fde68a 100%) !important;
+        border-bottom: 1px solid rgba(202, 138, 4, 0.28) !important;
+    }
+    .sa-inventory-card .card-header h6 {
+        color: #78350f !important;
+        font-weight: 700;
+    }
+    .pulse-mini-label {
+        font-size: 0.72rem;
+        color: var(--sa-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 0.15rem;
+    }
+    .pulse-mini-value {
+        font-weight: 700;
+        font-size: 0.95rem;
+        line-height: 1.2;
+    }
+    .pulse-alert-item {
+        font-size: 0.82rem;
+        margin-bottom: 0.3rem;
+    }
+    .pulse-alert-item:last-child {
+        margin-bottom: 0;
+    }
+    .pulse-topshop-name {
+        font-weight: 700;
+        color: #198754;
+        margin-bottom: 0.15rem;
+    }
+    .pulse-sales-change {
+        font-size: 0.95rem;
+        line-height: 1.25;
+    }
+    .pulse-sales-change-heading {
+        display: inline-block;
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #7f1d1d;
+        background: rgba(220, 53, 69, 0.12);
+        border: 1px solid rgba(220, 53, 69, 0.2);
+        border-radius: 999px;
+        padding: 2px 8px;
+        margin-bottom: 0.3rem;
     }
 
     /* Tables inside cards */
@@ -699,7 +785,7 @@
 
     {{-- 4️⃣ Live Activity Ticker --}}
     <div class="row sa-dashboard-section">
-        <div class="col-12">
+        <div class="col-lg-8 col-12">
             <div class="card sa-activity-card mb-2">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h6 class="mb-0 text-uppercase">Live Activity Ticker</h6>
@@ -722,12 +808,31 @@
                 </div>
             </div>
         </div>
+        <div class="col-lg-4 col-12">
+            <div class="card border sa-pulse-card h-100 mb-2">
+                <div class="card-header">
+                    <h6 class="mb-0 text-uppercase">
+                        <i class="fas fa-heartbeat text-danger"></i> Business Pulse
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div id="pulseMiniStats"></div>
+                    <hr>
+                    <div id="pulseAlerts"></div>
+                    <hr>
+                    <div id="pulseSalesChange"></div>
+                    <div class="text-right mt-2">
+                        <small id="pulseUpdatedAt" class="text-muted"></small>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     {{-- 5️⃣ Child Shop Comparison Table --}}
     <div class="row sa-dashboard-section">
         <div class="col-12">
-            <div class="card">
+            <div class="card sa-shop-performance-card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h6 class="mb-0">Child Shop Performance Comparison</h6>
                 </div>
@@ -779,7 +884,7 @@
             <h6 class="sa-section-title">Visual Comparisons</h6>
         </div>
         <div class="col-lg-6 mb-3">
-            <div class="card h-100">
+            <div class="card h-100 sa-sales-compare-card">
                 <div class="card-header">
                     <h6 class="mb-0">Sales Comparison</h6>
                 </div>
@@ -789,7 +894,7 @@
             </div>
         </div>
         <div class="col-lg-6 mb-3">
-            <div class="card h-100">
+            <div class="card h-100 sa-profit-compare-card">
                 <div class="card-header">
                     <h6 class="mb-0">Net Profit Comparison</h6>
                 </div>
@@ -803,7 +908,7 @@
     {{-- 7️⃣ Inventory Snapshot Section --}}
     <div class="row sa-dashboard-section mb-4">
         <div class="col-12">
-            <div class="card">
+            <div class="card sa-inventory-card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h6 class="mb-0">Inventory Snapshot</h6>
                 </div>
@@ -862,6 +967,7 @@
     var previousShopStats = {};
     var previousInsights = {};
     var previousInventory = {};
+    var previousPulse = { sales_change: null };
     var salesChart = null;
     var profitChart = null;
     var previousChartData = {
@@ -1008,6 +1114,8 @@
             fetchInsights();
             fetchChartData();
             fetchInventorySnapshot();
+            fetchBusinessPulse();
+            togglePulseSalesChangeVisibility();
             return;
         }
 
@@ -1023,6 +1131,7 @@
             startGroup.style.display = 'none';
             endGroup.style.display = 'none';
         }
+        togglePulseSalesChangeVisibility();
     }
 
     function getFilterParams() {
@@ -1444,6 +1553,115 @@
         });
     }
 
+    function formatPulseNumber(value, digits) {
+        return Number(value || 0).toLocaleString('en-US', {
+            minimumFractionDigits: digits,
+            maximumFractionDigits: digits
+        });
+    }
+
+    function updateMiniStats(data) {
+        if (JSON.stringify(previousPulse.mini || {}) === JSON.stringify(data || {})) {
+            return;
+        }
+        data = data || {};
+        var html = '\
+            <div class="d-flex justify-content-between">\
+                <div>\
+                    <div class="pulse-mini-label">Sales</div>\
+                    <div class="pulse-mini-value text-success">PKR ' + formatPulseNumber(data.sales, 2) + '</div>\
+                </div>\
+                <div>\
+                    <div class="pulse-mini-label">Orders</div>\
+                    <div class="pulse-mini-value text-primary">' + formatPulseNumber(data.orders, 0) + '</div>\
+                </div>\
+                <div>\
+                    <div class="pulse-mini-label">Profit</div>\
+                    <div class="pulse-mini-value text-warning">PKR ' + formatPulseNumber(data.profit, 2) + '</div>\
+                </div>\
+            </div>\
+        ';
+        $('#pulseMiniStats').html(html);
+    }
+
+    function updateAlerts(alerts) {
+        alerts = Array.isArray(alerts) ? alerts : [];
+        if (JSON.stringify(previousPulse.alerts || []) === JSON.stringify(alerts)) {
+            return;
+        }
+        var html = '';
+        if (alerts.length === 0) {
+            html = '<div class="pulse-alert-item text-success"><i class="fas fa-check-circle mr-1"></i>All systems normal</div>';
+        } else {
+            alerts.forEach(function(alertText) {
+                html += '<div class="pulse-alert-item text-danger"><i class="fas fa-exclamation-triangle mr-1"></i>' + escapeHtml(alertText) + '</div>';
+            });
+        }
+        $('#pulseAlerts').html(html);
+    }
+
+    function updateSalesChange(data) {
+        data = data || { percentage: 0, direction: 'same' };
+        if (JSON.stringify(previousPulse.sales_change || null) === JSON.stringify(data)) {
+            return;
+        }
+
+        var icon = 'fa-minus';
+        var color = 'text-muted';
+        var text = '0%';
+        var pct = Number(data.percentage || 0).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+        if (data.direction === 'up') {
+            icon = 'fa-arrow-up';
+            color = 'text-success';
+            text = '+' + pct + '%';
+        } else if (data.direction === 'down') {
+            icon = 'fa-arrow-down';
+            color = 'text-danger';
+            text = pct + '%';
+        }
+
+        var html = '\
+            <div class="pulse-sales-change">\
+                <div class="pulse-sales-change-heading">Sales Change</div>\
+                <div class="font-weight-bold ' + color + '">\
+                    <i class="fas ' + icon + '"></i> ' + text + '\
+                </div>\
+                <small class="text-muted">vs Yesterday</small>\
+            </div>\
+        ';
+
+        $('#pulseSalesChange').html(html);
+    }
+
+    function togglePulseSalesChangeVisibility() {
+        if ($('#sa_date_range').val() !== 'today') {
+            $('#pulseSalesChange').hide();
+        } else {
+            $('#pulseSalesChange').show();
+        }
+    }
+
+    function fetchBusinessPulse() {
+        var params = getFilterParams();
+        var filters = {
+            date_filter: params.date_filter,
+            start_date: params.start_date,
+            end_date: params.end_date,
+            shops: $('#sa_shops').val()
+        };
+
+        $.get('{{ route("dashboard.business-pulse") }}', filters, function(data) {
+            if (!data) return;
+            updateMiniStats(data.mini || {});
+            updateAlerts(data.alerts || []);
+            updateSalesChange(data.sales_change || { percentage: 0, direction: 'same' });
+            $('#pulseUpdatedAt').text('Updated: ' + (data.updated_at || ''));
+            togglePulseSalesChangeVisibility();
+            previousPulse = data;
+        });
+    }
+
     function applyLowStockTone(selector, count) {
         var el = $(selector);
         if (!el.length) return;
@@ -1541,17 +1759,20 @@
         });
 
         toggleSaCustomDates();
+        togglePulseSalesChangeVisibility();
         var btn = document.getElementById('sa_apply_filters_btn');
         if (btn) btn.addEventListener('click', function() {
             previousShopStats = {};
             previousInsights = {};
             previousInventory = {};
+            previousPulse = { sales_change: null };
             previousChartData = { sales: [], profit: [] };
             fetchKPIs(true);
             fetchShopPerformance();
             fetchInsights();
             fetchChartData();
             fetchInventorySnapshot();
+            fetchBusinessPulse();
         });
         fetchKPIs(true);
         fetchActivities();
@@ -1559,12 +1780,14 @@
         fetchInsights();
         fetchChartData();
         fetchInventorySnapshot();
+        fetchBusinessPulse();
         setInterval(function() { fetchKPIs(false); }, 5000);
         setInterval(fetchActivities, 5000);
         setInterval(fetchShopPerformance, 5000);
         setInterval(fetchInsights, 5000);
         setInterval(fetchChartData, 5000);
         setInterval(fetchInventorySnapshot, 5000);
+        setInterval(fetchBusinessPulse, 5000);
     });
 
     window.toggleSaCustomDates = toggleSaCustomDates;

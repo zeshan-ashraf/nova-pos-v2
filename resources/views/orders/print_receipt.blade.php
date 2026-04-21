@@ -5,14 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Receipt - {{ $order->invoice_no }}</title>
     <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 3.5in;
+        }
         body {
-            margin: 0 auto;
-            width: 2.5in;
             font-family: "Courier New", Courier, monospace;
             font-size: 12px;
             color: #000;
-            padding: 6px;
+            padding: 0 6px;
             line-height: 1.25;
+            box-sizing: border-box;
         }
         .center {
             text-align: center;
@@ -55,12 +59,19 @@
         }
         @media print {
             @page {
-                size: 2.5in auto;
-                margin: 0.08in;
+                size: 3.5in auto;
+                margin: 0;
+            }
+            html, body {
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 3.5in !important;
+                box-sizing: border-box;
             }
             body {
-                width: 2.5in;
+                width: 3.5in;
                 font-size: 12px;
+                padding: 0 6px !important;
             }
         }
     </style>
