@@ -76,11 +76,11 @@ class OrderController extends Controller
         $ordersQuery = Order::with(['customer', 'shop.parent'])
             ->sortable();
 
-        // Date filter (when not "all") — use full datetime so end date is inclusive (order_date can be DATETIME)
+        // Date filter (when not "all") — inclusive start/end of day in app timezone (DATETIME-safe)
         if ($dateFilter !== 'all' && isset($dateRange['start_datetime'], $dateRange['end_datetime'])) {
             $ordersQuery->whereBetween('order_date', [
-                $dateRange['start_datetime']->format('Y-m-d H:i:s'),
-                $dateRange['end_datetime']->format('Y-m-d H:i:s'),
+                $dateRange['start_datetime'],
+                $dateRange['end_datetime'],
             ]);
         }
 

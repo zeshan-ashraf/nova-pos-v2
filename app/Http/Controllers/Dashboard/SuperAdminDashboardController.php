@@ -157,10 +157,7 @@ class SuperAdminDashboardController extends Controller
     private function aggregateKpis($startDt, $endDt, $shopIds): array
     {
         $ordersQuery = Order::query()
-            ->whereBetween('order_date', [
-                $startDt->format('Y-m-d H:i:s'),
-                $endDt->format('Y-m-d 23:59:59'),
-            ])
+            ->whereBetween('order_date', [$startDt, $endDt])
             ->whereIn('shop_id', $shopIds);
 
         $orderIds = (clone $ordersQuery)->pluck('id');
@@ -184,11 +181,11 @@ class SuperAdminDashboardController extends Controller
         $totalDiscounts = $invoiceDiscount + $lineDiscount;
         $totalPurchases = (float) Purchase::query()
             ->whereIn('shop_id', $shopIds)
-            ->whereBetween('purchase_date', [$startDt->format('Y-m-d'), $endDt->format('Y-m-d')])
+            ->whereBetween('purchase_date', [$startDt, $endDt])
             ->sum('total');
         $totalExpense = (float) Activity::query()
             ->whereIn('shop_id', $shopIds)
-            ->whereBetween('date', [$startDt->format('Y-m-d'), $endDt->format('Y-m-d')])
+            ->whereBetween('date', [$startDt, $endDt])
             ->sum('activity_cost');
         $grossProfit = $totalSales - $totalCogs;
         $netProfit = $grossProfit - $totalDiscounts;

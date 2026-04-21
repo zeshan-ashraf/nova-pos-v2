@@ -281,14 +281,13 @@ class DashboardController extends Controller
 
         $shopIds = $this->parseShopIdsFromFilter($request->input('shops'));
         $dateRange = $this->getDateRange($request);
-        $startDate = $dateRange['start_date'];
-        $endDate = $dateRange['end_date'];
+        $startDt = $dateRange['start_datetime'];
+        $endDt = $dateRange['end_datetime'];
 
         $ordersBase = Order::withoutGlobalScopes()
             ->whereNotNull('shop_id')
             ->when($shopIds->isNotEmpty(), fn ($q) => $q->whereIn('shop_id', $shopIds))
-            ->when($startDate, fn ($q) => $q->whereDate('order_date', '>=', $startDate))
-            ->when($endDate, fn ($q) => $q->whereDate('order_date', '<=', $endDate));
+            ->whereBetween('order_date', [$startDt, $endDt]);
 
         $miniSales = (float) (clone $ordersBase)->sum('total');
         $miniOrders = (int) (clone $ordersBase)->count();
@@ -420,20 +419,14 @@ class DashboardController extends Controller
     {
         $shopIds = $this->parseShopIdsFromFilter($request->input('shops'));
         $dateRange = $this->getDateRange($request);
-        $startDate = $dateRange['start_date'];
-        $endDate = $dateRange['end_date'];
+        $startDt = $dateRange['start_datetime'];
+        $endDt = $dateRange['end_datetime'];
 
         $ordersAggQuery = Order::withoutGlobalScopes()
             ->selectRaw('shop_id, COALESCE(SUM(total), 0) as sales, COUNT(*) as orders_count, COALESCE(SUM(invoice_discount), 0) as invoice_discount')
             ->whereNotNull('shop_id')
+            ->whereBetween('order_date', [$startDt, $endDt])
             ->groupBy('shop_id');
-
-        if ($startDate) {
-            $ordersAggQuery->whereDate('order_date', '>=', $startDate);
-        }
-        if ($endDate) {
-            $ordersAggQuery->whereDate('order_date', '<=', $endDate);
-        }
         if ($shopIds->isNotEmpty()) {
             $ordersAggQuery->whereIn('shop_id', $shopIds);
         }
@@ -442,14 +435,8 @@ class DashboardController extends Controller
 
         $filteredOrdersForJoin = Order::withoutGlobalScopes()
             ->select(['id', 'shop_id'])
-            ->whereNotNull('shop_id');
-
-        if ($startDate) {
-            $filteredOrdersForJoin->whereDate('order_date', '>=', $startDate);
-        }
-        if ($endDate) {
-            $filteredOrdersForJoin->whereDate('order_date', '<=', $endDate);
-        }
+            ->whereNotNull('shop_id')
+            ->whereBetween('order_date', [$startDt, $endDt]);
         if ($shopIds->isNotEmpty()) {
             $filteredOrdersForJoin->whereIn('shop_id', $shopIds);
         }
@@ -510,10 +497,7 @@ class DashboardController extends Controller
     private function aggregateKpis($startDt, $endDt, $shopIds): array
     {
         $ordersQuery = Order::query()
-            ->whereBetween('order_date', [
-                $startDt->format('Y-m-d H:i:s'),
-                $endDt->format('Y-m-d 23:59:59'),
-            ])
+            ->whereBetween('order_date', [$startDt, $endDt])
             ->whereIn('shop_id', $shopIds);
 
         $orderIds = (clone $ordersQuery)->pluck('id');

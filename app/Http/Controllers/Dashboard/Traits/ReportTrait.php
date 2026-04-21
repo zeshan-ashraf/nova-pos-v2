@@ -80,12 +80,16 @@ trait ReportTrait
             [$startDate, $endDate] = [$endDate, $startDate];
         }
 
+        // Inclusive range in app timezone: [start 00:00:00.000000, end 23:59:59.999999]
+        $startDt = Carbon::parse($startDate)->startOfDay();
+        $endDt = Carbon::parse($endDate)->endOfDay();
+
         return [
             'date_filter' => $dateFilter,
             'start_date' => $startDate,
             'end_date' => $endDate,
-            'start_datetime' => Carbon::parse($startDate)->startOfDay(),
-            'end_datetime' => Carbon::parse($endDate)->endOfDay(),
+            'start_datetime' => $startDt,
+            'end_datetime' => $endDt,
         ];
     }
 
