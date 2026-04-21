@@ -34,6 +34,8 @@ use App\Services\PurchaseDeletionService;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Collection;
+use Illuminate\Database\Eloquent\Builder;
 
 class OrderController extends Controller
 {
@@ -43,6 +45,23 @@ class OrderController extends Controller
         private StockService $stockService,
         private PurchaseDeletionService $purchaseDeletionService,
     ) {}
+
+    /**
+     * Scope customer queries to shops the user may see. Uses explicit shop_id filtering
+     * (not only BelongsToShop), which can be unset for some requests and would otherwise
+     * return customers from every shop.
+     */
+    protected function applyCustomerVisibleShopConstraint(Builder $customerQuery, Collection $visibleShopIds): Builder
+    {
+        $customerQuery->withoutGlobalScope('shop');
+        if ($visibleShopIds->isEmpty()) {
+            $customerQuery->whereRaw('1 = 0');
+        } else {
+            $customerQuery->whereIn('shop_id', $visibleShopIds->all());
+        }
+
+        return $customerQuery;
+    }
 
     /**
      * Display a listing of the resource.
@@ -108,9 +127,15 @@ class OrderController extends Controller
             $ordersQuery->where('total', '<=', (float) $request->input('total_max'));
         }
 
-        // Customer (exact match when selected)
+        // Customer (exact match when selected; ignore IDs outside visible shops)
         if ($request->filled('customer_id')) {
-            $ordersQuery->where('customer_id', $request->input('customer_id'));
+            $customerId = (int) $request->input('customer_id');
+            $customerAllowed = $this->applyCustomerVisibleShopConstraint(Customer::query(), $visibleShopIds)
+                ->whereKey($customerId)
+                ->exists();
+            if ($customerAllowed) {
+                $ordersQuery->where('customer_id', $customerId);
+            }
         }
 
         // Product filter: orders having selected product in order_details
@@ -126,9 +151,10 @@ class OrderController extends Controller
         // General search (existing behavior)
         $search = $request->input('search');
         if ($search !== null && $search !== '') {
-            $ordersQuery->where(function ($query) use ($search) {
+            $ordersQuery->where(function ($query) use ($search, $visibleShopIds) {
                 $query->where('invoice_no', 'like', '%' . $search . '%')
-                    ->orWhereHas('customer', function ($q) use ($search) {
+                    ->orWhereHas('customer', function ($q) use ($search, $visibleShopIds) {
+                        $this->applyCustomerVisibleShopConstraint($q, $visibleShopIds);
                         $q->where('name', 'like', '%' . $search . '%');
                     })
                     ->orWhere('order_date', 'like', '%' . $search . '%')
@@ -178,7 +204,7 @@ class OrderController extends Controller
 
         if ($byCustomer->isNotEmpty()) {
             $ids = $byCustomer->pluck('customer_id')->unique()->values();
-            $nameMap = Customer::query()
+            $nameMap = $this->applyCustomerVisibleShopConstraint(Customer::query(), $visibleShopIds)
                 ->whereIn('id', $ids)
                 ->pluck('name', 'id');
             $customerOrderTotals = $byCustomer->map(function ($row) use ($nameMap) {
@@ -209,9 +235,8 @@ class OrderController extends Controller
 
         $customerOrderTotals = $customerOrderTotals->sortByDesc('total_sum')->values();
 
-        // Customers for dropdown (visible shops only)
-        $customers = Customer::query()
-            ->when($visibleShopIds->isNotEmpty(), fn ($q) => $q->whereIn('shop_id', $visibleShopIds))
+        // Customers for dropdown (visible shops only; never unscoped when visibleShopIds is empty)
+        $customers = $this->applyCustomerVisibleShopConstraint(Customer::query(), $visibleShopIds)
             ->orderBy('name')
             ->get(['id', 'name']);
 
