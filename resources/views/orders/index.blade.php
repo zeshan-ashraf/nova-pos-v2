@@ -240,6 +240,30 @@
 }
 .orders-by-customer-section .orders-customer-box--danger { background-color: #dc3545; }
 .orders-by-customer-section .orders-customer-box--secondary { background-color: #6c757d; }
+
+/* Bank payment tooltip (orders/all) */
+.tooltip.bank-payment-tooltip .tooltip-inner {
+    background: #000000;
+    color: #ffffff;
+    border-radius: 10px;
+    padding: 0.5rem 0.7rem;
+    font-weight: 500;
+    font-size: 0.78rem;
+    box-shadow: 0 10px 22px rgba(16, 24, 40, 0.24);
+    white-space: pre-line;
+}
+.tooltip.bank-payment-tooltip.bs-tooltip-top .arrow::before {
+    border-top-color: #000000;
+}
+.tooltip.bank-payment-tooltip.bs-tooltip-bottom .arrow::before {
+    border-bottom-color: #000000;
+}
+.tooltip.bank-payment-tooltip.bs-tooltip-left .arrow::before {
+    border-left-color: #000000;
+}
+.tooltip.bank-payment-tooltip.bs-tooltip-right .arrow::before {
+    border-right-color: #000000;
+}
 </style>
 @endsection
 
@@ -591,7 +615,32 @@
                             <td>{{ $order->order_date }}</td>
                             <td>{{ number_format($order->total ?? 0, 2) }}</td>
                             <td>{{ strtolower($order->payment_status ?? '') === 'credit' ? number_format(0, 2) : number_format($order->pay ?? 0, 2) }}</td>
-                            <td>{{ $order->payment_status }}</td>
+                            <td>
+                                @php
+                                    $paymentStatus = strtolower((string) ($order->payment_status ?? ''));
+                                    $paymentBankBreakdown = $paymentBankBreakdowns[$order->id] ?? [];
+                                    $showBankTooltip = in_array($paymentStatus, ['bank', 'cheque'], true) && !empty($paymentBankBreakdown);
+                                    $bankTooltipLines = collect($paymentBankBreakdown)->map(function ($row) {
+                                        $name = $row['name'] ?? 'Bank';
+                                        $amount = number_format((float) ($row['amount'] ?? 0), 2);
+                                        return $name . ' (' . $amount . ')';
+                                    })->all();
+                                    $bankTooltipText = "Banks:\n" . implode("\n", $bankTooltipLines);
+                                @endphp
+                                @if($showBankTooltip)
+                                    <span
+                                        class="bank-payment-pill"
+                                        data-toggle="tooltip"
+                                        data-placement="right"
+                                        title="{{ $bankTooltipText }}"
+                                    >
+                                        {{ $order->payment_status }}
+                                        <i class="ri-bank-line ml-1"></i>
+                                    </span>
+                                @else
+                                    {{ $order->payment_status }}
+                                @endif
+                            </td>
                             <td>
                                 <span class="badge
                                     @if($order->order_status == 'complete')
@@ -807,6 +856,15 @@ function formatCurrency(amount) {
             placeholder: '— All —',
             allowClear: true,
             width: '100%'
+        });
+
+        $('[data-toggle="tooltip"]').not('.bank-payment-pill').tooltip();
+        $('.bank-payment-pill').tooltip('dispose').tooltip({
+            template: '<div class="tooltip bank-payment-tooltip" role="tooltip"><div class="arrow"></div><div class="tooltip-inner"></div></div>',
+            container: 'body',
+            html: false,
+            placement: 'right',
+            trigger: 'hover focus'
         });
 
         $('.product-filter-select').select2({

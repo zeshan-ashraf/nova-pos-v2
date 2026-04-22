@@ -261,13 +261,19 @@ class OrderController extends Controller
             \Log::info('Orders index SQL (debug_sql=1)', ['sql' => $sql]);
         }
 
+        $orders = $ordersQuery->paginate($row)->withQueryString();
+        $paymentBankBreakdowns = $this->getPaymentBankBreakdownsForOrders(
+            collect($orders->items())->pluck('id')
+        );
+
         $viewData = [
-            'orders' => $ordersQuery->paginate($row)->withQueryString(),
+            'orders' => $orders,
             'dateRange' => $dateRange,
             'customers' => $customers,
             'orderStats' => $orderStats,
             'customer_order_totals' => $customerOrderTotals,
             'selectedProduct' => $selectedProduct,
+            'paymentBankBreakdowns' => $paymentBankBreakdowns,
         ];
         if ($debugSql !== null) {
             $viewData['debugSql'] = $debugSql;
@@ -687,6 +693,60 @@ class OrderController extends Controller
             ->where('bank_shop.id', $log->shop_bank_id)
             ->join('banks', 'bank_shop.bank_id', '=', 'banks.id')
             ->value('banks.name');
+    }
+
+    /**
+     * Resolve bank payment breakdowns for many orders at once.
+     *
+     * @param \Illuminate\Support\Collection<int, int|string> $orderIds
+     * @return \Illuminate\Support\Collection<int, array<int, array{name:string, amount:float}>>
+     */
+    private function getPaymentBankBreakdownsForOrders(Collection $orderIds): Collection
+    {
+        $orderIds = $orderIds
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($orderIds->isEmpty()) {
+            return collect();
+        }
+
+        $rowsByOrder = PaymentLog::query()
+            ->whereIn('order_id', $orderIds->all())
+            ->whereNotNull('shop_bank_id')
+            ->where('amount_paid', '>', 0)
+            ->get(['order_id', 'shop_bank_id', 'amount_paid'])
+            ->groupBy('order_id');
+
+        if ($rowsByOrder->isEmpty()) {
+            return collect();
+        }
+
+        $allShopBankIds = $rowsByOrder
+            ->flatMap(fn ($rows) => $rows->pluck('shop_bank_id'))
+            ->unique()
+            ->values()
+            ->all();
+
+        $bankNames = DB::table('bank_shop')
+            ->whereIn('bank_shop.id', $allShopBankIds)
+            ->join('banks', 'bank_shop.bank_id', '=', 'banks.id')
+            ->pluck('banks.name', 'bank_shop.id');
+
+        return $rowsByOrder->map(function ($rows) use ($bankNames) {
+            return $rows
+                ->groupBy('shop_bank_id')
+                ->map(function ($bankRows, $shopBankId) use ($bankNames) {
+                    return [
+                        'name' => $bankNames->get((int) $shopBankId, 'Bank'),
+                        'amount' => (float) $bankRows->sum('amount_paid'),
+                    ];
+                })
+                ->values()
+                ->all();
+        })->filter();
     }
 
     public function pendingDue()
