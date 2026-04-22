@@ -739,8 +739,11 @@ class OrderController extends Controller
             return $rows
                 ->groupBy('shop_bank_id')
                 ->map(function ($bankRows, $shopBankId) use ($bankNames) {
+                    $rawName = (string) $bankNames->get((int) $shopBankId, 'Bank');
+                    $cleanName = preg_replace('/\s*\(largest\)\s*$/i', '', $rawName) ?: $rawName;
+
                     return [
-                        'name' => $bankNames->get((int) $shopBankId, 'Bank'),
+                        'name' => $cleanName,
                         'amount' => (float) $bankRows->sum('amount_paid'),
                     ];
                 })

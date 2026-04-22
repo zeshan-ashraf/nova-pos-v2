@@ -264,6 +264,11 @@
 .tooltip.bank-payment-tooltip.bs-tooltip-right .arrow::before {
     border-right-color: #000000;
 }
+.orders-bank-breakdown {
+    font-size: 0.76rem;
+    line-height: 1.35;
+    color: #5f6b7a;
+}
 </style>
 @endsection
 
@@ -602,7 +607,7 @@
                                 <a href="{{ $url }}" class="table-sortable-th">{{ $label }} @if(request('sort') === $col)<i class="ri-arrow-{{ request('direction') === 'asc' ? 'up' : 'down' }}-line ml-1"></i>@endif</a>
                             </th>
                             <th>Payment</th>
-                            <th>Status</th>
+                            <th></th>
                             <th>Action</th>
                         </tr>
                     </thead>
@@ -620,8 +625,12 @@
                                     $paymentStatus = strtolower((string) ($order->payment_status ?? ''));
                                     $paymentBankBreakdown = $paymentBankBreakdowns[$order->id] ?? [];
                                     $showBankTooltip = in_array($paymentStatus, ['bank', 'cheque'], true) && !empty($paymentBankBreakdown);
-                                    $bankTooltipLines = collect($paymentBankBreakdown)->map(function ($row) {
+                                    $showAmountPerBank = count($paymentBankBreakdown) > 1;
+                                    $bankTooltipLines = collect($paymentBankBreakdown)->map(function ($row) use ($showAmountPerBank) {
                                         $name = $row['name'] ?? 'Bank';
+                                        if (! $showAmountPerBank) {
+                                            return $name;
+                                        }
                                         $amount = number_format((float) ($row['amount'] ?? 0), 2);
                                         return $name . ' (' . $amount . ')';
                                     })->all();
@@ -642,16 +651,13 @@
                                 @endif
                             </td>
                             <td>
-                                <span class="badge
-                                    @if($order->order_status == 'complete')
-                                        badge-success
-                                    @elseif($order->order_status == 'pending')
-                                        badge-danger
-                                    @else
-                                        badge-secondary
-                                    @endif">
-                                    {{ $order->order_status }}
-                                </span>
+                                @if($showBankTooltip)
+                                    <div class="orders-bank-breakdown">
+                                        @foreach($bankTooltipLines as $line)
+                                            <div>{{ $line }}</div>
+                                        @endforeach
+                                    </div>
+                                @endif
                             </td>
 
                             <td>
