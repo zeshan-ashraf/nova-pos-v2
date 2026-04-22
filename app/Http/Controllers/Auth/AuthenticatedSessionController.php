@@ -40,8 +40,8 @@ class AuthenticatedSessionController extends Controller
             ActiveShop::ensureFor($user);
         }
 
-        // Redirect to invoice create page after login
-        return redirect()->intended(route('invoice.create'));
+        // Always go to invoice create after successful login.
+        return redirect()->route('invoice.create');
     }
 
     /**
