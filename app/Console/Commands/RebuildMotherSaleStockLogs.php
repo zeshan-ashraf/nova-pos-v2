@@ -102,6 +102,7 @@ class RebuildMotherSaleStockLogs extends Command
                     ),
                     'product_id' => (int) $d->product_id,
                     'qty' => (int) $d->quantity,
+                    'price' => (float) ($d->unitcost ?? 0),
                     'cost_per_unit' => (float) ($d->cost_per_unit ?? 0),
                 ];
             })
@@ -149,6 +150,7 @@ class RebuildMotherSaleStockLogs extends Command
                     'source_id' => (string) $order->id,
                     'adjustment_date' => $order->order_date,
                     'supplier_id' => null,
+                    'price' => $sample['price'],
                     'cost_per_unit' => $sample['cost_per_unit'],
                     'created_at' => $createdAt,
                     'updated_at' => $now,
