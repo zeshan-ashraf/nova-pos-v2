@@ -432,6 +432,24 @@
     .content-page .sa-dashboard-page .table.table-striped:not(.table-borderless):not(.table-dark) tbody tr:hover th {
         background-color: rgba(140, 87, 255, 0.1) !important;
     }
+    .sa-shop-cell {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        font-weight: 600;
+        color: var(--sa-text);
+    }
+    .sa-shop-cell i {
+        font-size: 0.95rem;
+        width: 1rem;
+        text-align: center;
+    }
+    .sa-shop-icon--1 { color: #8c57ff; }
+    .sa-shop-icon--2 { color: #00cfe8; }
+    .sa-shop-icon--3 { color: #28c76f; }
+    .sa-shop-icon--4 { color: #ff9f43; }
+    .sa-shop-icon--5 { color: #ea5455; }
+    .sa-shop-icon--6 { color: #7367f0; }
 
     .sa-dashboard-page #kpi-error-alert {
         border: none;
@@ -853,8 +871,14 @@
                             </thead>
                             <tbody>
                                 @forelse($shops ?? [] as $shop)
+                                    @php $shopIconClass = 'sa-shop-icon--' . (((int) $shop->id % 6) + 1); @endphp
                                     <tr>
-                                        <td>{{ $shop->name ?? 'Shop Name' }}</td>
+                                        <td>
+                                            <span class="sa-shop-cell">
+                                                <i class="fas fa-store-alt {{ $shopIconClass }}" aria-hidden="true"></i>
+                                                <span>{{ $shop->name ?? 'Shop Name' }}</span>
+                                            </span>
+                                        </td>
                                         <td id="sales_{{ $shop->id }}" class="text-right">{{ number_format(0, 2) }}</td>
                                         <td id="orders_{{ $shop->id }}" class="text-right">{{ number_format(0, 0) }}</td>
                                         <td id="cogs_{{ $shop->id }}" class="text-right">{{ number_format(0, 2) }}</td>
@@ -924,8 +948,14 @@
                             </thead>
                             <tbody>
                                 @forelse($shops ?? [] as $shop)
+                                    @php $shopIconClass = 'sa-shop-icon--' . (((int) $shop->id % 6) + 1); @endphp
                                     <tr>
-                                        <td>{{ $shop->name ?? 'Shop Name' }}</td>
+                                        <td>
+                                            <span class="sa-shop-cell">
+                                                <i class="fas fa-store-alt {{ $shopIconClass }}" aria-hidden="true"></i>
+                                                <span>{{ $shop->name ?? 'Shop Name' }}</span>
+                                            </span>
+                                        </td>
                                         <td id="stock_{{ $shop->id }}" class="text-right">{{ number_format(0, 2) }}</td>
                                         <td id="lowstock_{{ $shop->id }}" class="text-right">{{ number_format(0, 0) }}</td>
                                     </tr>
