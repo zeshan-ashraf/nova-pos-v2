@@ -3,57 +3,67 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Dashboard\Traits\ReportTrait;
+use App\Models\AccountTransaction;
 use App\Models\Order;
 use App\Models\OrderDetails;
 use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\Shop;
+use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Support\ActiveShop;
+use Illuminate\Support\Collection;
 
 class DashboardController extends Controller
 {
     use ReportTrait;
 
-    public function index(){
-        $authUser = auth()->user();
-        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+    public function index(Request $request){
+        $visibleShopIds = $this->dashboardScopeShopIds();
+        $dateRange = $this->getDateRange($request);
+        $financialKpis = $this->buildShopFinancialKpis($dateRange);
+        $groupBy = $request->input('group_by');
+        $ordersOverview = $this->buildOrdersOverviewSeries($dateRange, $groupBy);
+        $revenueVsCost = $this->buildRevenueVsCostSeries($dateRange, $groupBy);
 
         $ordersQuery = Order::query();
         $productsQuery = Product::query();
 
-        // Apply shop filtering for orders
-        if ($authUser->shop_id) {
-            $ordersQuery->whereIn('shop_id', $visibleShopIds);
+        // Apply strict dashboard shop scope.
+        if ($visibleShopIds->isEmpty()) {
+            $ordersQuery->whereRaw('1 = 0');
+            $productsQuery->whereRaw('1 = 0');
         } else {
-            $ordersQuery->where(function ($query) use ($visibleShopIds) {
-                $query->whereNull('shop_id');
-                if ($visibleShopIds->isNotEmpty()) {
-                    $query->orWhereIn('shop_id', $visibleShopIds);
-                }
-            });
-        }
-
-        // Apply shop filtering for products
-        if ($authUser->shop_id) {
-            $productsQuery->whereIn('shop_id', $visibleShopIds);
-        } else {
-            $productsQuery->where(function ($query) use ($visibleShopIds) {
-                $query->whereNull('shop_id');
-                if ($visibleShopIds->isNotEmpty()) {
-                    $query->orWhereIn('shop_id', $visibleShopIds);
-                }
-            });
+            $ordersQuery->whereIn('shop_id', $visibleShopIds->all());
+            $productsQuery->whereIn('shop_id', $visibleShopIds->all());
         }
 
         return view('dashboard.index', [
             'total_paid' => (clone $ordersQuery)->sum('pay'),
             'total_due' => (clone $ordersQuery)->sum('due'),
-            'complete_orders' => (clone $ordersQuery)->where('order_status', 'complete')->get(),
+            'complete_orders' => (clone $ordersQuery)->where('order_status', 'complete')->count(),
+            'customer_total_due' => $financialKpis['total_due'],
+            'net_cash' => $financialKpis['net_cash'],
+            'total_sales' => $financialKpis['total_sales'],
+            'profit' => $financialKpis['profit'],
+            'orders_overview' => $ordersOverview,
+            'revenue_vs_cost' => $revenueVsCost,
+            'dateRange' => $dateRange,
             'products' => (clone $productsQuery)->orderBy('product_store')->take(5)->get(),
             'new_products' => (clone $productsQuery)->orderBy('buying_date')->take(2)->get(),
         ]);
+    }
+
+    /**
+     * KPI endpoint for logged-in shop user:
+     * - net_cash: cash/bank inflow - outflow
+     * - total_sales: valid sales total
+     * - profit: total_sales - cogs
+     */
+    public function getFinancialKpis(Request $request)
+    {
+        return response()->json($this->buildShopFinancialKpis($this->getDateRange($request)));
     }
 
     /**
@@ -70,8 +80,7 @@ class DashboardController extends Controller
             'shop_ids.*'  => 'integer|exists:shops,id',
         ]);
 
-        $authUser = auth()->user();
-        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+        $visibleShopIds = $this->dashboardScopeShopIds();
         $emptyKpis = [
             'total_sales' => 0, 'total_cogs' => 0, 'gross_profit' => 0,
             'total_discounts' => 0, 'net_profit' => 0, 'profit_margin' => 0,
@@ -229,7 +238,7 @@ class DashboardController extends Controller
             'shops' => 'nullable',
         ]);
 
-        $shopIds = $this->parseShopIdsFromFilter($request->input('shops'));
+        $shopIds = $this->parseShopIdsFromFilter($request->input('shops'), $this->dashboardScopeShopIds());
 
         $stockAgg = Product::withoutGlobalScopes()
             ->selectRaw('shop_id, COALESCE(SUM(COALESCE(product_store, 0) * COALESCE(buying_price, 0)), 0) as stock_value')
@@ -279,7 +288,7 @@ class DashboardController extends Controller
             'shops' => 'nullable',
         ]);
 
-        $shopIds = $this->parseShopIdsFromFilter($request->input('shops'));
+        $shopIds = $this->parseShopIdsFromFilter($request->input('shops'), $this->dashboardScopeShopIds());
         $dateRange = $this->getDateRange($request);
         $startDt = $dateRange['start_datetime'];
         $endDt = $dateRange['end_datetime'];
@@ -402,7 +411,7 @@ class DashboardController extends Controller
         ]);
     }
 
-    private function parseShopIdsFromFilter($shopsInput)
+    private function parseShopIdsFromFilter($shopsInput, ?Collection $allowedShopIds = null): Collection
     {
         $shopIds = collect();
         if (is_array($shopsInput)) {
@@ -412,12 +421,28 @@ class DashboardController extends Controller
         } elseif (is_numeric($shopsInput)) {
             $shopIds = collect([(int) $shopsInput])->filter();
         }
-        return $shopIds->unique()->values();
+        $shopIds = $shopIds->unique()->values();
+
+        if ($allowedShopIds === null) {
+            return $shopIds;
+        }
+
+        if ($allowedShopIds->isEmpty()) {
+            return collect();
+        }
+
+        if ($shopIds->isEmpty()) {
+            return $allowedShopIds->values();
+        }
+
+        return $shopIds
+            ->intersect($allowedShopIds)
+            ->values();
     }
 
     private function buildShopPerformanceRows(Request $request)
     {
-        $shopIds = $this->parseShopIdsFromFilter($request->input('shops'));
+        $shopIds = $this->parseShopIdsFromFilter($request->input('shops'), $this->dashboardScopeShopIds());
         $dateRange = $this->getDateRange($request);
         $startDt = $dateRange['start_datetime'];
         $endDt = $dateRange['end_datetime'];
@@ -530,6 +555,284 @@ class DashboardController extends Controller
             'total_discounts' => $totalDiscounts,
             'net_profit' => $netProfit,
             'profit_margin' => $profitMargin,
+        ];
+    }
+
+    /**
+     * Default dashboard scope:
+     * - Shop user: strictly their own shop_id only.
+     * - Non-shop/platform user: visible shops from active shop context.
+     */
+    private function dashboardScopeShopIds(): Collection
+    {
+        $user = auth()->user();
+        if ($user && $user->shop_id) {
+            return collect([(int) $user->shop_id]);
+        }
+
+        if (!$user) {
+            return collect();
+        }
+
+        return ActiveShop::visibleShopIds($user)
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * Build financial KPIs scoped strictly to authenticated user's shop_id.
+     *
+     * @param array{start_datetime:\Carbon\Carbon,end_datetime:\Carbon\Carbon} $dateRange
+     * @return array{total_due: float, net_cash: float, total_sales: float, profit: float}
+     */
+    private function buildShopFinancialKpis(array $dateRange): array
+    {
+        $user = auth()->user();
+        $shopId = $user?->shop_id ? (int) $user->shop_id : null;
+
+        if (!$shopId) {
+            return [
+                'total_due' => 0.0,
+                'net_cash' => 0.0,
+                'total_sales' => 0.0,
+                'profit' => 0.0,
+            ];
+        }
+
+        $startDt = $dateRange['start_datetime'];
+        $endDt = $dateRange['end_datetime'];
+
+        $cashFlowQuery = AccountTransaction::query()
+            ->where('shop_id', $shopId)
+            ->whereBetween('transaction_date', [$startDt, $endDt])
+            ->whereIn('account_type', [
+                AccountTransaction::ACCOUNT_TYPE_CASH,
+                AccountTransaction::ACCOUNT_TYPE_BANK,
+            ]);
+
+        $totalInflow = (float) (clone $cashFlowQuery)
+            ->where('direction', AccountTransaction::DIRECTION_DEBIT)
+            ->sum('amount');
+        $totalOutflow = (float) (clone $cashFlowQuery)
+            ->where('direction', AccountTransaction::DIRECTION_CREDIT)
+            ->sum('amount');
+        $netCash = $totalInflow - $totalOutflow;
+
+        $ordersInRange = Order::query()
+            ->where('shop_id', $shopId)
+            ->whereBetween('order_date', [$startDt, $endDt]);
+
+        $totalDue = (float) (clone $ordersInRange)->sum('due');
+        $totalSales = (float) (clone $ordersInRange)
+            ->where('order_status', 'complete')
+            ->sum('total');
+
+        $totalCost = (float) OrderDetails::query()
+            ->join('orders', function ($join) use ($shopId) {
+                $join->on('orders.id', '=', 'order_details.order_id')
+                    ->where('orders.shop_id', '=', $shopId)
+                    ->where('orders.order_status', '=', 'complete')
+                    ->whereNull('orders.deleted_at');
+            })
+            ->leftJoin('products', 'products.id', '=', 'order_details.product_id')
+            ->whereBetween('orders.order_date', [$startDt, $endDt])
+            ->selectRaw('COALESCE(SUM(order_details.quantity * COALESCE(NULLIF(order_details.cost_per_unit, 0), products.buying_price, 0)), 0) as total_cost')
+            ->value('total_cost');
+
+        return [
+            'total_due' => round($totalDue, 2),
+            'net_cash' => round($netCash, 2),
+            'total_sales' => round($totalSales, 2),
+            'profit' => round($totalSales - $totalCost, 2),
+        ];
+    }
+
+    /**
+     * Build Revenue vs Cost vs Profit series for dashboard chart.
+     *
+     * - Strictly scoped to authenticated user's shop_id
+     * - Uses global date filter range
+     * - Auto grouping: <=31 days => daily, otherwise monthly
+     * - Revenue: completed orders total
+     * - Cost: order_details quantity * (cost_per_unit fallback product buying_price)
+     * - Profit: Revenue - Cost
+     *
+     * @param array{start_datetime:\Carbon\Carbon,end_datetime:\Carbon\Carbon} $dateRange
+     * @param string|null $requestedGroupBy
+     * @return array{
+     *   labels: array<int,string>,
+     *   revenue: array<int,float>,
+     *   cost: array<int,float>,
+     *   profit: array<int,float>,
+     *   group_by: string,
+     *   auto_group_by: string,
+     *   manual_override: bool
+     * }
+     */
+    private function buildRevenueVsCostSeries(array $dateRange, ?string $requestedGroupBy = null): array
+    {
+        $shopId = (int) (auth()->user()?->shop_id ?? 0);
+        $startDt = $dateRange['start_datetime']->copy()->startOfDay();
+        $endDt = $dateRange['end_datetime']->copy()->endOfDay();
+        $autoGroupBy = ($startDt->diffInDays($endDt) + 1) <= 31 ? 'daily' : 'monthly';
+
+        $requestedGroupBy = is_string($requestedGroupBy) ? strtolower($requestedGroupBy) : null;
+        $selectedGroupBy = in_array($requestedGroupBy, ['daily', 'monthly'], true)
+            ? $requestedGroupBy
+            : $autoGroupBy;
+        $isDaily = $selectedGroupBy === 'daily';
+
+        if ($shopId <= 0) {
+            return [
+                'labels' => [],
+                'revenue' => [],
+                'cost' => [],
+                'profit' => [],
+                'group_by' => $selectedGroupBy,
+                'auto_group_by' => $autoGroupBy,
+                'manual_override' => $requestedGroupBy !== null,
+            ];
+        }
+
+        $groupExpr = $isDaily
+            ? 'DATE(order_date)'
+            : "DATE_FORMAT(order_date, '%Y-%m')";
+        $groupExprOrders = $isDaily
+            ? 'DATE(orders.order_date)'
+            : "DATE_FORMAT(orders.order_date, '%Y-%m')";
+
+        $revenueRows = Order::query()
+            ->where('shop_id', $shopId)
+            ->where('order_status', 'complete')
+            ->whereBetween('order_date', [$startDt, $endDt])
+            ->selectRaw($groupExpr . ' as d, COALESCE(SUM(total), 0) as amount')
+            ->groupBy('d')
+            ->orderBy('d')
+            ->get();
+
+        $costRows = OrderDetails::query()
+            ->join('orders', function ($join) use ($shopId) {
+                $join->on('orders.id', '=', 'order_details.order_id')
+                    ->where('orders.shop_id', '=', $shopId)
+                    ->where('orders.order_status', '=', 'complete')
+                    ->whereNull('orders.deleted_at');
+            })
+            ->leftJoin('products', 'products.id', '=', 'order_details.product_id')
+            ->whereBetween('orders.order_date', [$startDt, $endDt])
+            ->selectRaw('
+                ' . $groupExprOrders . ' as d,
+                COALESCE(
+                    SUM(order_details.quantity * COALESCE(NULLIF(order_details.cost_per_unit, 0), products.buying_price, 0)),
+                    0
+                ) as amount
+            ')
+            ->groupBy('d')
+            ->orderBy('d')
+            ->get();
+
+        $revenueMap = $revenueRows->pluck('amount', 'd');
+        $costMap = $costRows->pluck('amount', 'd');
+
+        $labels = [];
+        $revenue = [];
+        $cost = [];
+        $profit = [];
+
+        $periodStart = $isDaily ? $startDt->copy() : $startDt->copy()->startOfMonth();
+        $periodEnd = $isDaily ? $endDt->copy() : $endDt->copy()->startOfMonth();
+        $periodStep = $isDaily ? '1 day' : '1 month';
+
+        foreach (CarbonPeriod::create($periodStart, $periodStep, $periodEnd) as $date) {
+            $key = $isDaily ? $date->format('Y-m-d') : $date->format('Y-m');
+            $r = round((float) ($revenueMap[$key] ?? 0), 2);
+            $c = round((float) ($costMap[$key] ?? 0), 2);
+            $labels[] = $key;
+            $revenue[] = $r;
+            $cost[] = $c;
+            $profit[] = round($r - $c, 2);
+        }
+
+        return [
+            'labels' => $labels,
+            'revenue' => $revenue,
+            'cost' => $cost,
+            'profit' => $profit,
+            'group_by' => $selectedGroupBy,
+            'auto_group_by' => $autoGroupBy,
+            'manual_override' => $requestedGroupBy !== null,
+        ];
+    }
+
+    /**
+     * Build Orders overview series for the Overview chart.
+     *
+     * @param array{start_datetime:\Carbon\Carbon,end_datetime:\Carbon\Carbon} $dateRange
+     * @param string|null $requestedGroupBy
+     * @return array{
+     *   labels: array<int,string>,
+     *   orders: array<int,int>,
+     *   group_by: string,
+     *   auto_group_by: string,
+     *   manual_override: bool
+     * }
+     */
+    private function buildOrdersOverviewSeries(array $dateRange, ?string $requestedGroupBy = null): array
+    {
+        $shopId = (int) (auth()->user()?->shop_id ?? 0);
+        $startDt = $dateRange['start_datetime']->copy()->startOfDay();
+        $endDt = $dateRange['end_datetime']->copy()->endOfDay();
+        $autoGroupBy = ($startDt->diffInDays($endDt) + 1) <= 31 ? 'daily' : 'monthly';
+
+        $requestedGroupBy = is_string($requestedGroupBy) ? strtolower($requestedGroupBy) : null;
+        $selectedGroupBy = in_array($requestedGroupBy, ['daily', 'monthly'], true)
+            ? $requestedGroupBy
+            : $autoGroupBy;
+        $isDaily = $selectedGroupBy === 'daily';
+
+        if ($shopId <= 0) {
+            return [
+                'labels' => [],
+                'orders' => [],
+                'group_by' => $selectedGroupBy,
+                'auto_group_by' => $autoGroupBy,
+                'manual_override' => $requestedGroupBy !== null,
+            ];
+        }
+
+        $groupExpr = $isDaily
+            ? 'DATE(order_date)'
+            : "DATE_FORMAT(order_date, '%Y-%m')";
+
+        $rows = Order::query()
+            ->where('shop_id', $shopId)
+            ->whereBetween('order_date', [$startDt, $endDt])
+            ->selectRaw($groupExpr . ' as d, COUNT(*) as c')
+            ->groupBy('d')
+            ->orderBy('d')
+            ->get();
+
+        $countMap = $rows->pluck('c', 'd');
+        $labels = [];
+        $orders = [];
+
+        $periodStart = $isDaily ? $startDt->copy() : $startDt->copy()->startOfMonth();
+        $periodEnd = $isDaily ? $endDt->copy() : $endDt->copy()->startOfMonth();
+        $periodStep = $isDaily ? '1 day' : '1 month';
+
+        foreach (CarbonPeriod::create($periodStart, $periodStep, $periodEnd) as $date) {
+            $key = $isDaily ? $date->format('Y-m-d') : $date->format('Y-m');
+            $labels[] = $key;
+            $orders[] = (int) ($countMap[$key] ?? 0);
+        }
+
+        return [
+            'labels' => $labels,
+            'orders' => $orders,
+            'group_by' => $selectedGroupBy,
+            'auto_group_by' => $autoGroupBy,
+            'manual_override' => $requestedGroupBy !== null,
         ];
     }
 }

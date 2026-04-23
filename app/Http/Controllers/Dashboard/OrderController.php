@@ -2049,6 +2049,19 @@ class OrderController extends Controller
                         Product::where('id', $product['product_id'])
                             ->update(['product_store' => DB::raw('product_store - ' . $product['quantity'])]);
 
+                        // Stock log for mother shop transfer OUT
+                        StockLog::create([
+                            'shop_id' => $motherShop->id,
+                            'product_id' => $motherProduct->id,
+                            'supplier_id' => null,
+                            'qty' => (int) $product['quantity'],
+                            'direction' => 'out',
+                            'source_type' => 'mother_sale',
+                            'source_id' => (string) $order_id,
+                            'price' => (float) ($product['unit_price'] ?? 0),
+                            'stock_qty' => -(int) $product['quantity'],
+                        ]);
+
                         // Check if child shop already has this SKU (by parent link, code, or name)
                         $childProduct = $this->findChildShopProductForMotherSale($childShop, $motherProduct);
 
@@ -2082,18 +2095,6 @@ class OrderController extends Controller
                                 'product_id' => $childProduct->id,
                                 'product_store' => $childProduct->product_store,
                                 'quantity' => $product['quantity'],
-                            ]);
-                            // Step 7 — Insert stock_log for child shop (audit trail for mother_sale).
-                            StockLog::create([
-                                'shop_id' => $childShop->id,
-                                'product_id' => $childProduct->id,
-                                'supplier_id' => $supplier->id,
-                                'qty' => (int) $product['quantity'],
-                                'direction' => 'in',
-                                'source_type' => 'mother_sale',
-                                'source_id' => (string) $order_id,
-                                'price' => (float) ($product['unit_price'] ?? 0),
-                                'stock_qty' => (int) $product['quantity'],
                             ]);
                         } else {
                             // Resolve category for child shop: find by name or create (query child shop, so bypass shop scope)
@@ -2130,18 +2131,6 @@ class OrderController extends Controller
                                 'buying_price' => $product['unit_price'], // Invoice price
                                 'selling_price' => $product['unit_price'], // Same as buying_price
                                 'status' => $motherProduct->status,
-                            ]);
-                            // Step 7 — Insert stock_log for new child product (mother_sale).
-                            StockLog::create([
-                                'shop_id' => $childShop->id,
-                                'product_id' => $newChild->id,
-                                'supplier_id' => $supplier->id,
-                                'qty' => (int) $product['quantity'],
-                                'direction' => 'in',
-                                'source_type' => 'mother_sale',
-                                'source_id' => (string) $order_id,
-                                'price' => (float) ($product['unit_price'] ?? 0),
-                                'stock_qty' => (int) $product['quantity'],
                             ]);
                         }
                     }

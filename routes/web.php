@@ -65,6 +65,7 @@ Route::get('/', function () {
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth'])->name('dashboard');
     Route::get('/dashboard/kpis', [DashboardController::class, 'getKPIs'])->name('dashboard.kpis');
+    Route::get('/dashboard/financial-kpis', [DashboardController::class, 'getFinancialKpis'])->name('dashboard.financial-kpis');
     Route::get('/dashboard/activities', [DashboardController::class, 'getActivities'])->name('dashboard.activities');
     Route::get('/dashboard/shop-performance', [DashboardController::class, 'getShopPerformance'])->name('dashboard.shop-performance');
     Route::get('/dashboard/insights', [DashboardController::class, 'getInsights'])->name('dashboard.insights');
