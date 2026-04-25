@@ -226,16 +226,17 @@ class StockMovementReportService
      */
     private function buildWhere(array $filters, array &$bindings, string $alias = 'sl'): string
     {
+       
         $conditions = ['1 = 1', "{$alias}.deleted_at IS NULL"];
 
-        // Date filter now applies on adjustment_date (backfilled for sale/purchase),
-        // so movement reports align with business dates instead of raw created_at.
+        // Prefer adjustment_date (business date); when null, use created_at so rows still match the range.
+        $effectiveDate = "COALESCE({$alias}.adjustment_date, {$alias}.created_at)";
         if (!empty($filters['from_date'])) {
-            $conditions[] = "{$alias}.adjustment_date >= ?";
+            $conditions[] = "{$effectiveDate} >= ?";
             $bindings[] = Carbon::parse($filters['from_date'])->startOfDay()->toDateTimeString();
         }
         if (!empty($filters['to_date'])) {
-            $conditions[] = "{$alias}.adjustment_date <= ?";
+            $conditions[] = "{$effectiveDate} <= ?";
             $bindings[] = Carbon::parse($filters['to_date'])->endOfDay()->toDateTimeString();
         }
         if (isset($filters['product_id']) && $filters['product_id'] !== '' && $filters['product_id'] !== null) {

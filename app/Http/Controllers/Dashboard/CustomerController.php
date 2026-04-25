@@ -36,8 +36,40 @@ class CustomerController extends Controller
             ->filter(request(['search']))
             ->sortable();
 
+        $customers = $customersQuery->paginate($row)->appends(request()->query());
+
+        $customerIds = $customers->getCollection()->pluck('id')->filter()->values();
+        $orderAgg = collect();
+        $paymentAgg = collect();
+        if ($customerIds->isNotEmpty()) {
+            $orderAgg = Order::query()
+                ->whereIn('customer_id', $customerIds->all())
+                ->selectRaw('customer_id, COALESCE(SUM(total), 0) as total_sales')
+                ->groupBy('customer_id')
+                ->get()
+                ->keyBy('customer_id');
+
+            $paymentAgg = AccountTransaction::query()
+                ->where('account_type', AccountTransaction::ACCOUNT_TYPE_CUSTOMER)
+                ->whereIn('account_ref_id', $customerIds->all())
+                ->where('source_type', AccountTransaction::SOURCE_CUSTOMER_PAYMENT)
+                ->where('direction', AccountTransaction::DIRECTION_CREDIT)
+                ->selectRaw('account_ref_id as customer_id, COALESCE(SUM(amount), 0) as total_paid')
+                ->groupBy('account_ref_id')
+                ->get()
+                ->keyBy('customer_id');
+        }
+
+        $customers->getCollection()->transform(function ($customer) use ($orderAgg, $paymentAgg) {
+            $orderRow = $orderAgg->get($customer->id);
+            $payRow = $paymentAgg->get($customer->id);
+            $customer->total_sales_amount = (float) ($orderRow->total_sales ?? 0);
+            $customer->total_paid_amount = (float) ($payRow->total_paid ?? 0);
+            return $customer;
+        });
+
         return view('customers.index', [
-            'customers' => $customersQuery->paginate($row)->appends(request()->query()),
+            'customers' => $customers,
         ]);
     }
 
