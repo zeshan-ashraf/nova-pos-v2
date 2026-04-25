@@ -266,6 +266,13 @@
                                     </a>
                                 </li>
                                 @endif
+                                @if (auth()->user()->can('stock_audit_report_view'))
+                                <li class="{{ Request::is('reports/stock-audit*') ? 'active' : '' }}">
+                                    <a href="{{ route('reports.stock.audit') }}">
+                                        <i class="fas fa-circle" style="font-size: 6px; vertical-align: middle;"></i><span>Stock Audit</span>
+                                    </a>
+                                </li>
+                                @endif
                                 @if (auth()->user()->can('reports.expired-products'))
                                 <!--<li class="{{ Request::is('reports/inventory/expired-products*') ? 'active' : '' }}">
                                     <a href="{{ route('reports.inventory.expired-products') }}">

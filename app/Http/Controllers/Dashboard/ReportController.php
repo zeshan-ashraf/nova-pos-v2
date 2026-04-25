@@ -163,6 +163,12 @@ class ReportController extends Controller
                         'permission' => 'reports.expired-products',
                         'description' => 'Expired and expiring products'
                     ],
+                    [
+                        'name' => 'Stock Audit',
+                        'route' => 'reports.stock.audit',
+                        'permission' => 'stock_audit_report_view',
+                        'description' => 'Compare expected stock with ledger stock balance'
+                    ],
                 ]
             ],
             'payment' => [

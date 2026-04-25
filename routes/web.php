@@ -44,6 +44,7 @@ use App\Http\Controllers\Dashboard\PayableController;
 use App\Http\Controllers\Dashboard\PayableTransactionController;
 use App\Http\Controllers\Dashboard\PurchaseReturnController;
 use App\Http\Controllers\Dashboard\TransferReturnController;
+use App\Http\Controllers\Report\StockAuditController;
 
 /*
 |--------------------------------------------------------------------------
@@ -427,6 +428,10 @@ Route::middleware(['permission:reports.menu'])->group(function () {
         Route::get('/reports/executive/summary', [ExecutiveReportController::class, 'summary'])->name('reports.executive.summary');
     });
 });
+
+Route::get('/reports/stock-audit', [StockAuditController::class, 'index'])
+    ->name('reports.stock.audit')
+    ->middleware(['auth', 'permission:stock_audit_report_view']);
 
 // ====== SYSTEM RESET (Super Admin Only) ======
 Route::middleware(['auth', 'role:Super Admin'])->group(function () {
