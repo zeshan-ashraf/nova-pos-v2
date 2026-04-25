@@ -2267,4 +2267,13 @@
     });
 })(jQuery);
 </script>
+@if(session('open_print_tab') && session('print_order_id'))
+<script>
+    (function() {
+        const orderId = {{ session('print_order_id') }};
+        const printUrl = '{{ route("order.invoiceDownload", ":id") }}'.replace(':id', orderId) + '?print=1';
+        window.open(printUrl, '_blank');
+    })();
+</script>
+@endif
 @endsection

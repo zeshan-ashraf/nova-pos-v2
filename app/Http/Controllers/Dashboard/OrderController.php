@@ -1841,14 +1841,14 @@ class OrderController extends Controller
                 // Store order_id in session for opening print tab
                 session(['print_order_id' => $order_id]);
                 
-                return Redirect::route('order.index')->with([
+                return Redirect::route('invoice.create')->with([
                     'success' => 'Invoice has been created successfully!',
                     'warning' => $warning,
                     'open_print_tab' => true, // Flag to open print tab
                 ]);
             }
 
-            return Redirect::route('order.index')->with([
+            return Redirect::route('invoice.create')->with([
                 'success' => 'Invoice has been created successfully!',
                 'warning' => $warning,
             ]);
@@ -2289,7 +2289,7 @@ class OrderController extends Controller
                     DB::transaction($runShopTransfer);
                 }
 
-                return Redirect::route('order.index')->with([
+                return Redirect::route('invoice.create')->with([
                     'success' => 'Stock transfer invoice has been created successfully! Purchase invoice has been auto-generated.',
                 ]);
 

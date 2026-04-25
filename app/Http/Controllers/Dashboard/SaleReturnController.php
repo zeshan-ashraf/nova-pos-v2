@@ -10,9 +10,9 @@ use App\Models\SaleReturn;
 use App\Models\SaleReturnDetail;
 use App\Support\ActiveShop;
 use App\Services\SaleReturnService;
-use Haruncpi\LaravelIdGenerator\IdGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
 
@@ -235,14 +235,6 @@ class SaleReturnController extends Controller
 
         $customer = $order->customer;
 
-        // Generate return number
-        $return_no = IdGenerator::generate([
-            'table' => 'sale_returns',
-            'field' => 'return_no',
-            'length' => 10,
-            'prefix' => 'RET-'
-        ]);
-
         // Validate per-line return quantities before creating any records.
         // Ensures we never insert sale_return_details that exceed sold quantity.
         $this->saleReturnService->validateReturnQuantities($order, $validatedData['products']);
@@ -264,13 +256,22 @@ class SaleReturnController extends Controller
         $total = max(0, $subtotal + $vat - $invoiceDiscount);
 
         // Prepare return data
+        $resolvedShopId = $authUser->shop_id
+            ?? $order->shop_id
+            ?? $customer?->shop_id;
+
+        if (empty($resolvedShopId)) {
+            return back()->withErrors([
+                'error' => 'Sale return cannot be saved because shop is missing on this order/customer.',
+            ])->withInput();
+        }
+
         $returnData = [
             'order_id' => $order->id,
             'customer_id' => $order->customer_id,
-            'shop_id' => $authUser->shop_id ?? $order->shop_id,
+            'shop_id' => (int) $resolvedShopId,
             'return_date' => Carbon::parse($validatedData['return_date'])->format('Y-m-d H:i:s'),
             'return_status' => 'completed',
-            'return_no' => $return_no,
             'total_products' => $totalProducts,
             'sub_total' => $subtotal,
             'invoice_discount' => $invoiceDiscount,
@@ -282,34 +283,46 @@ class SaleReturnController extends Controller
         $return_id = null;
 
         try {
-            DB::transaction(function () use (&$return_id, $returnData, $validatedData, $order, $customer, $authUser) {
-                // 1. Create sale return header using existing insert structure
-                $saleReturn = SaleReturn::create($returnData);
-                $return_id = $saleReturn->id;
+            $maxAttempts = 5;
+            for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+                try {
+                    DB::transaction(function () use (&$return_id, $returnData, $validatedData, $order, $customer, $authUser) {
+                        // 1. Create sale return header with collision-safe return number.
+                        $returnData['return_no'] = $this->generateNextReturnNo();
+                        $saleReturn = SaleReturn::create($returnData);
+                        $return_id = $saleReturn->id;
 
-                // 2. Create return details and restore inventory for each selected item
-                $selectedProducts = array_filter($validatedData['products'], function ($product) {
-                    return !empty($product['product_id']) && !empty($product['quantity']) && $product['quantity'] > 0;
-                });
+                        // 2. Create return details and restore inventory for each selected item
+                        $selectedProducts = array_filter($validatedData['products'], function ($product) {
+                            return !empty($product['product_id']) && !empty($product['quantity']) && $product['quantity'] > 0;
+                        });
 
-                if (empty($selectedProducts)) {
-                    throw new \RuntimeException('Please select at least one item to return.');
+                        if (empty($selectedProducts)) {
+                            throw new \RuntimeException('Please select at least one item to return.');
+                        }
+
+                        foreach ($selectedProducts as $product) {
+                            $this->saleReturnService->createReturnDetailAndRestoreInventory(
+                                $saleReturn,
+                                $order,
+                                $product,
+                                $authUser->shop_id
+                            );
+                        }
+
+                        // 3. Apply financial impact (inventory-safe and accounting-safe)
+                        $this->saleReturnService->applyFinancialImpact($saleReturn, $order, $customer);
+                    });
+
+                    return Redirect::route('sale-returns.index')->with('success', 'Sale return has been created successfully!');
+                } catch (QueryException $e) {
+                    // Retry only when return_no unique key collides.
+                    if ($attempt < $maxAttempts && $this->isReturnNoDuplicateException($e)) {
+                        continue;
+                    }
+                    throw $e;
                 }
-
-                foreach ($selectedProducts as $product) {
-                    $this->saleReturnService->createReturnDetailAndRestoreInventory(
-                        $saleReturn,
-                        $order,
-                        $product,
-                        $authUser->shop_id
-                    );
-                }
-
-                // 3. Apply financial impact (inventory-safe and accounting-safe)
-                $this->saleReturnService->applyFinancialImpact($saleReturn, $order, $customer);
-            });
-
-            return Redirect::route('sale-returns.index')->with('success', 'Sale return has been created successfully!');
+            }
         } catch (\Illuminate\Validation\ValidationException $e) {
             return back()->withErrors($e->errors())->withInput();
         } catch (\Throwable $e) {
@@ -320,6 +333,26 @@ class SaleReturnController extends Controller
             return back()->withErrors(['error' => 'Failed to create return: ' . $e->getMessage()])
                 ->withInput();
         }
+    }
+
+    /**
+     * Generate next RET sequence based on highest existing number.
+     * Uses all rows (including soft-deleted) to respect unique index.
+     */
+    private function generateNextReturnNo(): string
+    {
+        $maxNo = (int) (DB::table('sale_returns')
+            ->where('return_no', 'like', 'RET-%')
+            ->selectRaw('COALESCE(MAX(CAST(SUBSTRING(return_no, 5) AS UNSIGNED)), 0) as max_no')
+            ->value('max_no') ?? 0);
+
+        return 'RET-' . str_pad((string) ($maxNo + 1), 6, '0', STR_PAD_LEFT);
+    }
+
+    private function isReturnNoDuplicateException(QueryException $e): bool
+    {
+        return $e->getCode() === '23000'
+            && str_contains($e->getMessage(), 'sale_returns_return_no_unique');
     }
 
     /**

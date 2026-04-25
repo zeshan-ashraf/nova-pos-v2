@@ -114,6 +114,19 @@
                     </button>
                 </div>
             @endif
+            @if ($errors->any())
+                <div class="alert alert-danger" role="alert">
+                    @if ($errors->has('error'))
+                        <div>{{ $errors->first('error') }}</div>
+                    @else
+                        <ul class="mb-0 pl-3">
+                            @foreach ($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    @endif
+                </div>
+            @endif
 
             <div class="return-form-container">
                 <div class="return-header">

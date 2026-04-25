@@ -197,7 +197,13 @@ class SaleReturnService
             return;
         }
 
-        $shopId = $order->shop_id;
+        $shopId = $saleReturn->shop_id
+            ?? $order->shop_id
+            ?? $customer?->shop_id;
+
+        if (empty($shopId)) {
+            throw new InvalidArgumentException('Unable to post sale return financial impact: missing shop_id.');
+        }
         $today = Carbon::now()->toDateString();
 
         if ($customer->is_walkin) {
