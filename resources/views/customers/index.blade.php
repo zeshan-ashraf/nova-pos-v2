@@ -74,6 +74,7 @@
                             <th>@sortablelink('phone')</th>
                             <th>Credit Limit</th>
                             <th>Total Sales</th>
+                            <th>Sale Return</th>
                             <th>Paid</th>
                             <th>Due Amount</th>
                             <th>Credit Days</th>
@@ -88,6 +89,7 @@
                             <td>{{ $customer->phone }}</td>
                             <td>{{ number_format($customer->credit_limit ?? 0, 2) }}</td>
                             <td>{{ number_format($customer->total_sales_amount ?? 0, 2) }}</td>
+                            <td>{{ number_format($customer->total_sale_return_amount ?? 0, 2) }}</td>
                             <td>{{ number_format($customer->total_paid_amount ?? 0, 2) }}</td>
                             <td>{{ number_format($customer->credit_amount ?? 0, 2) }}</td>
                             <td>{{ $customer->credit_days ?? 0 }}</td>

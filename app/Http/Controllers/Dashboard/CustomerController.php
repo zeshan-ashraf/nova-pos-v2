@@ -40,11 +40,19 @@ class CustomerController extends Controller
 
         $customerIds = $customers->getCollection()->pluck('id')->filter()->values();
         $orderAgg = collect();
+        $saleReturnAgg = collect();
         $paymentAgg = collect();
         if ($customerIds->isNotEmpty()) {
             $orderAgg = Order::query()
                 ->whereIn('customer_id', $customerIds->all())
                 ->selectRaw('customer_id, COALESCE(SUM(total), 0) as total_sales')
+                ->groupBy('customer_id')
+                ->get()
+                ->keyBy('customer_id');
+
+            $saleReturnAgg = SaleReturn::query()
+                ->whereIn('customer_id', $customerIds->all())
+                ->selectRaw('customer_id, COALESCE(SUM(total), 0) as total_sale_returns')
                 ->groupBy('customer_id')
                 ->get()
                 ->keyBy('customer_id');
@@ -60,10 +68,12 @@ class CustomerController extends Controller
                 ->keyBy('customer_id');
         }
 
-        $customers->getCollection()->transform(function ($customer) use ($orderAgg, $paymentAgg) {
+        $customers->getCollection()->transform(function ($customer) use ($orderAgg, $saleReturnAgg, $paymentAgg) {
             $orderRow = $orderAgg->get($customer->id);
+            $returnRow = $saleReturnAgg->get($customer->id);
             $payRow = $paymentAgg->get($customer->id);
             $customer->total_sales_amount = (float) ($orderRow->total_sales ?? 0);
+            $customer->total_sale_return_amount = (float) ($returnRow->total_sale_returns ?? 0);
             $customer->total_paid_amount = (float) ($payRow->total_paid ?? 0);
             return $customer;
         });
