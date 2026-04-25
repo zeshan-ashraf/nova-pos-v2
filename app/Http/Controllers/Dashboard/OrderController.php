@@ -65,7 +65,7 @@ class OrderController extends Controller
 
     /**
      * Display a listing of the resource.
-     * Filters: date (default Today), invoice no (partial), total min/max, customer (Select2), search. Apply button.
+     * Filters: date (default All), invoice no (partial), total min/max, customer (Select2), search. Apply button.
      */
     public function index(Request $request)
     {
@@ -78,8 +78,8 @@ class OrderController extends Controller
         $authUser = auth()->user();
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
 
-        // Date filter: default "today" (explicit "all" shows every order)
-        $dateFilter = $request->input('date_filter', 'today');
+        // Date filter: default "all" (explicit presets narrow by order_date)
+        $dateFilter = $request->input('date_filter', 'all');
         if ($dateFilter !== 'all') {
             $dateRange = $this->getDateRange($request);
         } else {
@@ -266,6 +266,15 @@ class OrderController extends Controller
             collect($orders->items())->pluck('id')
         );
 
+        // One-shot after "Save & print" (if user lands on list before create page consumed flags)
+        $openOrderDetailsAfterSaveId = null;
+        if (session()->pull('open_print_tab')) {
+            $id = session()->pull('print_order_id');
+            if ($id !== null && $id !== '' && ctype_digit((string) $id)) {
+                $openOrderDetailsAfterSaveId = (int) $id;
+            }
+        }
+
         $viewData = [
             'orders' => $orders,
             'dateRange' => $dateRange,
@@ -274,6 +283,7 @@ class OrderController extends Controller
             'customer_order_totals' => $customerOrderTotals,
             'selectedProduct' => $selectedProduct,
             'paymentBankBreakdowns' => $paymentBankBreakdowns,
+            'openOrderDetailsAfterSaveId' => $openOrderDetailsAfterSaveId,
         ];
         if ($debugSql !== null) {
             $viewData['debugSql'] = $debugSql;
@@ -1176,6 +1186,15 @@ class OrderController extends Controller
         // Shop banks for payment method bank/cheque (auth user's shop_id only)
         $shopBanks = $this->getShopBanksByShopId($authUser->shop_id);
 
+        // One-shot after "Save & print": open order details in a new tab; consume session so refresh does not repeat.
+        $openOrderDetailsAfterSaveId = null;
+        if (session()->pull('open_print_tab')) {
+            $id = session()->pull('print_order_id');
+            if ($id !== null && $id !== '' && ctype_digit((string) $id)) {
+                $openOrderDetailsAfterSaveId = (int) $id;
+            }
+        }
+
         return view('orders.create-invoice', [
             'customers' => $customersQuery->orderBy('shopname')->get(),
             'products' => $productsQuery->orderBy('product_name')->get(),
@@ -1184,6 +1203,7 @@ class OrderController extends Controller
             'shopBanks' => $shopBanks,
             'isEdit' => false,
             'order' => null,
+            'openOrderDetailsAfterSaveId' => $openOrderDetailsAfterSaveId,
         ]);
     }
 
@@ -1240,6 +1260,7 @@ class OrderController extends Controller
             'shopBanks' => $shopBanks,
             'isEdit' => true,
             'order' => $order,
+            'openOrderDetailsAfterSaveId' => null,
         ]);
     }
 

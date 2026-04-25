@@ -310,7 +310,7 @@
 
         @php
             $dateRange = $dateRange ?? [];
-            $dateFilter = $dateRange['date_filter'] ?? 'today';
+            $dateFilter = $dateRange['date_filter'] ?? 'all';
         @endphp
         <!-- Filter Section (same UI as reports/sales/summary) -->
         <div class="col-lg-12 mb-3">
@@ -903,15 +903,11 @@ function formatCurrency(amount) {
         });
     });
 </script>
-@if(session('open_print_tab') && session('print_order_id'))
+@if(!empty($openOrderDetailsAfterSaveId))
 <script>
     (function() {
-        // Get order_id from session (passed via PHP)
-        const orderId = {{ session('print_order_id') }};
-        
-        // Open invoice download page in new tab
-        const printUrl = '{{ route("order.invoiceDownload", ":id") }}'.replace(':id', orderId) + '?print=1';
-        window.open(printUrl, '_blank');
+        var detailsUrl = @json(route('order.orderDetails', ['order_id' => $openOrderDetailsAfterSaveId]));
+        window.open(detailsUrl, '_blank');
     })();
 </script>
 @endif
