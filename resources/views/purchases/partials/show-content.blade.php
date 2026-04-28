@@ -92,6 +92,10 @@
                             <input type="text" class="form-control bg-white" value="{{ number_format($purchase->pay ?? 0, 2) }}" readonly>
                         </div>
                         <div class="form-group col-md-6">
+                            <label>Purchase Total</label>
+                            <input type="text" class="form-control bg-white" value="{{ number_format($purchase->total ?? 0, 2) }}" readonly>
+                        </div>
+                        <div class="form-group col-md-6">
                             <label>Due Amount</label>
                             <input type="text" class="form-control bg-white" value="{{ number_format($purchase->due ?? 0, 2) }}" readonly>
                         </div>

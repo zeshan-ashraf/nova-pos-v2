@@ -54,6 +54,7 @@ class RebuildPurchaseStockCommand extends Command
 
         $oldTotal = (float) ($purchase->total ?? 0);
         $newTotal = $this->calculateSubtotalFromDetails($details->all());
+        $detailTotalPayloads = $this->buildDetailTotalPayloads($details->all());
         $productIds = $details->pluck('product_id')->filter()->map(fn ($id) => (int) $id)->unique()->values()->all();
 
         $oldPurchaseLogCount = StockLog::withoutGlobalScopes()
@@ -94,12 +95,23 @@ class RebuildPurchaseStockCommand extends Command
             DB::transaction(function () use (
                 $purchase,
                 $newTotal,
+                $detailTotalPayloads,
                 $newStockRows,
                 $productIds,
                 $transactionPayload,
                 &$oldPurchaseLogCount,
                 &$oldTxnCount
             ) {
+                foreach ($detailTotalPayloads as $payload) {
+                    DB::table('purchase_details')
+                        ->where('id', $payload['id'])
+                        ->whereNull('deleted_at')
+                        ->update([
+                            'total' => $payload['total'],
+                            'updated_at' => now(),
+                        ]);
+                }
+
                 $purchase->sub_total = $newTotal;
                 $purchase->total = $newTotal;
                 $purchase->save();
@@ -196,6 +208,25 @@ class RebuildPurchaseStockCommand extends Command
         }
 
         return (float) ($detail->unitcost ?? 0);
+    }
+
+    /**
+     * Recalculate each purchase_details.total using qty * resolved cost.
+     *
+     * @param  array<int, \App\Models\PurchaseDetail>  $details
+     * @return array<int, array{id:int,total:float}>
+     */
+    private function buildDetailTotalPayloads(array $details): array
+    {
+        $payloads = [];
+        foreach ($details as $detail) {
+            $payloads[] = [
+                'id' => (int) $detail->id,
+                'total' => round(((float) ($detail->quantity ?? 0)) * $this->resolveCostPerUnit($detail), 2),
+            ];
+        }
+
+        return $payloads;
     }
 
     private function buildStockRows(Purchase $purchase, array $details): array
