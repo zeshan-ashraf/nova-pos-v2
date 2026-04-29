@@ -25,8 +25,8 @@
                         <div class="row align-items-end">
                             <div class="col-md-2">
                                 @php($currentDateFilter = request('date_filter', 'this_month'))
-                                <label for="date_filter" class="form-label">Date</label>
-                                <select class="form-control" name="date_filter" id="date_filter" onchange="toggleCustomDates()">
+                                <label for="date_filter" class="small mb-0">Date</label>
+                                <select class="form-control form-control-sm" name="date_filter" id="date_filter" onchange="toggleCustomDates()">
                                     <option value="all" {{ $currentDateFilter === 'all' ? 'selected' : '' }}>All</option>
                                     <option value="today" {{ $currentDateFilter === 'today' ? 'selected' : '' }}>Today</option>
                                     <option value="yesterday" {{ $currentDateFilter === 'yesterday' ? 'selected' : '' }}>Yesterday</option>
@@ -40,17 +40,17 @@
                                 </select>
                             </div>
                             <div class="col-md-2" id="start_date_group" style="display: none;">
-                                <label for="start_date" class="form-label">Start</label>
-                                <input type="date" class="form-control" name="start_date" id="start_date">
+                                <label for="start_date" class="small mb-0">Start</label>
+                                <input type="date" class="form-control form-control-sm" name="start_date" id="start_date">
                             </div>
                             <div class="col-md-2" id="end_date_group" style="display: none;">
-                                <label for="end_date" class="form-label">End</label>
-                                <input type="date" class="form-control" name="end_date" id="end_date">
+                                <label for="end_date" class="small mb-0">End</label>
+                                <input type="date" class="form-control form-control-sm" name="end_date" id="end_date">
                             </div>
                             @if(auth()->user()->shop_id == null)
                             <div class="col-md-2">
-                                <label for="shop_id" class="form-label">Shop</label>
-                                <select class="form-control" name="shop_id" id="shop_id">
+                                <label for="shop_id" class="small mb-0">Shop</label>
+                                <select class="form-control form-control-sm" name="shop_id" id="shop_id">
                                     <option value="all" {{ ($shopFilter['selected_shop_id'] ?? '') == 'all' ? 'selected' : '' }}>All Shops</option>
                                     @foreach($shopFilter['shops'] ?? [] as $shop)
                                     <option value="{{ $shop->id }}" {{ ($shopFilter['selected_shop_id'] ?? '') == $shop->id ? 'selected' : '' }}>{{ $shop->name }}</option>
@@ -59,8 +59,8 @@
                             </div>
                             @endif
                             <div class="col-md-2">
-                                <label for="movement_type" class="form-label">Type</label>
-                                <select class="form-control" name="movement_type" id="movement_type">
+                                <label for="movement_type" class="small mb-0">Type</label>
+                                <select class="form-control form-control-sm" name="movement_type" id="movement_type">
                                     <option value="">All</option>
                                     <option value="opening">Opening</option>
                                     <option value="purchase">Purchase</option>
@@ -74,8 +74,8 @@
                                 </select>
                             </div>
                             <div class="col-md-4 col-lg-4">
-                                <label for="product_id" class="form-label">Product <span class="text-muted font-weight-normal">(Type to search products in your shop)</span></label>
-                                <select class="form-control" name="product_id" id="product_id" style="width: 100%;">
+                                <label for="product_id" class="small mb-0">Product <span class="text-muted font-weight-normal">(Type to search products in your shop)</span></label>
+                                <select class="form-control form-control-sm" name="product_id" id="product_id" style="width: 100%;">
                                     @if(isset($selectedProductId) && $selectedProduct)
                                     <option value="{{ $selectedProduct->id }}" selected>
                                         {{ $selectedProduct->product_name }}
@@ -85,8 +85,8 @@
                                 </select>
                             </div>
                             <div class="col-md-2">
-                                <label for="per_page" class="form-label">Per page</label>
-                                <select class="form-control" name="per_page" id="per_page">
+                                <label for="per_page" class="small mb-0">Row</label>
+                                <select class="form-control form-control-sm" name="per_page" id="per_page">
                                     <option value="25">25</option>
                                     <option value="50" selected>50</option>
                                     <option value="100">100</option>
@@ -94,10 +94,10 @@
                                 </select>
                             </div>
                             <div class="col-md-2">
-                                <button type="submit" class="btn btn-primary"><i class="ri-search-line mr-1"></i> Filter</button>
+                                <button type="submit" class="btn btn-primary btn-sm"><i class="ri-search-line mr-1"></i> Apply</button>
                             </div>
                             <div class="col-md-2">
-                                <a id="exportCsvLink" class="btn btn-success ml-2" href="{{ route('reports.inventory.stock-movement', ['export' => 'csv', 'format' => 'csv']) }}">
+                                <a id="exportCsvLink" class="btn btn-success btn-sm ml-2" href="{{ route('reports.inventory.stock-movement', ['export' => 'csv', 'format' => 'csv']) }}">
                                     <i class="ri-file-excel-2-line mr-1"></i> Export CSV
                                 </a>
                             </div>

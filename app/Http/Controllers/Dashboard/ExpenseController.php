@@ -39,6 +39,11 @@ class ExpenseController extends Controller
             $groupBy = 'none';
         }
 
+        $expenseTab = $request->input('expense_tab', 'petty');
+        if (!in_array($expenseTab, ['petty', 'purchase'], true)) {
+            $expenseTab = 'petty';
+        }
+
         $expensesQuery = Activity::query();
 
         // Shop filter: use logged-in user's shop_id when set
@@ -48,6 +53,15 @@ class ExpenseController extends Controller
 
         // Date filter (default today)
         $expensesQuery->whereBetween('date', [$dateRange['start_datetime'], $dateRange['end_datetime']]);
+
+        // Split tab content:
+        // Petty expenses => NOT related to a purchase (activities.purchase_id IS NULL)
+        // Purchase expenses => related to a purchase (activities.purchase_id IS NOT NULL)
+        if ($expenseTab === 'petty') {
+            $expensesQuery->whereNull('purchase_id');
+        } elseif ($expenseTab === 'purchase') {
+            $expensesQuery->whereNotNull('purchase_id');
+        }
 
         // Search filter
         if ($request->filled('search')) {
@@ -60,7 +74,7 @@ class ExpenseController extends Controller
             });
         }
 
-        $expensesQuery->with('expense');
+        $expensesQuery->with(['expense', 'purchase']);
 
         // Total and count for filtered range (same filters, no pagination)
         $expenseTotal = (clone $expensesQuery)->sum('activity_cost');
@@ -79,6 +93,7 @@ class ExpenseController extends Controller
             'groupBy' => $groupBy,
             'expenseTotal' => $expenseTotal,
             'expenseCount' => $expenseCount,
+            'expenseTab' => $expenseTab,
         ]);
     }
 

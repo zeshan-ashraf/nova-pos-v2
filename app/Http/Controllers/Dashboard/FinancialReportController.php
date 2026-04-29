@@ -207,7 +207,10 @@ class FinancialReportController extends Controller
             ->leftJoin('expenses', 'activities.expense_id', '=', 'expenses.id')
             ->where('account_transactions.source_type', AccountTransaction::SOURCE_EXPENSE)
             ->where('account_transactions.direction', AccountTransaction::DIRECTION_DEBIT)
-            ->whereNull('account_transactions.deleted_at');
+            ->whereNull('account_transactions.deleted_at')
+            // Operating expenses on P&L should exclude purchase-linked expenses.
+            // Keep current LEFT JOIN behavior for unmatched activity rows (shown as Uncategorized).
+            ->whereNull('activities.purchase_id');
         $this->applyShopFilter($expensesQuery, $shopFilter['shop_ids'], 'account_transactions.shop_id');
         $expensesQuery->whereBetween('account_transactions.transaction_date', [$start, $end]);
         $expenseRows = $expensesQuery
