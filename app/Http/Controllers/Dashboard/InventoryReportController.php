@@ -101,12 +101,14 @@ class InventoryReportController extends Controller
     {
         $authUser = auth()->user();
         $shopFilter = $this->getShopFilter($request, $authUser);
+        $format = $request->input('format');
+        $exportCsv = $request->input('export') === 'csv' || $format === 'csv';
 
-        if ($request->wantsJson() || $request->input('format') === 'json') {
+        if ($request->wantsJson() || $format === 'json' || $exportCsv) {
             $dateRange = $this->getDateRange($request);
             $filters = [
-                'from_date'      => $dateRange['start_date'] ?? $request->input('from_date'),
-                'to_date'        => $dateRange['end_date'] ?? $request->input('to_date'),
+                'from_date'      => $dateRange['start_date'],
+                'to_date'        => $dateRange['end_date'],
                 'product_id'     => $request->input('product_id'),
                 'movement_type'  => $request->input('movement_type'),
                 'user_id'        => $request->input('user_id'),
@@ -124,6 +126,55 @@ class InventoryReportController extends Controller
             }
             $page = (int) $request->input('page', 1);
             $perPage = (int) $request->input('per_page', StockMovementReportService::DEFAULT_PAGE_SIZE);
+            if ($exportCsv) {
+                $exportPerPage = StockMovementReportService::MAX_PAGE_SIZE;
+                $filename = 'stock-movement-' . now()->format('Ymd-His') . '.csv';
+
+                return response()->stream(function () use ($filters, $exportPerPage) {
+                    $out = fopen('php://output', 'w');
+                    // CSV header
+                    fputcsv($out, [
+                        'Date',
+                        'Product Name',
+                        'Code',
+                        'Reference',
+                        'Type',
+                        'Qty IN',
+                        'Qty OUT',
+                        'Balance',
+                    ]);
+
+                    $page = 1;
+                    $lastPage = 1;
+
+                    while ($page <= $lastPage) {
+                        $report = app(StockMovementReportService::class)->getReport($filters, $page, $exportPerPage);
+                        $rows = $report['data'] ?? [];
+                        $meta = $report['meta'] ?? [];
+                        $lastPage = (int) ($meta['last_page'] ?? 1);
+
+                        foreach ($rows as $row) {
+                            fputcsv($out, [
+                                $row['date'] ?? '',
+                                $row['product_name'] ?? '',
+                                $row['product_code'] ?? '',
+                                $row['reference'] ?? '',
+                                $row['movement_type'] ?? '',
+                                $row['qty_in'] ?? 0,
+                                $row['qty_out'] ?? 0,
+                                $row['balance'] ?? 0,
+                            ]);
+                        }
+                        $page++;
+                    }
+
+                    fclose($out);
+                }, 200, [
+                    'Content-Type' => 'text/csv',
+                    'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+                ]);
+            }
+
             $report = app(StockMovementReportService::class)->getReport($filters, $page, $perPage);
             return response()->json($report);
         }

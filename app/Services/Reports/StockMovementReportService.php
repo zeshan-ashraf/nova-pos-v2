@@ -80,7 +80,7 @@ class StockMovementReportService
                     CASE WHEN sl.direction = 'in' THEN COALESCE(sl.qty, 0) ELSE -COALESCE(sl.qty, 0) END
                 ) OVER (
                     PARTITION BY sl.product_id, COALESCE(sl.shop_id, 0)
-                    ORDER BY sl.created_at ASC, sl.id ASC
+                    ORDER BY {$orderByClause}
                     ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
                 ) AS balance
             FROM stock_logs sl
@@ -207,16 +207,15 @@ class StockMovementReportService
         ";
         $rows = DB::select($sql, array_merge($bindings, [$perPage, $offset]));
 
-        // Running balance: process in chronological order (oldest first)
-        $chrono = array_reverse($rows);
+        // Running balance must follow the same order as the result rows are returned/displayed.
         $running = [];
-        foreach ($chrono as $r) {
+        foreach ($rows as $r) {
             $key = ((int) $r->product_id) . '|' . (string) ($r->shop_id ?? 0);
             $delta = strtolower((string) $r->direction) === 'in' ? (int) $r->qty : -(int) $r->qty;
             $running[$key] = ($running[$key] ?? 0) + $delta;
             $r->balance = $running[$key];
         }
-        // Return newest first (same order as query)
+        // Return in the same order as query/display.
         return $rows;
     }
 

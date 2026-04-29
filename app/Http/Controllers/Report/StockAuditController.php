@@ -27,11 +27,11 @@ SELECT
     p.id AS product_id,
     p.product_name,
     p.product_code,
-    p.product_store,
+    p.product_store AS available_stock,
     p.shop_id,
 
     COALESCE(pur.total_purchased, 0) AS total_purchased,
-    COALESCE(ord.total_ordered, 0) AS total_ordered,
+    COALESCE(ord.total_ordered, 0) AS total_sold,
     COALESCE(sr.total_sale_return, 0) AS total_sale_return,
     COALESCE(pr.total_purchase_return, 0) AS total_purchase_return,
 
@@ -128,9 +128,9 @@ SQL;
         }
 
         $totals = [
-            'product_store' => $rows->sum('product_store'),
+            'available_stock' => $rows->sum('available_stock'),
             'total_purchased' => $rows->sum('total_purchased'),
-            'total_ordered' => $rows->sum('total_ordered'),
+            'total_sold' => $rows->sum('total_sold'),
             'total_sale_return' => $rows->sum('total_sale_return'),
             'total_purchase_return' => $rows->sum('total_purchase_return'),
             'expected_stock' => $rows->sum('expected_stock'),
@@ -158,9 +158,9 @@ SQL;
             fputcsv($out, [
                 'Product Name',
                 'Code',
-                'Store',
+                'Available Stock',
                 'Total Purchased',
-                'Total Ordered',
+                'Total Sold',
                 'Sale Return',
                 'Purchase Return',
                 'Expected Stock',
@@ -172,9 +172,9 @@ SQL;
                 fputcsv($out, [
                     $row->product_name,
                     $row->product_code,
-                    $row->product_store,
+                    $row->available_stock,
                     $row->total_purchased,
-                    $row->total_ordered,
+                    $row->total_sold,
                     $row->total_sale_return,
                     $row->total_purchase_return,
                     $row->expected_stock,

@@ -24,16 +24,18 @@
                     <form id="stockMovementFilterForm" action="{{ route('reports.inventory.stock-movement') }}" method="GET">
                         <div class="row align-items-end">
                             <div class="col-md-2">
+                                @php($currentDateFilter = request('date_filter', 'this_month'))
                                 <label for="date_filter" class="form-label">Date</label>
                                 <select class="form-control" name="date_filter" id="date_filter" onchange="toggleCustomDates()">
-                                    <option value="today">Today</option>
-                                    <option value="yesterday">Yesterday</option>
-                                    <option value="this_week">This Week</option>
-                                    <option value="last_week">Last Week</option>
-                                    <option value="this_month" selected>This Month</option>
-                                    <option value="last_month">Last Month</option>
-                                    <option value="this_year">This Year</option>
-                                    <option value="last_year">Last Year</option>
+                                    <option value="all" {{ $currentDateFilter === 'all' ? 'selected' : '' }}>All</option>
+                                    <option value="today" {{ $currentDateFilter === 'today' ? 'selected' : '' }}>Today</option>
+                                    <option value="yesterday" {{ $currentDateFilter === 'yesterday' ? 'selected' : '' }}>Yesterday</option>
+                                    <option value="this_week" {{ $currentDateFilter === 'this_week' ? 'selected' : '' }}>This Week</option>
+                                    <option value="last_week" {{ $currentDateFilter === 'last_week' ? 'selected' : '' }}>Last Week</option>
+                                    <option value="this_month" {{ $currentDateFilter === 'this_month' ? 'selected' : '' }}>This Month</option>
+                                    <option value="last_month" {{ $currentDateFilter === 'last_month' ? 'selected' : '' }}>Last Month</option>
+                                    <option value="this_year" {{ $currentDateFilter === 'this_year' ? 'selected' : '' }}>This Year</option>
+                                    <option value="last_year" {{ $currentDateFilter === 'last_year' ? 'selected' : '' }}>Last Year</option>
                                     <option value="custom">Custom</option>
                                 </select>
                             </div>
@@ -94,6 +96,11 @@
                             <div class="col-md-2">
                                 <button type="submit" class="btn btn-primary"><i class="ri-search-line mr-1"></i> Filter</button>
                             </div>
+                            <div class="col-md-2">
+                                <a id="exportCsvLink" class="btn btn-success ml-2" href="{{ route('reports.inventory.stock-movement', ['export' => 'csv', 'format' => 'csv']) }}">
+                                    <i class="ri-file-excel-2-line mr-1"></i> Export CSV
+                                </a>
+                            </div>
                         </div>
                         <input type="hidden" name="sort" id="sortParam" value="{{ request('sort', 'id') }}">
                         <input type="hidden" name="order" id="orderParam" value="{{ request('order', 'desc') }}">
@@ -112,9 +119,9 @@
                         <table class="table table-striped table-sm">
                             <thead>
                                 <tr>
-                                    <th><a href="#" class="table-sortable-th text-decoration-none" data-sort="date" title="Sort by Date">Date <i class="sort-arrow ml-1"></i></a></th>
-                                    <th><a href="#" class="table-sortable-th text-decoration-none" data-sort="product_name" title="Sort by Product">Product <i class="sort-arrow ml-1"></i></a></th>
-                                    <th><a href="#" class="table-sortable-th text-decoration-none" data-sort="product_code" title="Sort by Code">Code <i class="sort-arrow ml-1"></i></a></th>
+                                    <th>Date</th>
+                                    <th>Product</th>
+                                    <th>Code</th>
                                     <th>Reference</th>
                                     <th>Type</th>
                                     <th class="text-right">Qty IN</th>
@@ -123,6 +130,14 @@
                                 </tr>
                             </thead>
                             <tbody id="reportBody"></tbody>
+                            <tfoot>
+                                <tr class="font-weight-bold bg-light">
+                                    <td colspan="5" class="text-right">Total</td>
+                                    <td class="text-right" id="totalQtyIn">0</td>
+                                    <td class="text-right" id="totalQtyOut">0</td>
+                                    <td class="text-right" id="totalBalance">0</td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                     <nav id="paginationWrap" class="mt-3" style="display: none;" aria-label="Report pagination"></nav>
@@ -209,8 +224,17 @@
 
     function renderTable(data) {
         reportBody.innerHTML = '';
+        const totalQtyInEl = document.getElementById('totalQtyIn');
+        const totalQtyOutEl = document.getElementById('totalQtyOut');
+        const totalBalanceEl = document.getElementById('totalBalance');
+        let totalQtyIn = 0;
+        let totalQtyOut = 0;
+        let lastBalance = 0;
         if (!data.data || data.data.length === 0) {
             reportBody.innerHTML = '<tr><td colspan="8" class="text-center">No movements for the selected filters.</td></tr>';
+            if (totalQtyInEl) totalQtyInEl.textContent = '0';
+            if (totalQtyOutEl) totalQtyOutEl.textContent = '0';
+            if (totalBalanceEl) totalBalanceEl.textContent = '0';
             return;
         }
         data.data.forEach(function(row) {
@@ -225,7 +249,15 @@
                 '<td class="text-right">' + (row.qty_out > 0 ? row.qty_out : '–') + '</td>' +
                 '<td class="text-right">' + (row.balance ?? '–') + '</td>';
             reportBody.appendChild(tr);
+
+            totalQtyIn += parseFloat(row.qty_in || 0);
+            totalQtyOut += parseFloat(row.qty_out || 0);
+            lastBalance = parseFloat(row.balance || 0);
         });
+
+        if (totalQtyInEl) totalQtyInEl.textContent = String(totalQtyIn);
+        if (totalQtyOutEl) totalQtyOutEl.textContent = String(totalQtyOut);
+        if (totalBalanceEl) totalBalanceEl.textContent = String(lastBalance);
     }
 
     function renderPagination(meta) {
@@ -274,6 +306,27 @@
                 error.style.display = 'block';
             });
     }
+
+    function exportCsv() {
+        const fd = new FormData(form);
+        const params = new URLSearchParams();
+        fd.forEach(function (v, k) { if (v) params.set(k, v); });
+
+        // Export should always include all matching rows (server-side paging), so we force CSV mode.
+        params.set('format', 'csv');
+        params.set('export', 'csv');
+        params.set('page', '1');
+
+        const url = '{{ route("reports.inventory.stock-movement") }}' + '?' + params.toString();
+        // Keep <a> semantics: set href and navigate.
+        const exportLink = document.getElementById('exportCsvLink');
+        if (exportLink) exportLink.href = url;
+        window.location.href = url;
+    }
+    document.getElementById('exportCsvLink')?.addEventListener('click', function (e) {
+        e.preventDefault();
+        exportCsv();
+    });
 
     form.addEventListener('submit', function(e) {
         e.preventDefault();

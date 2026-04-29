@@ -898,19 +898,9 @@ class OrderController extends Controller
     public function stockLog(Request $request, $id)
     {
         $product = Product::findOrFail($id);
-        $stockLogs = StockLog::with(['product', 'supplier'])
-        ->where('product_id', $id)
-        ->orderBy($request->get('sort', 'created_at'), $request->get('direction', 'desc'))
-        ->paginate(10);
-
-        $stockLogs->getCollection()->transform(function ($stockLog) {
-            $stockLog->created_at = $stockLog->created_at->format('Y-m-d');
-            return $stockLog;
-        });
-            return view('products.stock-log', [
-                'product' => $product,
-                'stockLogs' => $stockLogs
-            ]);
+        return view('products.stock-log', [
+            'product' => $product,
+        ]);
     }
     public function search(Request $request, $id)
     {

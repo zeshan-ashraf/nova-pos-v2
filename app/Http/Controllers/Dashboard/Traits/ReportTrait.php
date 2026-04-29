@@ -20,6 +20,15 @@ trait ReportTrait
         $launch = config('app.erp_launch_date', '2025-11-01');
 
         switch ($dateFilter) {
+            case 'all':
+                // No date filtering at all.
+                return [
+                    'date_filter' => $dateFilter,
+                    'start_date' => null,
+                    'end_date' => null,
+                    'start_datetime' => null,
+                    'end_datetime' => null,
+                ];
             case 'all_time':
                 // Fixed ERP launch → today (ignore tampered start/end for this preset)
                 $startDate = $launch;

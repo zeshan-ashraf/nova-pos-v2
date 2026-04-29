@@ -67,9 +67,9 @@
                                 <tr>
                                     <th>Product Name</th>
                                     <th>Code</th>
-                                    <th class="text-right">Store</th>
+                                    <th class="text-right">Available Stock</th>
                                     <th class="text-right">Total Purchased</th>
-                                    <th class="text-right">Total Ordered</th>
+                                    <th class="text-right">Total Sold</th>
                                     <th class="text-right">Sale Return</th>
                                     <th class="text-right">Purchase Return</th>
                                     <th class="text-right">Expected Stock</th>
@@ -89,9 +89,9 @@
                                     <tr class="{{ $hasDiff ? 'stock-audit-mismatch' : '' }}">
                                         <td style="{{ $dangerCellStyle }}">{{ $row->product_name }}</td>
                                         <td style="{{ $dangerCellStyle }}">{{ $row->product_code ?? '–' }}</td>
-                                        <td class="text-right" style="{{ $dangerCellStyle }}">{{ number_format((float) $row->product_store, 2) }}</td>
+                                        <td class="text-right" style="{{ $dangerCellStyle }}">{{ number_format((float) $row->available_stock, 2) }}</td>
                                         <td class="text-right" style="{{ $dangerCellStyle }}">{{ number_format((float) $row->total_purchased, 2) }}</td>
-                                        <td class="text-right" style="{{ $dangerCellStyle }}">{{ number_format((float) $row->total_ordered, 2) }}</td>
+                                        <td class="text-right" style="{{ $dangerCellStyle }}">{{ number_format((float) $row->total_sold, 2) }}</td>
                                         <td class="text-right" style="{{ $dangerCellStyle }}">{{ number_format((float) $row->total_sale_return, 2) }}</td>
                                         <td class="text-right" style="{{ $dangerCellStyle }}">{{ number_format((float) $row->total_purchase_return, 2) }}</td>
                                         <td class="text-right" style="{{ $dangerCellStyle }}">{{ number_format((float) $row->expected_stock, 2) }}</td>
@@ -108,9 +108,9 @@
                                 <tfoot>
                                     <tr class="font-weight-bold bg-light">
                                         <td colspan="2">Totals</td>
-                                        <td class="text-right">{{ number_format((float) ($totals['product_store'] ?? 0), 2) }}</td>
+                                        <td class="text-right">{{ number_format((float) ($totals['available_stock'] ?? 0), 2) }}</td>
                                         <td class="text-right">{{ number_format((float) ($totals['total_purchased'] ?? 0), 2) }}</td>
-                                        <td class="text-right">{{ number_format((float) ($totals['total_ordered'] ?? 0), 2) }}</td>
+                                        <td class="text-right">{{ number_format((float) ($totals['total_sold'] ?? 0), 2) }}</td>
                                         <td class="text-right">{{ number_format((float) ($totals['total_sale_return'] ?? 0), 2) }}</td>
                                         <td class="text-right">{{ number_format((float) ($totals['total_purchase_return'] ?? 0), 2) }}</td>
                                         <td class="text-right">{{ number_format((float) ($totals['expected_stock'] ?? 0), 2) }}</td>

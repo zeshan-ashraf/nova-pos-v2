@@ -167,7 +167,12 @@ class Product extends Model
     public function scopeFilter($query, array $filters)
     {
         $query->when($filters['search'] ?? false, function ($query, $search) {
-            return $query->where('product_name', 'like', '%' . $search . '%');
+            // Search by both product name and product code.
+            $search = trim((string) $search);
+            return $query->where(function ($q) use ($search) {
+                $q->where('product_name', 'like', '%' . $search . '%')
+                    ->orWhere('product_code', 'like', '%' . $search . '%');
+            });
         });
     }
 }

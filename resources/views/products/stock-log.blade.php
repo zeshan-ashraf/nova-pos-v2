@@ -14,7 +14,7 @@
             @endif
             @if (session()->has('error'))
                 <div class="alert text-white bg-danger" role="alert">
-                    <div class="iq-alert-text">{{ session('success') }}</div>
+                    <div class="iq-alert-text">{{ session('error') }}</div>
                     <button type="button" class="close" data-dismiss="alert" aria-label="Close">
                     <i class="ri-close-line"></i>
                     </button>
@@ -22,193 +22,252 @@
             @endif
             <div class="d-flex flex-wrap align-items-center justify-content-between mb-4">
                 <div>
-                    <h4 class="mb-3">{{ $product->product_name }}</h4>
-                    <input type="hidden" id="product_id" value="{{ $product->id }}">
+                    <h4 class="mb-3">
+                        {{ $product->product_name }}
+                        @if(!empty($product->product_code))
+                            ({{ $product->product_code }})
+                        @endif
+                    </h4>
+                    <p class="mb-0 text-muted">Stock movement history for this product (source: stock_logs).</p>
+                </div>
+                <div>
+                    <a href="{{ route('products.index') }}" class="btn btn-secondary"><i class="ri-arrow-left-line mr-1"></i> Back to Products</a>
+                </div>
+            </div>
+        </div>
 
+        <div class="col-lg-12 mb-3">
+            <div class="card report-filter-card border-primary shadow-sm">
+                <div class="card-header border-0 py-2">
+                    <h6 class="mb-0 text-primary"><i class="ri-filter-3-line mr-1"></i> Controls</h6>
+                </div>
+                <div class="card-body pt-0">
+                    <form id="stockMovementByProductForm" action="{{ route('order.stockLog', $product->id) }}" method="GET">
+                        <div class="row align-items-end">
+                            <div class="col-md-2">
+                                <label for="per_page" class="form-label">Per page</label>
+                                <select class="form-control" name="per_page" id="per_page">
+                                    <option value="25" {{ request('per_page') == '25' ? 'selected' : '' }}>25</option>
+                                    <option value="50" {{ request('per_page', '50') == '50' ? 'selected' : '' }}>50</option>
+                                    <option value="100" {{ request('per_page') == '100' ? 'selected' : '' }}>100</option>
+                                    <option value="250" {{ request('per_page') == '250' ? 'selected' : '' }}>250</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <button type="submit" class="btn btn-primary"><i class="ri-search-line mr-1"></i> Refresh</button>
+                                <a id="exportExcelLink" class="btn btn-success ml-2" href="#">
+                                    <i class="ri-file-excel-2-line mr-1"></i> Export Excel
+                                </a>
+                            </div>
+                        </div>
+                        <input type="hidden" id="product_id" value="{{ $product->id }}">
+                        <input type="hidden" id="sortParam" value="id">
+                        <input type="hidden" id="orderParam" value="desc">
+                    </form>
                 </div>
             </div>
         </div>
 
         <div class="col-lg-12">
-            <form action="{{ route('stock.search',$product->id) }}" method="get">
-                <div class="d-flex flex-wrap align-items-center justify-content-between">
-                    <div class="form-group row">
-                        <label for="row" class="col-sm-3 align-self-center">Row:</label>
-                        <div class="col-sm-9">
-                            <select class="form-control" name="row" onchange="this.form.submit()">
-                                <option value="10" @if(request('row') == '10')selected="selected"@endif>10</option>
-                                <option value="25" @if(request('row') == '25')selected="selected"@endif>25</option>
-                                <option value="50" @if(request('row', '50') == '50')selected="selected"@endif>50</option>
-                                <option value="100" @if(request('row') == '100')selected="selected"@endif>100</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="form-group row">
-                        <label class="control-label col-sm-3 align-self-center" for="search">Search:</label>
-                        <div class="input-group flex-nowrap col-sm-8">
-                            <input type="text" id="search" class="form-control" name="search" placeholder="Search product" value="{{ request('search') }}" style="min-width: 200px;">
-                            <div class="input-group-append">
-                                <button type="button" id="search-btn" class="input-group-text bg-primary"><i class="las la-search"></i></button>
-                                <a href="{{ route('order.stockLog', $product->id) }}" class="input-group-text bg-danger"><i class="las la-trash"></i></a>
-                            </div>
-                        </div>
-                    </div>
+            <div class="card">
+                <div class="card-header bg-primary text-white d-flex align-items-center">
+                    <h5 class="mb-0">Movements</h5>
                 </div>
-            </form>
-        </div>
-
-        <div class="col-lg-12" id="product-list">
-            <div class="table-responsive rounded mb-3">
-                <table class="table mb-0">
-                    <thead class="bg-white text-uppercase">
-                        <tr class="ligth ligth-data">
-                            <th>No.</th>
-                            <th>@sortablelink('supplier.name', 'Supplier')</th> <!-- Supplier Name -->
-                            <th>@sortablelink('created_at', 'Purchased On')</th> <!-- Purchased On (created_at) -->
-                            <th>@sortablelink('stock_qty', 'Stock Purchased')</th> <!-- Stock Purchased -->
-                            <th>@sortablelink('price', 'Price')</th> <!-- Price -->
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="stock-log-table-body" class="ligth-body">
-                        @foreach ($stockLogs as $stockLog)
-                        <tr>
-                            <td>{{ (($stockLogs->currentPage() * $stockLogs->perPage()) - $stockLogs->perPage()) + $loop->iteration }}</td> <!-- Serial Number -->
-                            <td>{{ $stockLog->supplier ? $stockLog->supplier->name : 'N/A' }}</td>
-                            <td>{{ $stockLog->created_at->format('Y-m-d') }}</td>
-                            <td>{{ $stockLog->stock_qty }}</td>
-                            <td>{{ $stockLog->price }}</td>
-                            <td>
-                                <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#uploadInvoiceModal{{ $stockLog->id }}">
-                                    Upload Invoice
-                                </button>
-
-                                <!-- Modal for uploading invoice -->
-                                <div class="modal fade" id="uploadInvoiceModal{{ $stockLog->id }}" tabindex="-1" role="dialog" aria-labelledby="uploadInvoiceModalLabel{{ $stockLog->id }}" aria-hidden="true">
-                                    <div class="modal-dialog" role="document">
-                                        <div class="modal-content">
-                                            <div class="modal-header">
-                                                <h5 class="modal-title" id="uploadInvoiceModalLabel{{ $stockLog->id }}">Upload Invoice for Stock Log #{{ $stockLog->id }}</h5>
-                                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                                    <span aria-hidden="true">&times;</span>
-                                                </button>
-                                            </div>
-                                            <div class="modal-body">
-                                                <form action="{{ route('order.uploadInvoice', $stockLog->id) }}" method="POST" enctype="multipart/form-data">
-                                                    @csrf
-                                                    <div class="form-group">
-                                                        <label for="invoice_image">Select Invoice Image</label>
-                                                        <input type="file" name="invoice_image" id="invoice_image{{ $stockLog->id }}" class="form-control-file" accept="image/*">
-                                                    </div>
-                                                    <button type="submit" class="btn btn-success">Upload</button>
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                @if ($stockLog->invoice_image)
-                                <button type="button" class="btn btn-info" data-toggle="modal" data-target="#viewInvoiceModal{{ $stockLog->id }}">View Invoice</button>
-                                @endif
-                            </td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-
+                <div class="card-body">
+                    <div id="loading" class="text-center py-4 text-muted">Loading...</div>
+                    <div id="error" class="alert alert-danger" style="display: none;"></div>
+                    <div class="table-responsive" id="tableWrap" style="display: none;">
+                        <table class="table table-striped table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Reference</th>
+                                    <th>Type</th>
+                                    <th class="text-right">Qty IN</th>
+                                    <th class="text-right">Qty OUT</th>
+                                    <th class="text-right">Balance</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reportBody"></tbody>
+                            <tfoot>
+                                <tr class="font-weight-bold bg-light">
+                                    <td colspan="3" class="text-right">Total</td>
+                                    <td class="text-right" id="totalQtyIn">0</td>
+                                    <td class="text-right" id="totalQtyOut">0</td>
+                                    <td class="text-right" id="totalBalance">0</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <nav id="paginationWrap" class="mt-3" style="display: none;" aria-label="Report pagination"></nav>
+                </div>
             </div>
-            {{ $stockLogs->appends(request()->query())->links() }}
         </div>
     </div>
-    <!-- Page end  -->
 </div>
 
 @endsection
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+@section('specificpagescripts')
 <script>
-    $(document).ready(function() {
-        // Bind the search button click event
-        $('#search-btn').on('click', function() {
-            var searchQuery = $('#search').val(); // Get the search query from input
-            var productId = $("#product_id").val();
+(function () {
+    const form = document.getElementById('stockMovementByProductForm');
+    const loading = document.getElementById('loading');
+    const error = document.getElementById('error');
+    const tableWrap = document.getElementById('tableWrap');
+    const reportBody = document.getElementById('reportBody');
+    const paginationWrap = document.getElementById('paginationWrap');
+    const productId = document.getElementById('product_id').value;
+    const exportExcelLink = document.getElementById('exportExcelLink');
 
-            // Send an AJAX request to search for stock logs
-            $.ajax({
-                url: "{{ route('stock.search', ['productId' => '__productId__']) }}".replace('__productId__', productId),
-                method: 'GET',
-                data: { search: searchQuery }, // Pass the search term
-                success: function(response) {
-                    // If the request is successful, update the stock logs table
-                    var stockLogList = $('#stock-log-table-body');
-                    stockLogList.empty(); // Clear previous search results
+    function getQueryParams(page, forExport) {
+        const fd = new FormData(form);
+        const params = new URLSearchParams();
 
-                    if (response.stockLogs.length > 0) {
-                        // Loop through stock logs and append them to the table
-                        $.each(response.stockLogs, function(index, stockLog) {
-                            var row = `
-                                <tr>
-                                    <td>${index + 1}</td>
-                                    <td>${stockLog.supplier.name}</td>
-                                    <td>${stockLog.created_at}</td>
-                                    <td>${stockLog.stock_qty}</td>
-                                    <td>${stockLog.price}</td>
-                                    <td>
-                                        <!-- Upload Invoice Button -->
-                                        <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#uploadInvoiceModal${stockLog.id}">
-                                            Upload Invoice
-                                        </button>
+        params.set('date_filter', 'all');
+        params.set('product_id', productId);
+        params.set('per_page', fd.get('per_page') || '50');
+        params.set('sort', document.getElementById('sortParam').value || 'id');
+        params.set('order', document.getElementById('orderParam').value || 'desc');
 
-                                        <!-- Modal for uploading invoice -->
-                                        <div class="modal fade" id="uploadInvoiceModal${stockLog.id}" tabindex="-1" role="dialog" aria-labelledby="uploadInvoiceModalLabel${stockLog.id}" aria-hidden="true">
-                                            <div class="modal-dialog" role="document">
-                                                <div class="modal-content">
-                                                    <div class="modal-header">
-                                                        <h5 class="modal-title" id="uploadInvoiceModalLabel${stockLog.id}">Upload Invoice for Stock Log #${stockLog.id}</h5>
-                                                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                                            <span aria-hidden="true">&times;</span>
-                                                        </button>
-                                                    </div>
-                                                    <div class="modal-body">
-                                                        <form action="{{ url('order') }}/${stockLog.id}/upload-invoice" method="POST" enctype="multipart/form-data" id="invoiceForm${stockLog.id}">
-                                                            @csrf
-                                                            <div class="form-group">
-                                                                <label for="invoice_image">Select Invoice Image</label>
-                                                                <input type="file" name="invoice_image" id="invoice_image${stockLog.id}" class="form-control-file" accept="image/*">
-                                                            </div>
-                                                            <button type="submit" class="btn btn-success" id="uploadBtn${stockLog.id}">Upload</button>
-                                                        </form>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
+        if (forExport) {
+            params.set('format', 'csv');
+            params.set('export', 'csv');
+        } else {
+            params.set('format', 'json');
+        }
+        if (page) {
+            params.set('page', String(page));
+        }
 
-                                        <!-- View Invoice Button (only if invoice image exists) -->
-                                        ${stockLog.invoice_image ? `
-                                            <button type="button" class="btn btn-info" data-toggle="modal" data-target="#viewInvoiceModal${stockLog.id}">View Invoice</button>
-                                        ` : ''}
+        return params.toString();
+    }
 
-                                    </td>
-                                </tr>
-                            `;
-                            stockLogList.append(row);
-                        });
-                    } else {
-                        // Display a message if no stock logs found
-                        stockLogList.append('<tr><td colspan="6" class="text-center">No Stock Logs Found.</td></tr>');
-                    }
-                },
-                error: function() {
-                    alert("Error occurred while searching. Please try again.");
-                }
+    function formatDate(iso) {
+        if (!iso) return '-';
+        const d = new Date(iso);
+        return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' });
+    }
+
+    function escapeHtml(s) {
+        if (s === null || s === undefined) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function formatReferenceCell(row) {
+        const text = row.reference != null && row.reference !== '' ? String(row.reference) : '-';
+        const escText = escapeHtml(text);
+        if (row.reference_url) {
+            return '<a href="' + escapeHtml(row.reference_url) + '" target="_blank" rel="noopener noreferrer">' + escText + '</a>';
+        }
+        return escText;
+    }
+
+    function renderTable(data) {
+        reportBody.innerHTML = '';
+
+        const totalQtyInEl = document.getElementById('totalQtyIn');
+        const totalQtyOutEl = document.getElementById('totalQtyOut');
+        const totalBalanceEl = document.getElementById('totalBalance');
+        let totalQtyIn = 0;
+        let totalQtyOut = 0;
+        let lastBalance = 0;
+
+        if (!data.data || data.data.length === 0) {
+            reportBody.innerHTML = '<tr><td colspan="6" class="text-center">No movements found for this product.</td></tr>';
+            totalQtyInEl.textContent = '0';
+            totalQtyOutEl.textContent = '0';
+            totalBalanceEl.textContent = '0';
+            return;
+        }
+
+        data.data.forEach(function (row) {
+            const tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td>' + formatDate(row.date) + '</td>' +
+                '<td>' + formatReferenceCell(row) + '</td>' +
+                '<td>' + escapeHtml(row.movement_type || '-') + '</td>' +
+                '<td class="text-right">' + (row.qty_in > 0 ? row.qty_in : '-') + '</td>' +
+                '<td class="text-right">' + (row.qty_out > 0 ? row.qty_out : '-') + '</td>' +
+                '<td class="text-right">' + (row.balance ?? '-') + '</td>';
+            reportBody.appendChild(tr);
+
+            totalQtyIn += parseFloat(row.qty_in || 0);
+            totalQtyOut += parseFloat(row.qty_out || 0);
+            lastBalance = parseFloat(row.balance || 0);
+        });
+        totalQtyInEl.textContent = String(totalQtyIn);
+        totalQtyOutEl.textContent = String(totalQtyOut);
+        totalBalanceEl.textContent = String(lastBalance);
+    }
+
+    function renderPagination(meta) {
+        if (!meta || meta.last_page <= 1) {
+            paginationWrap.style.display = 'none';
+            return;
+        }
+        paginationWrap.style.display = 'block';
+
+        let html = '<ul class="pagination pagination-sm mb-0">';
+        for (let i = 1; i <= meta.last_page; i++) {
+            const active = i === meta.current_page ? ' active' : '';
+            html += '<li class="page-item' + active + '"><a class="page-link" href="#" data-page="' + i + '">' + i + '</a></li>';
+        }
+        html += '</ul>';
+        paginationWrap.innerHTML = html;
+        paginationWrap.querySelectorAll('.page-link').forEach(function (a) {
+            a.addEventListener('click', function (e) {
+                e.preventDefault();
+                loadReport(parseInt(a.getAttribute('data-page'), 10));
             });
         });
+    }
 
-        // Optionally, you can trigger the search automatically when the user types
-        $('#search').on('input', function() {
-            $('#search-btn').click(); // Trigger the search button click
-        });
+    function loadReport(page) {
+        page = page || 1;
+        loading.style.display = 'block';
+        error.style.display = 'none';
+        tableWrap.style.display = 'none';
+        paginationWrap.style.display = 'none';
+
+        const url = '{{ route("reports.inventory.stock-movement") }}?' + getQueryParams(page, false);
+        fetch(url, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                loading.style.display = 'none';
+                renderTable(res);
+                if (res.meta) renderPagination(res.meta);
+                tableWrap.style.display = 'block';
+            })
+            .catch(function (err) {
+                loading.style.display = 'none';
+                error.textContent = err.message || 'Failed to load report.';
+                error.style.display = 'block';
+            });
+    }
+
+    function exportExcel() {
+        const url = '{{ route("reports.inventory.stock-movement") }}?' + getQueryParams(1, true);
+        exportExcelLink.href = url;
+        window.location.href = url;
+    }
+
+    exportExcelLink.addEventListener('click', function (e) {
+        e.preventDefault();
+        exportExcel();
     });
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        loadReport(1);
+        return false;
+    });
+
+    loadReport(1);
+})();
 </script>
-
-
+@endsection
