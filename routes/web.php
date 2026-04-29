@@ -206,6 +206,7 @@ Route::middleware(['permission:orders.menu'])->group(function () {
     Route::get('/orders/complete', [OrderController::class, 'completeOrders'])->name('order.completeOrders');
     Route::get('/orders/details/{order_id}', [OrderController::class, 'orderDetails'])->name('order.orderDetails');
     Route::get('/orders/details/{order_id}/content', [OrderController::class, 'orderDetailsContent'])->name('order.orderDetailsContent');
+    Route::get('/orders/{id}/drawer', [OrderController::class, 'drawer'])->name('orders.drawer')->middleware(['auth']);
     Route::put('/orders/update/status', [OrderController::class, 'updateStatus'])->name('order.updateStatus');
     Route::get('/orders/invoice/download/{order_id}', [OrderController::class, 'invoiceDownload'])->name('order.invoiceDownload');
     Route::get('/orders/invoice/print-a4/{order_id}', [OrderController::class, 'printA4'])->name('order.printA4');

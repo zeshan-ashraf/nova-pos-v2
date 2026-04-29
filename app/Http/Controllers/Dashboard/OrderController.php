@@ -551,6 +551,23 @@ class OrderController extends Controller
         return response()->json(['html' => $html]);
     }
 
+    public function drawer(Int $id, Request $request)
+    {
+        $order = Order::with([
+            'customer',
+            'orderDetails.product',
+            'orderDetails.product.parent',
+        ])->findOrFail($id);
+        $this->ensureShopAccess($order);
+
+        $highlightProductId = $request->integer('product_id');
+        $highlightProduct = $highlightProductId
+            ? Product::withoutGlobalScope('shop')->find($highlightProductId)
+            : null;
+
+        return view('orders.partials.drawer', compact('order', 'highlightProductId', 'highlightProduct'));
+    }
+
     /**
      * Update the specified resource in storage.
      */

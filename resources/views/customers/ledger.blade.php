@@ -73,7 +73,7 @@
                             <label for="date_filter" class="form-label">Date Filter</label>
                             <select class="form-control" name="date_filter" id="date_filter" onchange="toggleCustomDates()">
                                 <option value="all" {{ ($date_filter ?? '') == 'all' ? 'selected' : '' }}>All</option>
-                                <option value="today" {{ ($date_filter ?? 'today') == 'today' ? 'selected' : '' }}>Today</option>
+                                <option value="today" {{ ($date_filter ?? '') == 'today' ? 'selected' : '' }}>Today</option>
                                 <option value="yesterday" {{ ($date_filter ?? '') == 'yesterday' ? 'selected' : '' }}>Yesterday</option>
                                 <option value="last_7_days" {{ ($date_filter ?? '') == 'last_7_days' ? 'selected' : '' }}>Last 7 Days</option>
                                 <option value="current_month" {{ ($date_filter ?? '') == 'current_month' ? 'selected' : '' }}>Current Month</option>
@@ -250,6 +250,12 @@
                 </tbody>
                 @if(!empty($transactions) && count($transactions) > 0)
                 <tfoot class="bg-light">
+                    <tr>
+                        <td colspan="4" class="text-right"><strong>Total</strong></td>
+                        <td class="text-right"><strong>{{ $fmt($total_debits ?? 0) }}</strong></td>
+                        <td class="text-right"><strong>{{ $fmt($total_credits ?? 0) }}</strong></td>
+                        <td class="text-right">—</td>
+                    </tr>
                     <tr>
                         <td colspan="6" class="text-right"><strong>Closing Balance</strong></td>
                         <td class="text-right"><strong>{{ $fmtBalance($closing_balance ?? 0) }}</strong> @if((float)($closing_balance ?? 0) < 0)<span class="small text-danger">(Advance)</span>@endif</td>

@@ -36,8 +36,8 @@ class StockMovementReportService
         $page = max(1, $page);
         $offset = ($page - 1) * $perPage;
 
-        $sort = $filters['sort'] ?? 'id';
-        $order = strtolower($filters['order'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+        $sort = $filters['sort'] ?? 'date';
+        $order = strtolower($filters['order'] ?? 'asc') === 'asc' ? 'asc' : 'desc';
         $allowedSort = ['id', 'date', 'product_name', 'product_code'];
         if (!in_array($sort, $allowedSort, true)) {
             $sort = 'id';
@@ -86,7 +86,7 @@ class StockMovementReportService
             FROM stock_logs sl
             JOIN products p ON p.id = sl.product_id
             LEFT JOIN purchases ref_p ON sl.source_type = 'purchase' AND sl.source_id = ref_p.id
-            LEFT JOIN orders ref_o ON sl.source_type = 'sale' AND sl.source_id = ref_o.id
+            LEFT JOIN orders ref_o ON sl.source_type IN ('sale', 'mother_sale') AND sl.source_id = ref_o.id
             LEFT JOIN sale_returns ref_sr ON sl.source_type = 'sale_return' AND sl.source_id = ref_sr.id
             LEFT JOIN purchase_returns ref_pr ON sl.source_type = 'purchase_return' AND sl.source_id = ref_pr.id
             LEFT JOIN customers cust_o ON cust_o.id = ref_o.customer_id
@@ -193,7 +193,7 @@ class StockMovementReportService
             FROM stock_logs sl
             JOIN products p ON p.id = sl.product_id
             LEFT JOIN purchases ref_p ON sl.source_type = 'purchase' AND sl.source_id = ref_p.id
-            LEFT JOIN orders ref_o ON sl.source_type = 'sale' AND sl.source_id = ref_o.id
+            LEFT JOIN orders ref_o ON sl.source_type IN ('sale', 'mother_sale') AND sl.source_id = ref_o.id
             LEFT JOIN sale_returns ref_sr ON sl.source_type = 'sale_return' AND sl.source_id = ref_sr.id
             LEFT JOIN purchase_returns ref_pr ON sl.source_type = 'purchase_return' AND sl.source_id = ref_pr.id
             LEFT JOIN customers cust_o ON cust_o.id = ref_o.customer_id
@@ -285,6 +285,11 @@ class StockMovementReportService
             $base = $purchaseNo;
         } elseif ($type === 'sale' && $invoiceNo !== null && $invoiceNo !== '') {
             $base = $invoiceNo;
+        } elseif ($type === 'mother_sale') {
+            $base = $id !== '' ? 'Mother sale #' . $id : 'Mother sale';
+            if ($invoiceNo !== null && $invoiceNo !== '') {
+                $base .= ' (' . $invoiceNo . ')';
+            }
         } elseif ($type === 'sale_return' && $saleReturnNo !== null && $saleReturnNo !== '') {
             $base = $saleReturnNo;
         } elseif ($type === 'purchase_return' && $purchaseReturnNo !== null && $purchaseReturnNo !== '') {
@@ -341,6 +346,7 @@ class StockMovementReportService
         try {
             return match ($sourceType) {
                 'sale' => route('order.orderDetails', ['order_id' => $nid]),
+                'mother_sale' => route('order.orderDetails', ['order_id' => $nid]),
                 'purchase' => route('purchases.show', ['purchase_id' => $nid]),
                 'sale_return' => route('sale-returns.show', ['return_id' => $nid]),
                 'purchase_return' => route('purchase-returns.show', $nid),

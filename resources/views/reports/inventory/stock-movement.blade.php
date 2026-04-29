@@ -102,8 +102,8 @@
                                 </a>
                             </div>
                         </div>
-                        <input type="hidden" name="sort" id="sortParam" value="{{ request('sort', 'id') }}">
-                        <input type="hidden" name="order" id="orderParam" value="{{ request('order', 'desc') }}">
+                        <input type="hidden" name="sort" id="sortParam" value="{{ request('sort', 'date') }}">
+                        <input type="hidden" name="order" id="orderParam" value="{{ request('order', 'asc') }}">
                     </form>
                 </div>
             </div>

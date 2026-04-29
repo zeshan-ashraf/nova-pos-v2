@@ -269,6 +269,98 @@
     line-height: 1.35;
     color: #5f6b7a;
 }
+
+/* Shopify-style order drawer */
+.order-drawer {
+    position: fixed;
+    top: 0;
+    right: -520px;
+    width: min(520px, 92vw);
+    height: 100%;
+    background: #fff;
+    box-shadow: -2px 0 14px rgba(0, 0, 0, 0.14);
+    transition: right 0.3s ease;
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+}
+.order-drawer.open {
+    right: 0;
+}
+.order-drawer-header {
+    padding: 0.9rem 1rem;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #ffd960;
+}
+.order-drawer-header-title {
+    margin: 0;
+    text-align: center;
+    flex: 1 1 auto;
+    font-size: 1.05rem;
+}
+.order-drawer-header-spacer {
+    width: 1.5rem;
+    flex: 0 0 1.5rem;
+}
+.order-drawer-close {
+    border: 0;
+    background: transparent;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: #566a7f;
+    padding: 0;
+}
+.order-drawer-close:hover {
+    color: #111;
+}
+.order-drawer-body {
+    padding: 1rem;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    background: #f8f9fa;
+}
+.order-drawer-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 1040;
+}
+.content-page #orderDrawer .table tbody tr.drawer-product-highlight-row > td,
+.content-page #orderDrawer .table tbody tr.drawer-product-highlight-row > th,
+.content-page #orderDrawer .table tbody tr > td.drawer-product-highlight-cell,
+.content-page #orderDrawer .table tbody tr > th.drawer-product-highlight-cell {
+    background-color: #fff3cd !important;
+    background-image: none !important;
+}
+.content-page #orderDrawer .table tbody tr.drawer-product-highlight-row > td,
+.content-page #orderDrawer .table tbody tr.drawer-product-highlight-row > th {
+    box-shadow: inset 0 1px 0 #f2cf66, inset 0 -1px 0 #f2cf66;
+}
+.content-page #orderDrawer .table {
+    background: #ffffff;
+    border-radius: 0.35rem;
+    overflow: hidden;
+    margin-bottom: 0;
+}
+.content-page #orderDrawer .table thead th {
+    background-color: #a7e7fc !important;
+    color: #000 !important;
+    border-color: #0b5ed7;
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+.content-page #orderDrawer .table tbody td {
+    color: #344054;
+    border-color: #e9ecef;
+}
 </style>
 @endsection
 
@@ -607,6 +699,7 @@
                                 <a href="{{ $url }}" class="table-sortable-th">{{ $label }} @if(request('sort') === $col)<i class="ri-arrow-{{ request('direction') === 'asc' ? 'up' : 'down' }}-line ml-1"></i>@endif</a>
                             </th>
                             <th>Payment</th>
+                            <th>Total Products</th>
                             <th></th>
                             <th>Action</th>
                         </tr>
@@ -615,7 +708,13 @@
                         @foreach ($orders as $order)
                         <tr>
                             <td>{{ (($orders->currentPage() * $orders->perPage()) - $orders->perPage()) + $loop->iteration }}</td>
-                            <td>{{ $order->invoice_no }}</td>
+                            <td>
+                                <a href="javascript:void(0)"
+                                   class="open-order-drawer text-primary fw-bold"
+                                   data-id="{{ $order->id }}">
+                                   {{ $order->invoice_no ? '#' . $order->invoice_no : '#' . $order->id }}
+                                </a>
+                            </td>
                             <td>{{ $order->customer?->name ?? $order->customer?->shopname ?? '—' }}</td>
                             <td>{{ $order->order_date }}</td>
                             <td>{{ number_format($order->total ?? 0, 2) }}</td>
@@ -650,6 +749,7 @@
                                     {{ $order->payment_status }}
                                 @endif
                             </td>
+                            <td>{{ number_format((float) ($order->total_products ?? 0), 0) }}</td>
                             <td>
                                 @if($showBankTooltip)
                                     <div class="orders-bank-breakdown">
@@ -696,6 +796,18 @@
 
     </div>
     <!-- Page end  -->
+</div>
+
+<div id="orderDrawerBackdrop" class="order-drawer-backdrop d-none"></div>
+<div id="orderDrawer" class="order-drawer" aria-hidden="true">
+    <div class="order-drawer-header">
+        <div class="order-drawer-header-spacer" aria-hidden="true"></div>
+        <h5 id="orderDrawerTitle" class="order-drawer-header-title">Order Details</h5>
+        <button id="closeDrawer" class="order-drawer-close" type="button" aria-label="Close drawer">&times;</button>
+    </div>
+    <div id="drawerContent" class="order-drawer-body">
+        <!-- AJAX content -->
+    </div>
 </div>
 
 <!-- Delete Confirmation Modal -->
@@ -857,6 +969,52 @@ function formatCurrency(amount) {
     }
     document.addEventListener('DOMContentLoaded', function() {
         toggleOrderCustomDates();
+        var drawerRouteTemplate = @json(route('orders.drawer', ['id' => '__ORDER_ID__']));
+        var selectedProductId = @json(request('product_id'));
+
+        function openOrderDrawer(orderId, invoiceLabel) {
+            $('#orderDrawerBackdrop').removeClass('d-none');
+            $('#orderDrawer').addClass('open').attr('aria-hidden', 'false');
+            $('body').addClass('overflow-hidden');
+            $('#orderDrawerTitle').text(invoiceLabel ? ('Order Details - ' + invoiceLabel) : 'Order Details');
+            $('#drawerContent').html('<p class="text-muted mb-0">Loading...</p>');
+
+            var drawerUrl = drawerRouteTemplate.replace('__ORDER_ID__', orderId);
+            if (selectedProductId) {
+                drawerUrl += '?product_id=' + encodeURIComponent(selectedProductId);
+            }
+
+            $.get(drawerUrl, function(response) {
+                $('#drawerContent').html(response);
+            }).fail(function() {
+                $('#drawerContent').html('<p class="text-danger mb-0">Failed to load order details. Please try again.</p>');
+            });
+        }
+
+        function closeOrderDrawer() {
+            $('#orderDrawer').removeClass('open').attr('aria-hidden', 'true');
+            $('#orderDrawerBackdrop').addClass('d-none');
+            $('body').removeClass('overflow-hidden');
+            $('#orderDrawerTitle').text('Order Details');
+        }
+
+        $(document).on('click', '.open-order-drawer', function () {
+            var orderId = $(this).data('id');
+            var invoiceLabel = $.trim($(this).text());
+            if (!orderId) return;
+            openOrderDrawer(orderId, invoiceLabel);
+        });
+
+        $('#closeDrawer, #orderDrawerBackdrop').on('click', function () {
+            closeOrderDrawer();
+        });
+
+        $(document).on('keydown', function(e) {
+            if (e.key === 'Escape' && $('#orderDrawer').hasClass('open')) {
+                closeOrderDrawer();
+            }
+        });
+
         $('.customer-select').select2({
             theme: 'bootstrap-5',
             placeholder: '— All —',

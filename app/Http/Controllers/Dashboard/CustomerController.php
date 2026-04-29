@@ -388,7 +388,7 @@ class CustomerController extends Controller
      */
     protected function buildCustomerLedgerData(Customer $customer, Request $request): array
     {
-        $dateFilter = $request->get('date_filter', 'today');
+        $dateFilter = $request->get('date_filter', 'all');
         $startDate = $request->get('start_date');
         $endDate = $request->get('end_date');
 
@@ -430,11 +430,7 @@ class CustomerController extends Controller
             $startDateStr = $fromDateTime->format('Y-m-d');
             $endDateStr = $toDateTime->format('Y-m-d');
         } else {
-            $dateFilter = 'today';
-            $fromDateTime = Carbon::today()->startOfDay();
-            $toDateTime = Carbon::today()->endOfDay();
-            $startDateStr = $fromDateTime->format('Y-m-d');
-            $endDateStr = $toDateTime->format('Y-m-d');
+            $dateFilter = 'all';
         }
 
         $shopId = $customer->shop_id;
