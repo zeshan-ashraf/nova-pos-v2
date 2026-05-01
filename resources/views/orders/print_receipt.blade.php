@@ -8,14 +8,20 @@
         html, body {
             margin: 0;
             padding: 0;
-            width: 3.5in;
+            width: 100%;
         }
         body {
             font-family: "Courier New", Courier, monospace;
             font-size: 12px;
             color: #000;
-            padding: 0 6px;
+            padding: 0;
             line-height: 1.25;
+            box-sizing: border-box;
+        }
+        .receipt-wrap {
+            width: calc(100% - 2mm);
+            margin-left: 2mm;
+            padding: 0 5px;
             box-sizing: border-box;
         }
         .center {
@@ -59,24 +65,30 @@
         }
         @media print {
             @page {
-                size: 3.5in auto;
+                size: 3in auto;
                 margin: 0;
             }
             html, body {
                 margin: 0 !important;
                 padding: 0 !important;
-                width: 3.5in !important;
+                width: 3in !important;
                 box-sizing: border-box;
             }
             body {
-                width: 3.5in;
+                width: 3in;
                 font-size: 12px;
-                padding: 0 6px !important;
+                padding: 0 !important;
+            }
+            .receipt-wrap {
+                width: calc(100% - 2mm);
+                margin-left: 2mm !important;
+                padding: 0 5px !important;
             }
         }
     </style>
 </head>
 <body>
+    <div class="receipt-wrap">
     @php
         $shop = $order->shop ?? auth()->user()->shop ?? null;
         $subtotal = (float) ($order->sub_total ?? $orderDetails->sum('total'));
@@ -140,9 +152,27 @@
     <div class="center">Thank you</div>
 
     <script>
-        window.onload = function() {
-            window.print();
-        }
+        (function () {
+            function closePrintPage() {
+                window.close();
+            }
+
+            window.addEventListener('afterprint', closePrintPage);
+
+            var mediaQueryList = window.matchMedia ? window.matchMedia('print') : null;
+            if (mediaQueryList) {
+                mediaQueryList.addEventListener('change', function (e) {
+                    if (!e.matches) {
+                        closePrintPage();
+                    }
+                });
+            }
+
+            window.onload = function() {
+                window.print();
+            };
+        })();
     </script>
+    </div>
 </body>
 </html>

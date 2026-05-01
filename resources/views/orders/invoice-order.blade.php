@@ -166,7 +166,7 @@
                                     <i class="fas fa-file-alt"></i> A4 Invoice
                                 </a>
                                 <a class="dropdown-item" href="#" id="printReceipt">
-                                    <i class="fas fa-receipt"></i> Receipt (3.5")
+                                    <i class="fas fa-receipt"></i> Receipt
                                 </a>
                             </div>
                         </div>

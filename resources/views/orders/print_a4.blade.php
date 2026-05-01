@@ -162,9 +162,28 @@
     @endif
 
     <script>
-        window.onload = function() {
-            window.print();
-        }
+        (function () {
+            function closePrintPage() {
+                // Works when opened via target="_blank"/window.open from orders list.
+                window.close();
+            }
+
+            window.addEventListener('afterprint', closePrintPage);
+
+            // Fallback for browsers where afterprint can be inconsistent.
+            var mediaQueryList = window.matchMedia ? window.matchMedia('print') : null;
+            if (mediaQueryList) {
+                mediaQueryList.addEventListener('change', function (e) {
+                    if (!e.matches) {
+                        closePrintPage();
+                    }
+                });
+            }
+
+            window.onload = function() {
+                window.print();
+            };
+        })();
     </script>
 </body>
 </html>

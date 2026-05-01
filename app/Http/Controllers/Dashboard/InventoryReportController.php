@@ -105,6 +105,9 @@ class InventoryReportController extends Controller
         $exportCsv = $request->input('export') === 'csv' || $format === 'csv';
 
         if ($request->wantsJson() || $format === 'json' || $exportCsv) {
+            if (! $request->filled('date_filter')) {
+                $request->merge(['date_filter' => 'all']);
+            }
             $dateRange = $this->getDateRange($request);
             $filters = [
                 'from_date'      => $dateRange['start_date'],

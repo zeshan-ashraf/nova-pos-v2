@@ -24,7 +24,7 @@
                     <form id="stockMovementFilterForm" action="{{ route('reports.inventory.stock-movement') }}" method="GET">
                         <div class="row align-items-end">
                             <div class="col-md-2">
-                                @php($currentDateFilter = request('date_filter', 'this_month'))
+                                @php($currentDateFilter = request('date_filter', 'all'))
                                 <label for="date_filter" class="small mb-0">Date</label>
                                 <select class="form-control form-control-sm" name="date_filter" id="date_filter" onchange="toggleCustomDates()">
                                     <option value="all" {{ $currentDateFilter === 'all' ? 'selected' : '' }}>All</option>
