@@ -283,13 +283,8 @@ class StockMovementReportService
         $base = null;
         if ($type === 'purchase' && $purchaseNo !== null && $purchaseNo !== '') {
             $base = $purchaseNo;
-        } elseif ($type === 'sale' && $invoiceNo !== null && $invoiceNo !== '') {
+        } elseif (in_array($type, ['sale', 'mother_sale'], true) && $invoiceNo !== null && $invoiceNo !== '') {
             $base = $invoiceNo;
-        } elseif ($type === 'mother_sale') {
-            $base = $id !== '' ? 'Mother sale #' . $id : 'Mother sale';
-            if ($invoiceNo !== null && $invoiceNo !== '') {
-                $base .= ' (' . $invoiceNo . ')';
-            }
         } elseif ($type === 'sale_return' && $saleReturnNo !== null && $saleReturnNo !== '') {
             $base = $saleReturnNo;
         } elseif ($type === 'purchase_return' && $purchaseReturnNo !== null && $purchaseReturnNo !== '') {
