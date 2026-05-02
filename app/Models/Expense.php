@@ -30,4 +30,9 @@ class Expense extends Model
     {
         return $this->hasMany(Activity::class, 'expense_id');
     }
+
+    public function shopExpenses()
+    {
+        return $this->hasMany(ShopExpense::class, 'expense_id');
+    }
 }

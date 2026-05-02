@@ -23,7 +23,7 @@
                     {{-- Left menu: Quick links (Create Sale Invoice, Create Purchase, Create Sale Return, Create Expense, Reports) --}}
                     <ul class="navbar-nav navbar-list align-items-center navbar-left-menu">
                         @auth
-                            @if(auth()->user()->can('advance.pos.menu') || auth()->user()->can('purchases.menu') || auth()->user()->can('sale-returns.menu') || auth()->user()->can('expense.menu') || auth()->user()->can('reports.menu') || auth()->user()->can('product.menu'))
+                            @if(auth()->user()->can('advance.pos.menu') || auth()->user()->can('purchases.menu') || auth()->user()->can('sale-returns.menu') || auth()->user()->can('expense.menu') || auth()->user()->can('shop_expense.view') || auth()->user()->can('reports.menu') || auth()->user()->can('product.menu'))
                                 @can('product.menu')
                                     <li class="nav-item">
                                         <a href="{{ route('products.index') }}" class="nav-link navbar-quick-link {{ request()->routeIs('products.*') ? 'active' : '' }}">Products</a>

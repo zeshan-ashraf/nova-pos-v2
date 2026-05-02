@@ -589,7 +589,7 @@
                 </li>
                 @endif
 
-                @if (auth()->user()->can('expense.menu'))
+                @if (auth()->user()->can('expense.menu') || auth()->user()->can('shop_expense.view'))
                 <li>
                     <a href="#expenses" class="collapsed" data-toggle="collapse" aria-expanded="false">
                         <i class="fas fa-boxes"></i>
@@ -599,6 +599,7 @@
                         </svg>
                     </a>
                     <ul id="expenses" class="iq-submenu collapse" data-parent="#iq-sidebar-toggle" style="">
+                        @if (auth()->user()->can('expense.menu'))
                         <li class="{{ Request::is(['expenses']) && !Request::is('expenses/create') ? 'active' : '' }}">
                             <a href="{{ route('expenses.index') }}">
                                 <i class="fas fa-arrow-right"></i><span>Expenses</span>
@@ -609,6 +610,7 @@
                                 <i class="fas fa-arrow-right"></i><span>Add Expense</span>
                             </a>
                         </li>
+                        @endif
                         @if (auth()->user()->can('expense-categories.menu'))
                         <li class="{{ Request::is('expense-categories*') ? 'active' : '' }}">
                             <a href="{{ route('expense-categories.index') }}">
@@ -616,6 +618,13 @@
                             </a>
                         </li>
                         @endif
+                        @can('shop_expense.view')
+                        <li class="{{ Request::is('shop-expenses*') ? 'active' : '' }}">
+                            <a href="{{ route('shop-expenses.index') }}">
+                                <i class="fas fa-arrow-right"></i><span>Shop Expenses</span>
+                            </a>
+                        </li>
+                        @endcan
                     </ul>
                 </li>
                 @endif

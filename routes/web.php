@@ -23,6 +23,7 @@ use App\Http\Controllers\Dashboard\RoleController;
 use App\Http\Controllers\Dashboard\UserController;
 use App\Http\Controllers\Dashboard\ExpenseController;
 use App\Http\Controllers\Dashboard\ExpenseCategoryController;
+use App\Http\Controllers\Dashboard\ShopExpenseController;
 use App\Http\Controllers\Dashboard\ActiveShopController;
 use App\Http\Controllers\Dashboard\ShopSwitchController;
 use App\Http\Controllers\Dashboard\SaleReturnController;
@@ -314,6 +315,13 @@ Route::middleware(['permission:expense-categories.menu'])->group(function () {
     Route::put('/expense-categories/{expense_category}', [ExpenseCategoryController::class, 'update'])->name('expense-categories.update');
     Route::delete('/expense-categories/{expense_category}', [ExpenseCategoryController::class, 'destroy'])->name('expense-categories.destroy');
     Route::get('/expense-categories/{expense_category}/entries', [ExpenseCategoryController::class, 'entries'])->name('expense-categories.entries');
+});
+
+// ====== SHOP EXPENSES (reporting only; no ledger impact) ======
+Route::middleware(['auth'])->group(function () {
+    Route::get('/shop-expenses/export/excel', [ShopExpenseController::class, 'exportExcel'])->name('shop-expenses.export.excel');
+    Route::get('/shop-expenses/export/pdf', [ShopExpenseController::class, 'exportPdf'])->name('shop-expenses.export.pdf');
+    Route::resource('shop-expenses', ShopExpenseController::class)->except(['show']);
 });
 
 // ====== DATABASE BACKUP ======
