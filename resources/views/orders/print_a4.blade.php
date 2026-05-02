@@ -161,6 +161,13 @@
         </div>
     @endif
 
+    @if($shop && filled(trim((string) ($shop->invoice_policy ?? ''))))
+        <div class="note">
+            <strong>Invoice policy</strong>
+            <div style="margin-top: 6px; white-space: pre-wrap;">{{ $shop->invoice_policy }}</div>
+        </div>
+    @endif
+
     <script>
         (function () {
             function closePrintPage() {

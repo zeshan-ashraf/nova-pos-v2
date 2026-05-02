@@ -13,6 +13,7 @@ use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Support\ActiveShop;
+use App\Support\MotherShopSuperAdmin;
 use Illuminate\Support\Collection;
 
 class DashboardController extends Controller
@@ -185,6 +186,9 @@ class DashboardController extends Controller
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'shops' => 'nullable',
+            'shop_id' => 'nullable|integer|exists:shops,id',
+            'shop_ids' => 'nullable|array',
+            'shop_ids.*' => 'integer|exists:shops,id',
         ]);
 
         $payload = $this->buildShopPerformanceRows($request);
@@ -199,6 +203,9 @@ class DashboardController extends Controller
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'shops' => 'nullable',
+            'shop_id' => 'nullable|integer|exists:shops,id',
+            'shop_ids' => 'nullable|array',
+            'shop_ids.*' => 'integer|exists:shops,id',
         ]);
 
         $rows = $this->buildShopPerformanceRows($request);
@@ -236,9 +243,12 @@ class DashboardController extends Controller
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'shops' => 'nullable',
+            'shop_id' => 'nullable|integer|exists:shops,id',
+            'shop_ids' => 'nullable|array',
+            'shop_ids.*' => 'integer|exists:shops,id',
         ]);
 
-        $shopIds = $this->parseShopIdsFromFilter($request->input('shops'), $this->dashboardScopeShopIds());
+        $shopIds = $this->resolveShopIdsForDashboardAggregates($request);
 
         $stockAgg = Product::withoutGlobalScopes()
             ->selectRaw('shop_id, COALESCE(SUM(COALESCE(product_store, 0) * COALESCE(buying_price, 0)), 0) as stock_value')
@@ -286,14 +296,17 @@ class DashboardController extends Controller
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'shops' => 'nullable',
+            'shop_id' => 'nullable|integer|exists:shops,id',
+            'shop_ids' => 'nullable|array',
+            'shop_ids.*' => 'integer|exists:shops,id',
         ]);
 
-        $shopIds = $this->parseShopIdsFromFilter($request->input('shops'), $this->dashboardScopeShopIds());
+        $shopIds = $this->resolveShopIdsForDashboardAggregates($request);
         $dateRange = $this->getDateRange($request);
         $startDt = $dateRange['start_datetime'];
         $endDt = $dateRange['end_datetime'];
 
-        $ordersBase = Order::withoutGlobalScopes()
+        $ordersBase = Order::query()
             ->whereNotNull('shop_id')
             ->when($shopIds->isNotEmpty(), fn ($q) => $q->whereIn('shop_id', $shopIds))
             ->whereBetween('order_date', [$startDt, $endDt]);
@@ -302,7 +315,7 @@ class DashboardController extends Controller
         $miniOrders = (int) (clone $ordersBase)->count();
         $invoiceDiscount = (float) (clone $ordersBase)->sum('invoice_discount');
 
-        $detailsAgg = OrderDetails::withoutGlobalScopes()
+        $detailsAgg = OrderDetails::query()
             ->joinSub((clone $ordersBase)->select(['id', 'shop_id']), 'fo', function ($join) {
                 $join->on('order_details.order_id', '=', 'fo.id');
             })
@@ -345,7 +358,7 @@ class DashboardController extends Controller
             ->groupBy('shop_id')
             ->get()
             ->keyBy('shop_id');
-        $lossDetail = OrderDetails::withoutGlobalScopes()
+        $lossDetail = OrderDetails::query()
             ->joinSub((clone $lossRows)->select(['id', 'shop_id']), 'lo', function ($join) {
                 $join->on('order_details.order_id', '=', 'lo.id');
             })
@@ -371,7 +384,7 @@ class DashboardController extends Controller
         $yesterdayStart = now()->subDay()->startOfDay();
         $yesterdayEnd = now()->subDay()->endOfDay();
 
-        $salesBase = Order::withoutGlobalScopes()
+        $salesBase = Order::query()
             ->whereNotNull('shop_id')
             ->when($shopIds->isNotEmpty(), fn ($q) => $q->whereIn('shop_id', $shopIds));
 
@@ -440,14 +453,59 @@ class DashboardController extends Controller
             ->values();
     }
 
+    /**
+     * Shop IDs for multi-shop dashboard aggregates (insights, shop performance, pulse, inventory).
+     * Aligns with super-admin KPI when {@see MotherShopSuperAdmin} passes shop_id / shop_ids or shops=all.
+     */
+    private function resolveShopIdsForDashboardAggregates(Request $request): Collection
+    {
+        $user = auth()->user();
+        $allShopIds = Shop::withoutGlobalScopes()->pluck('id')->values();
+
+        $requested = $request->input('shop_ids');
+        if (! is_array($requested) && $request->filled('shop_id')) {
+            $requested = [$request->input('shop_id')];
+        }
+        $requested = is_array($requested) ? array_map('intval', array_filter($requested)) : [];
+        $fromExplicit = collect($requested)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0 && $allShopIds->contains($id))
+            ->unique()
+            ->values();
+
+        if ($fromExplicit->isNotEmpty()) {
+            return $fromExplicit;
+        }
+
+        if ($user && MotherShopSuperAdmin::allows($user)) {
+            $shopsInput = $request->input('shops');
+            if ($shopsInput === 'all' || $shopsInput === null || $shopsInput === '') {
+                return $allShopIds;
+            }
+
+            $parsed = $this->parseShopIdsFromFilter($shopsInput, null);
+            if ($parsed->isNotEmpty()) {
+                return $parsed
+                    ->map(fn ($id) => (int) $id)
+                    ->filter(fn (int $id) => $id > 0 && $allShopIds->contains($id))
+                    ->values();
+            }
+
+            return $allShopIds;
+        }
+
+        return $this->parseShopIdsFromFilter($request->input('shops'), $this->dashboardScopeShopIds());
+    }
+
     private function buildShopPerformanceRows(Request $request)
     {
-        $shopIds = $this->parseShopIdsFromFilter($request->input('shops'), $this->dashboardScopeShopIds());
+        $shopIds = $this->resolveShopIdsForDashboardAggregates($request);
         $dateRange = $this->getDateRange($request);
         $startDt = $dateRange['start_datetime'];
         $endDt = $dateRange['end_datetime'];
 
-        $ordersAggQuery = Order::withoutGlobalScopes()
+        // Match SuperAdminDashboardController::aggregateKpis + /orders/all: exclude soft-deleted rows.
+        $ordersAggQuery = Order::query()
             ->selectRaw('shop_id, COALESCE(SUM(total), 0) as sales, COUNT(*) as orders_count, COALESCE(SUM(invoice_discount), 0) as invoice_discount')
             ->whereNotNull('shop_id')
             ->whereBetween('order_date', [$startDt, $endDt])
@@ -458,7 +516,7 @@ class DashboardController extends Controller
 
         $ordersAgg = $ordersAggQuery->get()->keyBy('shop_id');
 
-        $filteredOrdersForJoin = Order::withoutGlobalScopes()
+        $filteredOrdersForJoin = Order::query()
             ->select(['id', 'shop_id'])
             ->whereNotNull('shop_id')
             ->whereBetween('order_date', [$startDt, $endDt]);
@@ -466,7 +524,7 @@ class DashboardController extends Controller
             $filteredOrdersForJoin->whereIn('shop_id', $shopIds);
         }
 
-        $detailAgg = OrderDetails::withoutGlobalScopes()
+        $detailAgg = OrderDetails::query()
             ->joinSub($filteredOrdersForJoin, 'fo', function ($join) {
                 $join->on('order_details.order_id', '=', 'fo.id');
             })

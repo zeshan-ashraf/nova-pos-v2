@@ -148,6 +148,10 @@
     <div class="line-total bold"><span>Total</span><span>{{ number_format($invoiceTotal, 0, '.', '') }}</span></div>
     <div class="line-total"><span>Paid</span><span>{{ number_format((float) ($order->pay ?? 0), 0, '.', '') }}</span></div>
     <div class="line-total"><span>Due</span><span>{{ number_format((float) ($order->due ?? 0), 0, '.', '') }}</span></div>
+    @if($shop && filled(trim((string) ($shop->invoice_policy ?? ''))))
+    <div class="sep"></div>
+    <div class="invoice-policy" style="white-space: pre-wrap; font-size: 10px; line-height: 1.3; text-align: left;">{{ $shop->invoice_policy }}</div>
+    @endif
     <div class="sep"></div>
     <div class="center">Thank you</div>
 

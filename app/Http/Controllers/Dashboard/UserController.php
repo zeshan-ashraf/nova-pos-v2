@@ -50,6 +50,26 @@ class UserController extends Controller
     }
 
     /**
+     * HTML fragment for the shop users drawer (same panel pattern as orders list).
+     */
+    public function shopUsersDrawer(Shop $shop)
+    {
+        $actor = auth()->user();
+        if (!ActiveShop::allowedShopIds($actor)->contains((int) $shop->id)) {
+            abort(403);
+        }
+
+        $shopUsers = User::query()
+            ->where('shop_id', $shop->id)
+            ->orderBy('name')
+            ->get(['name', 'username', 'actual_password']);
+
+        return view('users.partials.shop-users-drawer', [
+            'shopUsers' => $shopUsers,
+        ]);
+    }
+
+    /**
      * Show the form for creating a new resource.
      */
     public function create()

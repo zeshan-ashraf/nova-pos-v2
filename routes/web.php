@@ -106,6 +106,7 @@ Route::middleware('auth')->group(function () {
 
 // ====== USERS ======
 Route::middleware(['permission:user.menu'])->group(function () {
+    Route::get('/users/shop/{shop}/users-drawer', [UserController::class, 'shopUsersDrawer'])->name('users.shopDrawer');
     Route::resource('/users', UserController::class)->except(['show']);
 });
 

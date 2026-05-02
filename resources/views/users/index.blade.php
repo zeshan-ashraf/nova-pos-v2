@@ -1,5 +1,93 @@
 @extends('dashboard.body.main')
 
+@section('specificpagestyles')
+<style>
+/* Right drawer — same pattern as orders list */
+.order-drawer {
+    position: fixed;
+    top: 0;
+    right: -520px;
+    width: min(520px, 92vw);
+    height: 100%;
+    background: #fff;
+    box-shadow: -2px 0 14px rgba(0, 0, 0, 0.14);
+    transition: right 0.3s ease;
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+}
+.order-drawer.open {
+    right: 0;
+}
+.order-drawer-header {
+    padding: 0.9rem 1rem;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #ffd960;
+}
+.order-drawer-header-title {
+    margin: 0;
+    text-align: center;
+    flex: 1 1 auto;
+    font-size: 1.05rem;
+}
+.order-drawer-header-spacer {
+    width: 1.5rem;
+    flex: 0 0 1.5rem;
+}
+.order-drawer-close {
+    border: 0;
+    background: transparent;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: #566a7f;
+    padding: 0;
+}
+.order-drawer-close:hover {
+    color: #111;
+}
+.order-drawer-body {
+    padding: 1rem;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    background: #f8f9fa;
+}
+.order-drawer-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 1040;
+}
+.content-page #shopUsersDrawer .table {
+    background: #ffffff;
+    border-radius: 0.35rem;
+    margin-bottom: 0;
+}
+.content-page #shopUsersDrawer .table thead th {
+    background-color: #a7e7fc !important;
+    color: #000 !important;
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+.content-page #shopUsersDrawer .table tbody td {
+    color: #344054;
+    border-color: #e9ecef;
+}
+/* View Users — label color */
+.open-shop-users-drawer,
+.open-shop-users-drawer:hover,
+.open-shop-users-drawer:focus,
+.open-shop-users-drawer:active {
+    color: #000 !important;
+}
+</style>
+@endsection
+
 @section('container')
 <div class="container-fluid">
     <div class="row">
@@ -83,18 +171,24 @@
                                 @endforeach
                             </td>
                             <td>
-                                <form action="{{ route('users.destroy', $item->username) }}" method="POST" style="margin-bottom: 5px">
-                                    @method('delete')
-                                    @csrf
-                                    <div class="d-flex align-items-center list-action">
-                                        {{-- <a class="btn btn-info mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="View"
-                                            href="{{ route('users.show', $item->username) }}"><i class="ri-eye-line mr-0"></i>
-                                        </a> --}}
+                                <div class="d-flex align-items-center list-action flex-wrap">
+                                    @if ($item->shop_id)
+                                        <button type="button"
+                                            class="btn btn-info mr-2 mb-1 open-shop-users-drawer"
+                                            data-shop-id="{{ $item->shop_id }}"
+                                            data-shop-name="{{ e($item->shop?->name ?? 'Shop') }}"
+                                            data-toggle="tooltip"
+                                            data-placement="top"
+                                            data-original-title="View all users in this shop">View Users</button>
+                                    @endif
+                                    <form action="{{ route('users.destroy', $item->username) }}" method="POST" class="d-inline-flex align-items-center mb-1">
+                                        @method('delete')
+                                        @csrf
                                         <a class="btn btn-success mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Edit" href="{{ route('users.edit', $item->username) }}"><i class="ri-pencil-line mr-0"></i>
                                         </a>
                                         <button type="submit" class="btn btn-warning mr-2 border-none" onclick="return confirm('Are you sure you want to delete this record?')" data-toggle="tooltip" data-placement="top" title="" data-original-title="Delete"><i class="ri-delete-bin-line mr-0"></i></button>
-                                    </div>
-                                </form>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
 
@@ -115,4 +209,65 @@
     <!-- Page end  -->
 </div>
 
+<div id="shopUsersDrawerBackdrop" class="order-drawer-backdrop d-none"></div>
+<div id="shopUsersDrawer" class="order-drawer" aria-hidden="true">
+    <div class="order-drawer-header">
+        <div class="order-drawer-header-spacer" aria-hidden="true"></div>
+        <h5 id="shopUsersDrawerTitle" class="order-drawer-header-title">Shop users</h5>
+        <button id="closeShopUsersDrawer" class="order-drawer-close" type="button" aria-label="Close drawer">&times;</button>
+    </div>
+    <div id="shopUsersDrawerContent" class="order-drawer-body"></div>
+</div>
+
+@endsection
+
+@section('specificpagescripts')
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var drawerRouteTemplate = @json(route('users.shopDrawer', ['shop' => '__SHOP_ID__']));
+        var $backdrop = $('#shopUsersDrawerBackdrop');
+        var $drawer = $('#shopUsersDrawer');
+        var $title = $('#shopUsersDrawerTitle');
+        var $content = $('#shopUsersDrawerContent');
+
+        function openShopUsersDrawer(shopId, shopName) {
+            $backdrop.removeClass('d-none');
+            $drawer.addClass('open').attr('aria-hidden', 'false');
+            $('body').addClass('overflow-hidden');
+            $title.text(shopName || 'Shop users');
+            $content.html('<p class="text-muted mb-0">Loading...</p>');
+
+            var url = drawerRouteTemplate.replace('__SHOP_ID__', shopId);
+            $.get(url, function (response) {
+                $content.html(response);
+            }).fail(function () {
+                $content.html('<p class="text-danger mb-0">Failed to load users. Please try again.</p>');
+            });
+        }
+
+        function closeShopUsersDrawer() {
+            $drawer.removeClass('open').attr('aria-hidden', 'true');
+            $backdrop.addClass('d-none');
+            $('body').removeClass('overflow-hidden');
+            $title.text('Shop users');
+        }
+
+        $(document).on('click', '.open-shop-users-drawer', function () {
+            var shopId = $(this).data('shop-id');
+            var shopName = $(this).data('shop-name');
+            if (!shopId) return;
+            openShopUsersDrawer(String(shopId), shopName);
+        });
+
+        $('#closeShopUsersDrawer, #shopUsersDrawerBackdrop').on('click', function () {
+            closeShopUsersDrawer();
+        });
+
+        $(document).on('keydown', function (e) {
+            if (e.key === 'Escape' && $drawer.hasClass('open')) {
+                closeShopUsersDrawer();
+            }
+        });
+    });
+</script>
 @endsection

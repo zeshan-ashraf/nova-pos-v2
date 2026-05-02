@@ -1177,6 +1177,20 @@
         return { date_filter: dateFilter, start_date: startDate, end_date: endDate, shop_ids: shopIds };
     }
 
+    /** Same shop scope as super-admin KPI (shop_id / shop_ids / all stores). */
+    function mergeSaKpiShopParams(base) {
+        var out = $.extend({}, base || {});
+        var p = getFilterParams();
+        if (p.shop_ids.length === 1) {
+            out.shop_id = p.shop_ids[0];
+        } else if (p.shop_ids.length > 1) {
+            out.shop_ids = p.shop_ids.slice();
+        }
+        var sel = document.getElementById('sa_shops');
+        out.shops = (sel && sel.value) ? sel.value : 'all';
+        return out;
+    }
+
     function fetchKPIs(clearValues) {
         showKpiSpinners(!!clearValues);
         var params = getFilterParams();
@@ -1340,12 +1354,11 @@
     }
 
     function fetchShopPerformance() {
-        var filters = {
+        var filters = mergeSaKpiShopParams({
             date_filter: $('#sa_date_range').val(),
             start_date: $('#sa_start_date').val(),
-            end_date: $('#sa_end_date').val(),
-            shops: $('#sa_shops').val()
-        };
+            end_date: $('#sa_end_date').val()
+        });
 
         $.get('{{ route("dashboard.shop-performance") }}', filters, function(res) {
             if (!res || !Array.isArray(res.shops)) return;
@@ -1485,12 +1498,11 @@
     }
 
     function fetchChartData() {
-        var filters = {
+        var filters = mergeSaKpiShopParams({
             date_filter: $('#sa_date_range').val(),
             start_date: $('#sa_start_date').val(),
-            end_date: $('#sa_end_date').val(),
-            shops: $('#sa_shops').val()
-        };
+            end_date: $('#sa_end_date').val()
+        });
 
         $.get('{{ route("dashboard.shop-performance") }}', filters, function(res) {
             if (!res || !Array.isArray(res.shops)) return;
@@ -1564,12 +1576,11 @@
     }
 
     function fetchInsights() {
-        var filters = {
+        var filters = mergeSaKpiShopParams({
             date_filter: $('#sa_date_range').val(),
             start_date: $('#sa_start_date').val(),
-            end_date: $('#sa_end_date').val(),
-            shops: $('#sa_shops').val()
-        };
+            end_date: $('#sa_end_date').val()
+        });
 
         $.get('{{ route("dashboard.insights") }}', filters, function(data) {
             if (!data) return;
@@ -1674,12 +1685,11 @@
 
     function fetchBusinessPulse() {
         var params = getFilterParams();
-        var filters = {
+        var filters = mergeSaKpiShopParams({
             date_filter: params.date_filter,
             start_date: params.start_date,
-            end_date: params.end_date,
-            shops: $('#sa_shops').val()
-        };
+            end_date: params.end_date
+        });
 
         $.get('{{ route("dashboard.business-pulse") }}', filters, function(data) {
             if (!data) return;
@@ -1761,12 +1771,11 @@
     }
 
     function fetchInventorySnapshot() {
-        var filters = {
+        var filters = mergeSaKpiShopParams({
             date_filter: $('#sa_date_range').val(),
             start_date: $('#sa_start_date').val(),
-            end_date: $('#sa_end_date').val(),
-            shops: $('#sa_shops').val()
-        };
+            end_date: $('#sa_end_date').val()
+        });
         $.get('{{ route("dashboard.inventory-snapshot") }}', filters, function(res) {
             if (!res || !Array.isArray(res.shops)) return;
             res.shops.forEach(function(shop) {
