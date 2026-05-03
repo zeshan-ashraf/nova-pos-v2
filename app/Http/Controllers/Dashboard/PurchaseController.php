@@ -13,6 +13,7 @@ use App\Models\StockLog;
 use App\Models\Supplier;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Dashboard\Traits\ReportTrait;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
@@ -28,12 +29,15 @@ use App\Services\Purchase\PurchaseUpdateService;
 
 class PurchaseController extends Controller
 {
+    use ReportTrait;
+
     /**
      * Display a listing of purchases.
+     * Filters: date (default all), supplier, product (line items), purchase invoice no; same filter card pattern as orders/all.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $row = (int) request('row', 50);
+        $row = (int) $request->input('row', 50);
 
         if ($row < 1 || $row > 100) {
             abort(400, 'The per-page parameter must be an integer between 1 and 100.');
@@ -42,20 +46,63 @@ class PurchaseController extends Controller
         $authUser = auth()->user();
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
 
-        $search = request('search');
+        $dateFilter = $request->input('date_filter', 'all');
+        if ($dateFilter !== 'all') {
+            $dateRange = $this->getDateRange($request);
+        } else {
+            $dateRange = [
+                'date_filter' => 'all',
+                'start_date' => '',
+                'end_date' => '',
+                'start_datetime' => null,
+                'end_datetime' => null,
+            ];
+        }
+
         $purchasesQuery = Purchase::with(['supplier', 'shop.parent'])
             ->withSum('activities', 'activity_cost')
-            ->sortable()
-            ->when($search, function ($query, $search) {
-                return $query->where('purchase_no', 'like', '%' . $search . '%')
-                             ->orWhereHas('supplier', function($query) use ($search) {
-                                 $query->where('name', 'like', '%' . $search . '%')
-                                       ->orWhere('shopname', 'like', '%' . $search . '%');
-                             })
-                             ->orWhere('purchase_date', 'like', '%' . $search . '%')
-                             ->orWhere('pay', 'like', '%' . $search . '%')
-                             ->orWhere('payment_status', 'like', '%' . $search . '%');
+            ->sortable();
+
+        if ($dateFilter !== 'all' && isset($dateRange['start_datetime'], $dateRange['end_datetime'])) {
+            $purchasesQuery->whereBetween('purchase_date', [
+                $dateRange['start_datetime'],
+                $dateRange['end_datetime'],
+            ]);
+        }
+
+        if ($request->filled('purchase_invoice_no')) {
+            $purchasesQuery->where('purchase_no', 'like', '%' . $request->input('purchase_invoice_no') . '%');
+        }
+
+        if ($request->filled('supplier_id')) {
+            $supplierId = (int) $request->input('supplier_id');
+            if ($this->supplierVisibleForPurchasesList($authUser, $visibleShopIds, $supplierId)) {
+                $purchasesQuery->where('supplier_id', $supplierId);
+            }
+        }
+
+        $selectedProduct = null;
+        if ($request->filled('product_id')) {
+            $productId = (int) $request->input('product_id');
+            $purchasesQuery->whereHas('purchaseDetails', function ($q) use ($productId) {
+                $q->where('product_id', $productId);
             });
+            $selectedProduct = Product::withoutGlobalScope('shop')->find($productId);
+        }
+
+        $search = $request->input('search');
+        if ($search !== null && $search !== '') {
+            $purchasesQuery->where(function ($query) use ($search) {
+                $query->where('purchase_no', 'like', '%' . $search . '%')
+                    ->orWhereHas('supplier', function ($q) use ($search) {
+                        $q->where('name', 'like', '%' . $search . '%')
+                            ->orWhere('shopname', 'like', '%' . $search . '%');
+                    })
+                    ->orWhere('purchase_date', 'like', '%' . $search . '%')
+                    ->orWhere('pay', 'like', '%' . $search . '%')
+                    ->orWhere('payment_status', 'like', '%' . $search . '%');
+            });
+        }
 
         // Apply shop filtering
         if ($authUser->shop_id) {
@@ -69,14 +116,78 @@ class PurchaseController extends Controller
             });
         }
 
-        // Apply default ordering by id DESC if no sort is specified
-        if (!request()->has('sort')) {
+        if (! $request->has('sort')) {
             $purchasesQuery->orderBy('id', 'desc');
         }
 
+        $statsBase = (clone $purchasesQuery)->reorder();
+        $totalPurchases = (int) (clone $statsBase)->count();
+        $totalAmount = (float) (clone $statsBase)->sum('total');
+        $largestPurchase = (float) ((clone $statsBase)->max('total') ?? 0);
+        $avgPurchaseValue = $totalPurchases > 0 ? $totalAmount / $totalPurchases : 0.0;
+
+        $purchaseStats = [
+            'total_purchases' => $totalPurchases,
+            'total_amount' => $totalAmount,
+            'avg_purchase_value' => $avgPurchaseValue,
+            'largest_purchase' => $largestPurchase,
+        ];
+
+        $suppliers = $this->suppliersForPurchasesFilter($authUser, $visibleShopIds);
+
         return view('purchases.index', [
-            'purchases' => $purchasesQuery->paginate($row)->appends(request()->query())
+            'purchases' => $purchasesQuery->paginate($row)->withQueryString(),
+            'dateRange' => $dateRange,
+            'suppliers' => $suppliers,
+            'selectedProduct' => $selectedProduct,
+            'purchaseStats' => $purchaseStats,
         ]);
+    }
+
+    /**
+     * Suppliers allowed in the purchases list filter (same shop visibility as purchases).
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, \App\Models\Supplier>
+     */
+    private function suppliersForPurchasesFilter($authUser, $visibleShopIds)
+    {
+        $q = Supplier::withoutGlobalScope('shop');
+        if ($authUser->shop_id) {
+            if ($visibleShopIds->isEmpty()) {
+                $q->whereRaw('1 = 0');
+            } else {
+                $q->whereIn('shop_id', $visibleShopIds->all());
+            }
+        } else {
+            $q->where(function ($sub) use ($visibleShopIds) {
+                $sub->whereNull('shop_id');
+                if ($visibleShopIds->isNotEmpty()) {
+                    $sub->orWhereIn('shop_id', $visibleShopIds->all());
+                }
+            });
+        }
+
+        return $q->orderBy('shopname')->orderBy('name')->get(['id', 'name', 'shopname']);
+    }
+
+    private function supplierVisibleForPurchasesList($authUser, $visibleShopIds, int $supplierId): bool
+    {
+        $q = Supplier::withoutGlobalScope('shop')->whereKey($supplierId);
+        if ($authUser->shop_id) {
+            if ($visibleShopIds->isEmpty()) {
+                return false;
+            }
+            $q->whereIn('shop_id', $visibleShopIds->all());
+        } else {
+            $q->where(function ($sub) use ($visibleShopIds) {
+                $sub->whereNull('shop_id');
+                if ($visibleShopIds->isNotEmpty()) {
+                    $sub->orWhereIn('shop_id', $visibleShopIds->all());
+                }
+            });
+        }
+
+        return $q->exists();
     }
 
     /**
@@ -507,6 +618,18 @@ class PurchaseController extends Controller
     /**
      * Return purchase detail HTML for modal (e.g. supplier ledger). Uses same partial as show() so both stay in sync.
      */
+    /**
+     * HTML fragment for the purchases list right drawer (same panel pattern as orders list).
+     */
+    public function drawer(int $purchase_id)
+    {
+        $purchase = Purchase::with(['supplier', 'purchaseDetails.product'])
+            ->findOrFail($purchase_id);
+        $this->ensureShopAccess($purchase);
+
+        return view('purchases.partials.drawer', compact('purchase'));
+    }
+
     public function showContent(int $purchase_id)
     {
         $purchase = Purchase::with(['supplier', 'shop.banks'])->findOrFail($purchase_id);

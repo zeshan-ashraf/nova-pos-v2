@@ -263,6 +263,7 @@ Route::middleware(['permission:purchases.menu'])->group(function () {
     Route::get('/purchases/pending', [PurchaseController::class, 'pending'])->name('purchases.pending');
     Route::get('/purchases/complete', [PurchaseController::class, 'complete'])->name('purchases.complete');
     Route::get('/purchases/{purchase_id}/content', [PurchaseController::class, 'showContent'])->name('purchases.showContent');
+    Route::get('/purchases/{purchase_id}/drawer', [PurchaseController::class, 'drawer'])->name('purchases.drawer');
     Route::get('/purchases/{purchase_id}/edit', [PurchaseController::class, 'edit'])->name('purchases.edit');
     Route::put('/purchases/{purchase_id}', [PurchaseController::class, 'update'])->name('purchases.update');
     Route::get('/purchases/{purchase_id}', [PurchaseController::class, 'show'])->name('purchases.show');

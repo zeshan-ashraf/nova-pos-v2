@@ -711,7 +711,8 @@
                             <td>
                                 <a href="javascript:void(0)"
                                    class="open-order-drawer text-primary fw-bold"
-                                   data-id="{{ $order->id }}">
+                                   data-id="{{ $order->id }}"
+                                   data-label="{{ e($order->invoice_no ? '#' . $order->invoice_no : '#' . $order->id) }}">
                                    {{ $order->invoice_no ? '#' . $order->invoice_no : '#' . $order->id }}
                                 </a>
                             </td>
@@ -802,7 +803,7 @@
 <div id="orderDrawer" class="order-drawer" aria-hidden="true">
     <div class="order-drawer-header">
         <div class="order-drawer-header-spacer" aria-hidden="true"></div>
-        <h5 id="orderDrawerTitle" class="order-drawer-header-title">Order Details</h5>
+        <h5 id="orderDrawerTitle" class="order-drawer-header-title">Order details</h5>
         <button id="closeDrawer" class="order-drawer-close" type="button" aria-label="Close drawer">&times;</button>
     </div>
     <div id="drawerContent" class="order-drawer-body">
@@ -976,7 +977,7 @@ function formatCurrency(amount) {
             $('#orderDrawerBackdrop').removeClass('d-none');
             $('#orderDrawer').addClass('open').attr('aria-hidden', 'false');
             $('body').addClass('overflow-hidden');
-            $('#orderDrawerTitle').text(invoiceLabel ? ('Order Details - ' + invoiceLabel) : 'Order Details');
+            $('#orderDrawerTitle').text(invoiceLabel ? String(invoiceLabel) : 'Order details');
             $('#drawerContent').html('<p class="text-muted mb-0">Loading...</p>');
 
             var drawerUrl = drawerRouteTemplate.replace('__ORDER_ID__', orderId);
@@ -995,12 +996,12 @@ function formatCurrency(amount) {
             $('#orderDrawer').removeClass('open').attr('aria-hidden', 'true');
             $('#orderDrawerBackdrop').addClass('d-none');
             $('body').removeClass('overflow-hidden');
-            $('#orderDrawerTitle').text('Order Details');
+            $('#orderDrawerTitle').text('Order details');
         }
 
         $(document).on('click', '.open-order-drawer', function () {
             var orderId = $(this).data('id');
-            var invoiceLabel = $.trim($(this).text());
+            var invoiceLabel = $(this).data('label') || $.trim($(this).text());
             if (!orderId) return;
             openOrderDrawer(orderId, invoiceLabel);
         });
