@@ -95,7 +95,13 @@
             <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 pl-report-header">
                 <div>
                     <h4 class="mb-1 pl-report-title">Profit & Loss Report</h4>
-                    <p class="mb-0 text-muted small pl-report-period">{{ $dateRange['start_date'] ?? '' }} to {{ $dateRange['end_date'] ?? '' }}</p>
+                    <p class="mb-0 text-muted small pl-report-period">
+                        @if(($dateRange['date_filter'] ?? '') === 'all')
+                            All dates
+                        @else
+                            {{ $dateRange['start_date'] ?? '' }} to {{ $dateRange['end_date'] ?? '' }}
+                        @endif
+                    </p>
                 </div>
                 <div>
                     <a href="{{ route('reports.financial.profit-loss-line-detail', request()->only(['date_filter', 'start_date', 'end_date', 'shop_id'])) }}" class="btn btn-outline-primary btn-sm mr-2">View line-level detail</a>
@@ -115,6 +121,7 @@
                         <div class="col-md-3">
                             <label for="date_filter" class="form-label small">Date Filter</label>
                             <select class="form-control form-control-sm" name="date_filter" id="date_filter" onchange="toggleCustomDates()">
+                                <option value="all" {{ ($dateRange['date_filter'] ?? '') == 'all' ? 'selected' : '' }}>All</option>
                                 <option value="today" {{ ($dateRange['date_filter'] ?? '') == 'today' ? 'selected' : '' }}>Today</option>
                                 <option value="yesterday" {{ ($dateRange['date_filter'] ?? '') == 'yesterday' ? 'selected' : '' }}>Yesterday</option>
                                 <option value="this_week" {{ ($dateRange['date_filter'] ?? '') == 'this_week' ? 'selected' : '' }}>This Week</option>

@@ -448,8 +448,10 @@
                                             <span class="stock-label stock-display" data-row="0">0</span>
                                             <input type="hidden" class="stock-value" name="products[0][stock]" value="0">
                                         </td>
-                                        <td>
+                                        <td class="unit-price-cell">
+                                            <input type="hidden" class="row-buying-price" value="" autocomplete="off">
                                             <input type="number" step="0.01" class="form-control unit-price" name="products[0][unit_price]" value="0" data-row="0" min="0">
+                                            <div class="text-danger small unit-price-buying-feedback mt-1" style="display: none;" data-row="0" role="alert"></div>
                                         </td>
                                         <td>
                                             <span class="total-display" data-row="0">0.00</span>
@@ -753,10 +755,14 @@
             $productIdToCode = collect($products ?? [])->keyBy('id')->map(function ($p) {
                 return $p->product_code ?? '';
             })->toArray();
+            $productIdToBuyingPrice = collect($products ?? [])->keyBy('id')->map(function ($p) {
+                return $p->buying_price;
+            })->toArray();
         @endphp
         var invoiceOldInput = @json($invoiceOldInput);
         var productIdToText = @json($productIdToText);
         var productIdToCode = @json($productIdToCode);
+        var productIdToBuyingPrice = @json($productIdToBuyingPrice);
 
         @if(!empty($isEdit) && !empty($order))
         @php
@@ -784,6 +790,7 @@
                         'product_name' => $p ? $p->product_name : '',
                         'product_code' => $p ? ($p->product_code ?? '') : '',
                         'product_store' => $p ? ($p->product_store ?? 0) : 0,
+                        'buying_price' => $p ? $p->buying_price : null,
                     ];
                 })->values()->all() : [],
             ];
@@ -862,6 +869,10 @@
             return false;
         }
 
+        if (!validateInvoiceAllUnitPricesVsBuying()) {
+            return false;
+        }
+
         // Check HTML5 validation first and log which fields are invalid
         if (!$invoiceForm[0].checkValidity()) {
             console.log('HTML5 validation failed');
@@ -934,6 +945,83 @@
             }, 1000);
         });
 
+    /**
+     * Buying price (cost) from product row for invoice validation.
+     * Empty / invalid means the product cannot be invoiced until cost is set.
+     */
+    function normalizeInvoiceBuyingPriceForRow(raw) {
+        if (raw === undefined || raw === null || raw === '') {
+            return null;
+        }
+        var n = parseFloat(raw);
+        if (Number.isNaN(n) || n <= 0) {
+            return null;
+        }
+        return n;
+    }
+
+    function syncRowBuyingPriceHidden($row, rawBuyingPrice) {
+        var n = normalizeInvoiceBuyingPriceForRow(rawBuyingPrice);
+        $row.find('.row-buying-price').val(n === null ? '' : String(n));
+    }
+
+    function clearInvoiceRowUnitPriceBuyingFeedback($row) {
+        $row.find('.unit-price').removeClass('is-invalid');
+        $row.find('.unit-price-buying-feedback').hide().text('');
+    }
+
+    function setInvoiceRowUnitPriceBuyingError($row, message) {
+        $row.find('.unit-price').addClass('is-invalid');
+        $row.find('.unit-price-buying-feedback').text(message || '').show();
+    }
+
+    /**
+     * Live check: unit price must be strictly greater than buying_price; buying_price must be valid (> 0).
+     */
+    function validateInvoiceRowUnitPriceVsBuying($row) {
+        var productId = ($row.find('.product-select').val() || '').toString().trim();
+        if (!productId) {
+            clearInvoiceRowUnitPriceBuyingFeedback($row);
+            return true;
+        }
+        var cost = normalizeInvoiceBuyingPriceForRow($row.find('.row-buying-price').val());
+        var unitRaw = ($row.find('.unit-price').val() || '').toString().trim();
+        var unit = unitRaw === '' ? NaN : parseFloat(unitRaw);
+        if (unitRaw === '' || Number.isNaN(unit)) {
+            clearInvoiceRowUnitPriceBuyingFeedback($row);
+            return true;
+        }
+        if (cost === null) {
+            setInvoiceRowUnitPriceBuyingError($row, 'This product has no valid buying price (cost). Set buying price on the product before invoicing.');
+            return false;
+        }
+        if (unit <= cost) {
+            setInvoiceRowUnitPriceBuyingError($row, 'Unit price must be greater than the product buying price (cost).');
+            return false;
+        }
+        clearInvoiceRowUnitPriceBuyingFeedback($row);
+        return true;
+    }
+
+    function validateInvoiceAllUnitPricesVsBuying() {
+        var firstBad = null;
+        $('#productTableBody tr.product-row').each(function() {
+            var $row = $(this);
+            var productId = ($row.find('.product-select').val() || '').toString().trim();
+            if (!productId) {
+                return;
+            }
+            if (!validateInvoiceRowUnitPriceVsBuying($row) && !firstBad) {
+                firstBad = $row.find('.unit-price').get(0);
+            }
+        });
+        if (firstBad) {
+            firstBad.focus();
+            return false;
+        }
+        return true;
+    }
+
     // Initialize Select2 on existing product selects
     function initializeSelect2($select) {
         const rowIndex = $select.data('row');
@@ -961,6 +1049,7 @@
                                 text: item.text,
                                 name: item.name,
                                 price: item.price,
+                                buying_price: item.buying_price,
                                 stock: item.stock,
                                 code: item.code
                             };
@@ -1008,6 +1097,7 @@
             
             $row.find('.original-price').val(data.price || 0);
             $row.find('.unit-price').val(data.price || 0);
+            syncRowBuyingPriceHidden($row, data.buying_price);
             var stockVal = data.stock != null && data.stock !== '' ? data.stock : 0;
             $row.find('.stock-display').text(stockVal);
             $row.find('.stock-value').val(stockVal);
@@ -1018,6 +1108,7 @@
             console.log('Product selected - Row:', rowIdx, 'Product ID:', data.id, 'Select value:', $selectElement.val());
             
             calculateRowTotal(rowIdx);
+            validateInvoiceRowUnitPriceVsBuying($row);
         });
 
         // Handle clear selection
@@ -1027,11 +1118,13 @@
             
             $row.find('.original-price').val(0);
             $row.find('.unit-price').val(0);
+            syncRowBuyingPriceHidden($row, null);
             $row.find('.stock-display').text(0);
             $row.find('.stock-value').val(0);
             $row.find('.product-code-display').text('-');
             
             calculateRowTotal(rowIdx);
+            clearInvoiceRowUnitPriceBuyingFeedback($row);
         });
 
     }
@@ -1167,6 +1260,10 @@
                     var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
                     $row.find('.stock-display').text(stock);
                     $row.find('.stock-value').val(stock);
+                    var bp = (typeof productIdToBuyingPrice !== 'undefined' && productIdToBuyingPrice && Object.prototype.hasOwnProperty.call(productIdToBuyingPrice, pid))
+                        ? productIdToBuyingPrice[pid] : null;
+                    syncRowBuyingPriceHidden($row, bp);
+                    validateInvoiceRowUnitPriceVsBuying($row);
                 }
             }
             calculateInvoiceTotal();
@@ -1242,6 +1339,8 @@
                         $row.find('.total-display').text(parseFloat(p.total || 0).toFixed(2));
                         $row.find('.stock-display').text(p.product_store != null ? p.product_store : 0);
                         $row.find('.stock-value').val(p.product_store != null ? p.product_store : 0);
+                        syncRowBuyingPriceHidden($row, p.buying_price);
+                        validateInvoiceRowUnitPriceVsBuying($row);
                     }
                 }
                 if (typeof calculateInvoiceTotal === 'function') calculateInvoiceTotal();
@@ -1287,7 +1386,7 @@
         }
     }
 
-    // Remove error highlight when user selects a product in that row
+    // Remove error highlight when user selects a product in that row (buying vs unit price is handled in Select2 handlers)
     $(document).on('change', '.product-select', function() {
         $(this).closest('tr.product-row').removeClass('product-row-error');
     });
@@ -1325,9 +1424,11 @@
 
     // Handle unit price change
     $(document).on('input', '.unit-price', function() {
-        $(this).removeClass('is-invalid').closest('tr.product-row').removeClass('product-row-error');
+        var $row = $(this).closest('tr.product-row');
+        $(this).closest('tr.product-row').removeClass('product-row-error');
         const rowIndex = $(this).data('row');
         calculateRowTotal(rowIndex);
+        validateInvoiceRowUnitPriceVsBuying($row);
     });
 
     /**
@@ -1378,6 +1479,7 @@
         $rows.removeClass('product-row-error');
         $rows.find('.unit-price, .quantity').removeClass('is-invalid');
         $rows.find('.product-select').removeClass('is-invalid');
+        $rows.find('.unit-price-buying-feedback').hide().text('');
 
         $rows.each(function() {
             const $row = $(this);
@@ -1856,8 +1958,10 @@
                     <span class="stock-label stock-display" data-row="${rowCount}">0</span>
                     <input type="hidden" class="stock-value" name="products[${rowCount}][stock]" value="0">
                 </td>
-                <td>
+                <td class="unit-price-cell">
+                    <input type="hidden" class="row-buying-price" value="" autocomplete="off">
                     <input type="number" step="0.01" class="form-control unit-price" name="products[${rowCount}][unit_price]" value="0" data-row="${rowCount}" min="0">
+                    <div class="text-danger small unit-price-buying-feedback mt-1" style="display: none;" data-row="${rowCount}" role="alert"></div>
                 </td>
                 <td>
                     <span class="total-display" data-row="${rowCount}">0.00</span>
@@ -1961,6 +2065,11 @@
         }
 
         if (!validateInvoiceProductRowsStrict()) {
+            e.preventDefault();
+            return false;
+        }
+
+        if (!validateInvoiceAllUnitPricesVsBuying()) {
             e.preventDefault();
             return false;
         }
@@ -2075,6 +2184,10 @@
             }
 
             if (!validateInvoiceProductRowsStrict()) {
+                return false;
+            }
+
+            if (!validateInvoiceAllUnitPricesVsBuying()) {
                 return false;
             }
 

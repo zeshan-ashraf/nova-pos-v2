@@ -172,11 +172,13 @@ class FinancialReportController extends Controller
     public function profitLoss(Request $request)
     {
         $authUser = auth()->user();
+        $request->mergeIfMissing('date_filter', 'all');
         $dateRange = $this->getDateRange($request);
         $shopFilter = $this->getShopFilter($request, $authUser);
 
         $start = $dateRange['start_datetime'];
         $end = $dateRange['end_datetime'];
+        $dateScoped = $start !== null && $end !== null;
 
         // 1) Sales, COGS — single query (orders + order_details), one row per line, no duplicate inflation
         $salesCogsQuery = Order::query()
@@ -184,7 +186,7 @@ class FinancialReportController extends Controller
                 $join->on('orders.id', '=', 'order_details.order_id')
                     ->whereNull('order_details.deleted_at');
             })
-            ->whereBetween('orders.order_date', [$start, $end])
+            ->when($dateScoped, fn ($q) => $q->whereBetween('orders.order_date', [$start, $end]))
             ->selectRaw("
                 SUM(order_details.unitcost * order_details.quantity) AS total_sales,
                 SUM(order_details.quantity * COALESCE(order_details.cost_per_unit, 0)) AS cogs
@@ -212,7 +214,9 @@ class FinancialReportController extends Controller
             // Keep current LEFT JOIN behavior for unmatched activity rows (shown as Uncategorized).
             ->whereNull('activities.purchase_id');
         $this->applyShopFilter($expensesQuery, $shopFilter['shop_ids'], 'account_transactions.shop_id');
-        $expensesQuery->whereBetween('account_transactions.transaction_date', [$start, $end]);
+        if ($dateScoped) {
+            $expensesQuery->whereBetween('account_transactions.transaction_date', [$start, $end]);
+        }
         $expenseRows = $expensesQuery
             ->select(
                 'account_transactions.id',
@@ -269,11 +273,13 @@ class FinancialReportController extends Controller
     public function profitLossLineDetail(Request $request)
     {
         $authUser = auth()->user();
+        $request->mergeIfMissing('date_filter', 'all');
         $dateRange = $this->getDateRange($request);
         $shopFilter = $this->getShopFilter($request, $authUser);
 
         $start = $dateRange['start_datetime'];
         $end = $dateRange['end_datetime'];
+        $dateScoped = $start !== null && $end !== null;
 
         $query = Order::query()
             ->join('order_details', function ($join) {
@@ -281,7 +287,7 @@ class FinancialReportController extends Controller
                     ->whereNull('order_details.deleted_at');
             })
             ->join('products', 'order_details.product_id', '=', 'products.id')
-            ->whereBetween('orders.order_date', [$start, $end])
+            ->when($dateScoped, fn ($q) => $q->whereBetween('orders.order_date', [$start, $end]))
             ->select(
                 'orders.id as order_id',
                 'orders.invoice_no',

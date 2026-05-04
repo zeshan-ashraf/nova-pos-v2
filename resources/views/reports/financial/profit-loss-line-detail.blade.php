@@ -33,7 +33,13 @@
             <div class="d-flex flex-wrap align-items-center justify-content-between mb-4">
                 <div>
                     <h4 class="mb-1">P&amp;L Line Detail (Sales &amp; COGS)</h4>
-                    <p class="mb-0 text-muted small">{{ $dateRange['start_date'] ?? '' }} to {{ $dateRange['end_date'] ?? '' }}</p>
+                    <p class="mb-0 text-muted small">
+                        @if(($dateRange['date_filter'] ?? '') === 'all')
+                            All dates
+                        @else
+                            {{ $dateRange['start_date'] ?? '' }} to {{ $dateRange['end_date'] ?? '' }}
+                        @endif
+                    </p>
                 </div>
                 <div>
                     <a href="{{ route('reports.financial.profit-loss', request()->only(['date_filter', 'start_date', 'end_date', 'shop_id'])) }}" class="btn btn-secondary btn-sm">Back to P&amp;L Report</a>

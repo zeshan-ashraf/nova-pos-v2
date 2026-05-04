@@ -1487,11 +1487,15 @@ class OrderController extends Controller
                 $displayText = $productCode ? $productCode . ' - ' . $product->product_name : $product->product_name;
                 // When selling_price is null, populate 0 as unit price for selection
                 $unitPrice = $product->selling_price !== null && $product->selling_price !== '' ? (float) $product->selling_price : 0;
+                $buyingPrice = $product->buying_price;
+                $buyingPrice = ($buyingPrice !== null && $buyingPrice !== '') ? (float) $buyingPrice : null;
+
                 return [
                     'id' => $product->id,
                     'text' => $displayText,
                     'name' => $product->product_name,
                     'price' => $unitPrice,
+                    'buying_price' => $buyingPrice,
                     'stock' => $product->product_store ?? 0,
                     'code' => $productCode,
                 ];
@@ -1619,7 +1623,18 @@ class OrderController extends Controller
         try {
             $validator = Validator::make($request->all(), $rules);
             $validator->after(function ($validator) use ($request) {
-                foreach ($request->input('products', []) as $i => $product) {
+                $productsInput = $request->input('products', []);
+                $productIds = collect($productsInput)
+                    ->pluck('product_id')
+                    ->filter(fn ($id) => $id !== null && $id !== '' && (int) $id > 0)
+                    ->map(fn ($id) => (int) $id)
+                    ->unique()
+                    ->values();
+                $productsById = $productIds->isNotEmpty()
+                    ? Product::whereIn('id', $productIds)->get()->keyBy('id')
+                    : collect();
+
+                foreach ($productsInput as $i => $product) {
                     $pid = $product['product_id'] ?? null;
                     if ($pid === null || $pid === '' || (int) $pid <= 0) {
                         continue;
@@ -1629,6 +1644,36 @@ class OrderController extends Controller
                         $validator->errors()->add(
                             "products.$i.unit_price",
                             'Unit price must be greater than zero for each selected product.'
+                        );
+
+                        continue;
+                    }
+
+                    $productModel = $productsById->get((int) $pid);
+                    if (! $productModel) {
+                        $validator->errors()->add(
+                            "products.$i.product_id",
+                            'Selected product could not be found.'
+                        );
+
+                        continue;
+                    }
+
+                    $buying = $productModel->buying_price;
+                    if ($buying === null || $buying === '' || (float) $buying <= 0) {
+                        $validator->errors()->add(
+                            "products.$i.unit_price",
+                            'This product has no valid buying price (cost). Set buying price on the product before invoicing.'
+                        );
+
+                        continue;
+                    }
+
+                    $buyingF = (float) $buying;
+                    if ($unit <= $buyingF) {
+                        $validator->errors()->add(
+                            "products.$i.unit_price",
+                            'Unit price must be greater than the product buying price (cost).'
                         );
                     }
                 }
