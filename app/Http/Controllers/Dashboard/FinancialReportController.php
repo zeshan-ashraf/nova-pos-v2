@@ -172,7 +172,7 @@ class FinancialReportController extends Controller
     public function profitLoss(Request $request)
     {
         $authUser = auth()->user();
-        $request->mergeIfMissing('date_filter', 'all');
+        $request->mergeIfMissing(['date_filter' => 'all']);
         $dateRange = $this->getDateRange($request);
         $shopFilter = $this->getShopFilter($request, $authUser);
 
@@ -273,7 +273,7 @@ class FinancialReportController extends Controller
     public function profitLossLineDetail(Request $request)
     {
         $authUser = auth()->user();
-        $request->mergeIfMissing('date_filter', 'all');
+        $request->mergeIfMissing(['date_filter' => 'all']);
         $dateRange = $this->getDateRange($request);
         $shopFilter = $this->getShopFilter($request, $authUser);
 

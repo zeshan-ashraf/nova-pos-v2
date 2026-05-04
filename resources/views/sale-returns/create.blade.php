@@ -1,7 +1,8 @@
 @extends('dashboard.body.main')
 
 @section('specificpagestyles')
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
     <style>
         .return-form-container {
             background: #fff;
@@ -91,6 +92,9 @@
         #orderDetailsTable {
             display: none;
         }
+        #order_select + .select2-container {
+            width: 100% !important;
+        }
     </style>
 @endsection
 
@@ -159,9 +163,10 @@
                             <div class="col-md-6">
                                 <div class="form-group">
                                     <label for="order_select">Invoice/Order <span class="text-danger">*</span></label>
-                                    <select class="form-control" id="order_select" name="order_select" required disabled>
-                                        <option value="">Select Customer First</option>
+                                    <select class="form-control" id="order_select" data-placeholder="Type to search invoice…">
+                                        <option value=""></option>
                                     </select>
+                                    <small class="form-text text-muted">All invoices are loaded here; type to filter. Pick a customer to narrow the list.</small>
                                 </div>
                             </div>
                         </div>
@@ -277,11 +282,62 @@
 @endsection
 
 @section('specificpagescripts')
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 (function($) {
     'use strict';
+
+    window.SALE_RETURN_ORDERS = @json($invoiceOrdersForJs ?? []);
     
     $(document).ready(function() {
+        var syncingCustomerFromOrder = false;
+
+        function getOrdersForInvoiceSelect(customerId) {
+            var all = window.SALE_RETURN_ORDERS || [];
+            if (!customerId) {
+                return all;
+            }
+            return all.filter(function (o) {
+                return String(o.customer_id) === String(customerId);
+            });
+        }
+
+        function rebuildInvoiceOrderSelect(customerId, preserveOrderId) {
+            var $sel = $('#order_select');
+            if ($sel.data('select2')) {
+                $sel.select2('destroy');
+            }
+            var list = getOrdersForInvoiceSelect(customerId || '');
+            $sel.empty();
+            $sel.append(new Option('', '', false, false));
+            list.forEach(function (o) {
+                var opt = new Option(o.option_text, String(o.id), false, false);
+                opt.setAttribute('data-invoice', o.invoice_no || '');
+                opt.setAttribute('data-date', o.order_date || '');
+                opt.setAttribute('data-total', o.total);
+                opt.setAttribute('data-pay', o.pay);
+                opt.setAttribute('data-due', o.due);
+                if (o.customer_id != null) {
+                    opt.setAttribute('data-customer-id', o.customer_id);
+                }
+                $sel.append(opt);
+            });
+            $sel.select2({
+                theme: 'bootstrap-5',
+                placeholder: customerId ? 'Type to search invoices for this customer…' : 'Type to search invoice…',
+                allowClear: true,
+                width: '100%',
+            });
+            var keep = preserveOrderId ? String(preserveOrderId) : '';
+            if (keep && $sel.find('option[value="' + keep + '"]').length) {
+                $sel.val(keep).trigger('change');
+            } else {
+                $sel.val(null).trigger('change');
+            }
+        }
+
+        rebuildInvoiceOrderSelect('', null);
+
         // Initialize return date with current date/time
         const now = new Date();
         const year = now.getFullYear();
@@ -292,45 +348,17 @@
         const formattedDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
         $('#return_date').val(formattedDateTime);
 
-        // Load orders when customer is selected
+        // Narrow invoice list when customer is chosen (all invoices stay available if customer is empty)
         $('#customer_id').on('change', function() {
+            if (syncingCustomerFromOrder) {
+                return;
+            }
             const customerId = $(this).val();
-            $('#order_select').html('<option value="">Loading...</option>').prop('disabled', true);
             $('#orderInfo').hide();
             $('#orderDetailsTable').hide();
             $('#returnSummary').hide();
             $('#createReturnBtn').prop('disabled', true);
-            
-            if (!customerId) {
-                $('#order_select').html('<option value="">Select Customer First</option>').prop('disabled', true);
-                return;
-            }
-
-            $.ajax({
-                url: `/sale-returns/customer/${customerId}/orders`,
-                method: 'GET',
-                success: function(response) {
-                    let options = '<option value="">Select Invoice/Order</option>';
-                    if (response.orders && response.orders.length > 0) {
-                        response.orders.forEach(function(order) {
-                            options += `<option value="${order.id}" 
-                                data-invoice="${order.invoice_no}" 
-                                data-date="${order.order_date}" 
-                                data-total="${order.total}" 
-                                data-pay="${order.pay}" 
-                                data-due="${order.due}">
-                                ${order.invoice_no} - ${order.order_date} (Total: ${order.total})
-                            </option>`;
-                        });
-                    } else {
-                        options = '<option value="">No orders found for this customer</option>';
-                    }
-                    $('#order_select').html(options).prop('disabled', false);
-                },
-                error: function() {
-                    $('#order_select').html('<option value="">Error loading orders</option>').prop('disabled', true);
-                }
-            });
+            rebuildInvoiceOrderSelect(customerId, null);
         });
 
         // Load order details when order is selected
@@ -339,10 +367,21 @@
             const selectedOption = $(this).find('option:selected');
             
             if (!orderId) {
+                $('#order_id').val('');
                 $('#orderInfo').hide();
                 $('#orderDetailsTable').hide();
                 $('#returnSummary').hide();
                 $('#createReturnBtn').prop('disabled', true);
+                return;
+            }
+
+            var custFromOrder = selectedOption.data('customer-id');
+            if (custFromOrder != null && custFromOrder !== '' &&
+                String($('#customer_id').val() || '') !== String(custFromOrder)) {
+                syncingCustomerFromOrder = true;
+                $('#customer_id').val(String(custFromOrder));
+                syncingCustomerFromOrder = false;
+                rebuildInvoiceOrderSelect(String(custFromOrder), orderId);
                 return;
             }
 

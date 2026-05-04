@@ -88,8 +88,55 @@ class SaleReturnController extends Controller
             });
         }
 
+        $invoiceOrdersQuery = Order::query()
+            ->with(['customer:id,name,shopname'])
+            ->orderBy('order_date', 'desc')
+            ->orderBy('id', 'desc');
+
+        if ($authUser->shop_id) {
+            $invoiceOrdersQuery->whereIn('shop_id', $visibleShopIds);
+        } else {
+            $invoiceOrdersQuery->where(function ($query) use ($visibleShopIds) {
+                $query->whereNull('shop_id');
+                if ($visibleShopIds->isNotEmpty()) {
+                    $query->orWhereIn('shop_id', $visibleShopIds);
+                }
+            });
+        }
+
+        $invoiceOrdersForJs = $invoiceOrdersQuery->get()->map(function (Order $order) {
+            $customer = $order->customer;
+            $custLabel = $customer ? trim((string) ($customer->shopname ?: $customer->name ?: '')) : '';
+            $inv = $order->invoice_no ?: ('#'.$order->id);
+            $dateStr = $order->order_date
+                ? Carbon::parse($order->order_date)->format('Y-m-d H:i')
+                : '';
+            $dateShort = $order->order_date
+                ? Carbon::parse($order->order_date)->format('Y-m-d')
+                : '';
+            $total = (float) ($order->total ?? 0);
+            $optionParts = array_values(array_filter([
+                $inv,
+                $custLabel !== '' ? $custLabel : null,
+                $dateShort !== '' ? $dateShort : null,
+                'Total: '.number_format($total, 2),
+            ]));
+
+            return [
+                'id' => $order->id,
+                'customer_id' => $order->customer_id,
+                'invoice_no' => $order->invoice_no ?? '',
+                'order_date' => $dateStr,
+                'total' => (float) ($order->total ?? 0),
+                'pay' => (float) ($order->pay ?? 0),
+                'due' => (float) ($order->due ?? 0),
+                'option_text' => implode(' — ', $optionParts),
+            ];
+        })->values()->all();
+
         return view('sale-returns.create', [
             'customers' => $customersQuery->orderBy('shopname')->get(),
+            'invoiceOrdersForJs' => $invoiceOrdersForJs,
         ]);
     }
 
