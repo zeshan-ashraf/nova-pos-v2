@@ -2,6 +2,7 @@
 
 namespace App\Services\Purchase;
 
+use App\Support\InterShopTransferStatus;
 use App\Models\Activity;
 use App\Models\AccountTransaction;
 use App\Models\Purchase;
@@ -24,7 +25,7 @@ class PurchaseExpenseService
         return DB::transaction(function () use ($purchaseId, $data) {
             $purchase = Purchase::query()->with('shop')->findOrFail($purchaseId);
 
-            if (($purchase->purchase_status ?? '') === 'complete') {
+            if (in_array((string) ($purchase->purchase_status ?? ''), ['complete', InterShopTransferStatus::COMPLETED], true)) {
                 throw new \RuntimeException('Cannot edit expenses after purchase is received.');
             }
 
@@ -66,7 +67,7 @@ class PurchaseExpenseService
             $purchaseId = (int) $activity->purchase_id;
 
             $purchase = Purchase::query()->findOrFail($purchaseId);
-            if (($purchase->purchase_status ?? '') === 'complete') {
+            if (in_array((string) ($purchase->purchase_status ?? ''), ['complete', InterShopTransferStatus::COMPLETED], true)) {
                 throw new \RuntimeException('Cannot edit expenses after purchase is received.');
             }
 
@@ -101,7 +102,7 @@ class PurchaseExpenseService
                 throw new \RuntimeException('Invalid purchase expense: purchase link missing.');
             }
 
-            if (($purchase->purchase_status ?? '') === 'complete') {
+            if (in_array((string) ($purchase->purchase_status ?? ''), ['complete', InterShopTransferStatus::COMPLETED], true)) {
                 throw new \RuntimeException('Cannot edit expenses after purchase is received.');
             }
 

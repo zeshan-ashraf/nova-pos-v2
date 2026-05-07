@@ -40,10 +40,9 @@ class PurchaseReceiveService
                 ->get(['product_id', 'quantity', 'unitcost', 'landed_unit_cost']);
 
             if ($isInternal) {
-                // Internal/system-generated invoices are accounting-only in this ERP.
-                // Stock transfer updates already happen in the order flow.
-                $purchase->update(['purchase_status' => 'complete']);
-                return;
+                throw new \RuntimeException(
+                    'Inter-shop transfer purchases are finalized when the mother shop completes the linked sale after approval.'
+                );
             }
 
             $supplierId = (int) ($purchase->supplier_id ?? 0);

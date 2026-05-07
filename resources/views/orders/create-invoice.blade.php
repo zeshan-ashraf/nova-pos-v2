@@ -978,7 +978,15 @@
     /**
      * Live check: unit price must be strictly greater than buying_price; buying_price must be valid (> 0).
      */
+    // TEMPORARY SWITCH:
+    // Set to true to re-enable client-side "unit price must be above buying price (cost)" validation.
+    var ENFORCE_INVOICE_UNIT_PRICE_ABOVE_BUYING = false;
+
     function validateInvoiceRowUnitPriceVsBuying($row) {
+        if (!ENFORCE_INVOICE_UNIT_PRICE_ABOVE_BUYING) {
+            clearInvoiceRowUnitPriceBuyingFeedback($row);
+            return true;
+        }
         var productId = ($row.find('.product-select').val() || '').toString().trim();
         if (!productId) {
             clearInvoiceRowUnitPriceBuyingFeedback($row);

@@ -7,6 +7,18 @@
     $expenseCategories = $expenseCategories ?? collect();
     $allocationLocked = $allocationLocked ?? false;
     $isInternalPurchase = $isInternalPurchase ?? false;
+
+    $interShopSpr = null;
+    if (($purchase->is_system_generated ?? false) && $purchase->source_sale_id) {
+        $interShopSpr = \App\Models\ShopPurchaseRequest::query()
+            ->where('mother_shop_sale_id', $purchase->source_sale_id)
+            ->where('child_shop_id', $purchase->shop_id)
+            ->first();
+    }
+    $motherOrderForLink = (($purchase->is_system_generated ?? false) && $purchase->source_sale_id)
+        ? \App\Models\Order::withoutGlobalScopes()->find($purchase->source_sale_id)
+        : null;
+    $canViewMotherOrder = $motherOrderForLink && \App\Support\ActiveShop::visibleShopIds(auth()->user())->contains($motherOrderForLink->shop_id);
 @endphp
 <div class="container-fluid purchase-detail-content">
     <style>
@@ -115,6 +127,39 @@
                         @endif
                     </div>
                     <!-- end: Show Data -->
+
+                    @if($purchase->source_sale_id && ($purchase->is_system_generated ?? false) && $canViewMotherOrder)
+                        <div class="row">
+                            <div class="col-lg-12">
+                                <a href="{{ route('order.orderDetails', $purchase->source_sale_id) }}" class="btn btn-outline-primary btn-sm">
+                                    <i class="ri-links-line mr-1"></i> View linked mother-shop sale
+                                </a>
+                            </div>
+                        </div>
+                    @endif
+
+                    @if (!$in_modal && ($purchase->is_system_generated ?? false) && $purchase->source_sale_id && $purchase->purchase_status === \App\Support\InterShopTransferStatus::PENDING)
+                        @if(auth()->user()->shop_id && (int) auth()->user()->shop_id === (int) $purchase->shop_id)
+                            <div class="row mt-2">
+                                <div class="col-lg-12">
+                                    @if($interShopSpr)
+                                        <a href="{{ route('shop-purchase-requests.show', $interShopSpr) }}" class="btn btn-success mr-2">Review purchase request</a>
+                                        <p class="text-muted small d-inline-block mb-0">Open the purchase request to approve or cancel. Stock and accounting apply when the mother shop completes dispatch after approval.</p>
+                                    @else
+                                        <form action="{{ route('purchases.interShop.approve', $purchase) }}" method="POST" class="d-inline">
+                                            @csrf
+                                            <button type="submit" class="btn btn-success mr-2">Approve transfer</button>
+                                        </form>
+                                        <p class="text-muted small d-inline-block mb-0">Stock and accounting apply when the mother shop completes dispatch after approval.</p>
+                                    @endif
+                                </div>
+                            </div>
+                        @endif
+                    @endif
+
+                    @if (!$in_modal && ($purchase->is_system_generated ?? false) && $purchase->source_sale_id && $purchase->purchase_status === \App\Support\InterShopTransferStatus::APPROVED)
+                        <div class="alert alert-info mt-2 mb-0">Approved. Waiting for the mother shop to complete dispatch.</div>
+                    @endif
 
                     @if (!$in_modal && $purchase->purchase_status == 'pending')
                         @php

@@ -3,6 +3,9 @@
     $in_modal = $in_modal ?? false;
     $salePayments = $salePayments ?? collect();
     $paymentBankName = $paymentBankName ?? null;
+    $linkedInterShopPurchase = $linkedInterShopPurchase ?? null;
+    $linkedShopPurchaseRequest = $linkedShopPurchaseRequest ?? null;
+    $interShopMotherContext = $linkedInterShopPurchase || $linkedShopPurchaseRequest;
 @endphp
 <div class="invoice-header">
     <h4>Order Details - Invoice #{{ $order->invoice_no }}</h4>
@@ -130,7 +133,19 @@
             <div class="summary-row">
                 <span class="summary-label">Order Status:</span>
                 <span class="summary-value">
-                    @if($order->order_status == 'complete')<span class="badge badge-success">Complete</span>@else<span class="badge badge-warning">Pending</span>@endif
+                    @if($order->order_status == 'complete' || $order->order_status == \App\Support\InterShopTransferStatus::COMPLETED)
+                        <span class="badge badge-success">Complete</span>
+                    @elseif($order->order_status == \App\Support\InterShopTransferStatus::PENDING)
+                        <span class="badge badge-warning">Pending approval</span>
+                    @elseif($order->order_status == \App\Support\InterShopTransferStatus::APPROVED)
+                        <span class="badge badge-info">Approved — ready to dispatch</span>
+                    @elseif($order->order_status == \App\Support\InterShopTransferStatus::CANCELLED)
+                        <span class="badge badge-secondary">Cancelled</span>
+                    @elseif($order->order_status == 'pending')
+                        <span class="badge badge-warning">Pending</span>
+                    @else
+                        <span class="badge badge-secondary">{{ $order->order_status }}</span>
+                    @endif
                 </span>
             </div>
         </div>
@@ -140,12 +155,33 @@
 <!-- Action Buttons -->
 <div class="mt-4">
     @if(!$in_modal)
-        @if($order->order_status != 'complete')
+        @if($interShopMotherContext && auth()->user()->shop_id && (int) auth()->user()->shop_id === (int) $order->shop_id)
+            @if($order->order_status == \App\Support\InterShopTransferStatus::APPROVED)
+                <form action="{{ route('order.interShop.complete', $order) }}" method="POST" class="d-inline mr-2">
+                    @csrf
+                    <button type="submit" class="btn btn-success btn-lg"><i class="ri-truck-line mr-1"></i> Complete transfer (apply stock &amp; ledger)</button>
+                </form>
+                <form action="{{ route('order.interShop.resetApproval', $order) }}" method="POST" class="d-inline mr-2" onsubmit="return confirm('Reset child approval? The order will return to pending.');">
+                    @csrf
+                    <button type="submit" class="btn btn-outline-warning btn-lg">Reset approval</button>
+                </form>
+            @endif
+            @if(in_array($order->order_status, [\App\Support\InterShopTransferStatus::PENDING, \App\Support\InterShopTransferStatus::APPROVED], true))
+                <form action="{{ route('order.interShop.cancel', $order) }}" method="POST" class="d-inline mr-2" onsubmit="return confirm('Cancel this transfer and release reserved stock?');">
+                    @csrf
+                    <button type="submit" class="btn btn-outline-danger btn-lg">Cancel transfer</button>
+                </form>
+            @endif
+        @endif
+        @if(!$interShopMotherContext && $order->order_status != 'complete')
             <button type="button" class="btn btn-success btn-lg mr-2" data-toggle="modal" data-target="#completeOrderModal" onclick="showCompleteOrderModal({{ $order->id }}, '{{ addslashes($order->invoice_no) }}')"><i class="ri-check-line mr-1"></i> Complete Order</button>
         @endif
         <a href="{{ route('order.invoiceDownload', $order->id) }}" class="btn btn-primary btn-lg" target="_blank"><i class="ri-printer-line mr-1"></i> Print</a>
-        @if($order->order_status == 'complete')
+        @if(($order->order_status == 'complete' || $order->order_status == \App\Support\InterShopTransferStatus::COMPLETED) && !$interShopMotherContext)
         <a href="{{ route('order.edit', $order->id) }}" class="btn btn-warning btn-lg mr-2"><i class="ri-edit-line mr-1"></i> Edit Invoice</a>
+        @endif
+        @if($interShopMotherContext && $order->order_status == \App\Support\InterShopTransferStatus::PENDING)
+            <a href="{{ route('order.edit', $order->id) }}" class="btn btn-warning btn-lg mr-2"><i class="ri-edit-line mr-1"></i> Edit draft</a>
         @endif
         <a href="{{ route('order.index') }}" class="btn btn-secondary btn-lg">Back</a>
     @else

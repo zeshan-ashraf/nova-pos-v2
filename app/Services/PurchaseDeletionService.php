@@ -8,6 +8,7 @@ use App\Models\Purchase;
 use App\Models\PurchaseDetail;
 use App\Models\StockLog;
 use App\Models\Supplier;
+use App\Support\InterShopTransferStatus;
 use App\Services\Ledger\LedgerBalanceService;
 use App\Services\Ledger\PurchaseLedgerService;
 use Illuminate\Support\Facades\DB;
@@ -60,46 +61,56 @@ class PurchaseDeletionService
             ? Supplier::withoutGlobalScope('shop')->find($purchase->supplier_id)
             : null;
 
+        $skipChildStockReversal = (bool) $purchase->is_system_generated
+            && $purchase->source_sale_id
+            && in_array((string) ($purchase->purchase_status ?? ''), [
+                InterShopTransferStatus::PENDING,
+                InterShopTransferStatus::APPROVED,
+                InterShopTransferStatus::CANCELLED,
+            ], true);
+
         // STEP 3 — Reverse stock for each purchase detail by updating products.product_store only.
-        foreach ($purchase->purchaseDetails as $detail) {
-            $qty = (int) ($detail->quantity ?? 0);
-            if ($qty <= 0) {
-                continue;
-            }
+        if (!$skipChildStockReversal) {
+            foreach ($purchase->purchaseDetails as $detail) {
+                $qty = (int) ($detail->quantity ?? 0);
+                if ($qty <= 0) {
+                    continue;
+                }
 
-            /** @var Product|null $product */
-            $product = $detail->product instanceof Product
-                ? $detail->product
-                : Product::withoutGlobalScope('shop')->lockForUpdate()->find($detail->product_id);
+                /** @var Product|null $product */
+                $product = $detail->product instanceof Product
+                    ? $detail->product
+                    : Product::withoutGlobalScope('shop')->lockForUpdate()->find($detail->product_id);
 
-            if (!$product) {
-                continue;
-            }
+                if (!$product) {
+                    continue;
+                }
 
-            // Log BEFORE decrement: product_code, product id, qty, product_store
-            \Log::info('PurchaseDeletionService: BEFORE decrement', [
-                'product_code' => $product->product_code,
-                'product_id' => $product->id,
-                'qty' => $qty,
-                'product_store' => $product->product_store,
-            ]);
-
-            // Reduce stock that was previously increased by this purchase.
-            // Use query builder with shop scope removed so the UPDATE runs on the correct row
-            // (child-shop products have different shop_id than current user; $product->decrement() would apply the scope and update 0 rows).
-            Product::withoutGlobalScope('shop')
-                ->where('id', $product->id)
-                ->decrement('product_store', $qty);
-
-            // Reload and log AFTER decrement
-            $reloaded = Product::withoutGlobalScope('shop')->find($product->id);
-            if ($reloaded) {
-                \Log::info('PurchaseDeletionService: AFTER decrement', [
-                    'product_code' => $reloaded->product_code,
-                    'product_id' => $reloaded->id,
+                // Log BEFORE decrement: product_code, product id, qty, product_store
+                \Log::info('PurchaseDeletionService: BEFORE decrement', [
+                    'product_code' => $product->product_code,
+                    'product_id' => $product->id,
                     'qty' => $qty,
-                    'product_store' => $reloaded->product_store,
+                    'product_store' => $product->product_store,
                 ]);
+
+                // Reduce stock that was previously increased by this purchase.
+                // Use query builder with shop scope removed so the UPDATE runs on the correct row
+                // (child-shop products have different shop_id than current user; $product->decrement() would apply the scope and update 0 rows).
+                Product::withoutGlobalScope('shop')
+                    ->where('id', $product->id)
+                    ->decrement('product_store', $qty);
+
+                // Reload and log AFTER decrement
+                $reloaded = Product::withoutGlobalScope('shop')->find($product->id);
+                if ($reloaded) {
+                    \Log::info('PurchaseDeletionService: AFTER decrement', [
+                        'product_code' => $reloaded->product_code,
+                        'product_id' => $reloaded->id,
+                        'qty' => $qty,
+                        'product_store' => $reloaded->product_store,
+                    ]);
+                }
             }
         }
 

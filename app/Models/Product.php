@@ -22,6 +22,7 @@ class Product extends Model
         'product_garage',
         'product_image',
         'product_store',
+        'reserved_stock',
         'low_stock_warning',
         'buying_date',
         'expire_date',
@@ -45,6 +46,7 @@ class Product extends Model
      */
     protected $casts = [
         'buying_price' => 'float',
+        'reserved_stock' => 'float',
     ];
 
     protected $with = [

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Kyslik\ColumnSortable\Sortable;
+use App\Support\InterShopTransferStatus;
 
 class Purchase extends Model
 {
@@ -45,6 +46,8 @@ class Purchase extends Model
         'pay',
         'due',
         'comment',
+        'approved_at',
+        'approved_by',
     ];
 
     public $sortable = [
@@ -61,6 +64,7 @@ class Purchase extends Model
 
     protected $casts = [
         'is_system_generated' => 'boolean',
+        'approved_at' => 'datetime',
     ];
 
     public function supplier()
@@ -94,5 +98,10 @@ class Purchase extends Model
     public function order()
     {
         return $this->belongsTo(Order::class, 'source_sale_id', 'id');
+    }
+
+    public function purchaseStatusDisplayLabel(): string
+    {
+        return InterShopTransferStatus::uiPurchaseStatusLabel($this->purchase_status);
     }
 }

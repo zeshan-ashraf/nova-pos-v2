@@ -13,6 +13,7 @@ use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Support\ActiveShop;
+use App\Support\InterShopTransferStatus;
 use App\Support\MotherShopSuperAdmin;
 use Illuminate\Support\Collection;
 
@@ -43,7 +44,7 @@ class DashboardController extends Controller
         return view('dashboard.index', [
             'total_paid' => (clone $ordersQuery)->sum('pay'),
             'total_due' => (clone $ordersQuery)->sum('due'),
-            'complete_orders' => (clone $ordersQuery)->where('order_status', 'complete')->count(),
+            'complete_orders' => (clone $ordersQuery)->whereIn('order_status', ['complete', InterShopTransferStatus::COMPLETED])->count(),
             'customer_total_due' => $financialKpis['total_due'],
             'net_cash' => $financialKpis['net_cash'],
             'total_sales' => $financialKpis['total_sales'],
@@ -684,14 +685,14 @@ class DashboardController extends Controller
 
         $totalDue = (float) (clone $ordersInRange)->sum('due');
         $totalSales = (float) (clone $ordersInRange)
-            ->where('order_status', 'complete')
+            ->whereIn('order_status', ['complete', InterShopTransferStatus::COMPLETED])
             ->sum('total');
 
         $totalCost = (float) OrderDetails::query()
             ->join('orders', function ($join) use ($shopId) {
                 $join->on('orders.id', '=', 'order_details.order_id')
                     ->where('orders.shop_id', '=', $shopId)
-                    ->where('orders.order_status', '=', 'complete')
+                    ->whereIn('orders.order_status', ['complete', InterShopTransferStatus::COMPLETED])
                     ->whereNull('orders.deleted_at');
             })
             ->leftJoin('products', 'products.id', '=', 'order_details.product_id')
@@ -763,7 +764,7 @@ class DashboardController extends Controller
 
         $revenueRows = Order::query()
             ->where('shop_id', $shopId)
-            ->where('order_status', 'complete')
+            ->whereIn('order_status', ['complete', InterShopTransferStatus::COMPLETED])
             ->whereBetween('order_date', [$startDt, $endDt])
             ->selectRaw($groupExpr . ' as d, COALESCE(SUM(total), 0) as amount')
             ->groupBy('d')
@@ -774,7 +775,7 @@ class DashboardController extends Controller
             ->join('orders', function ($join) use ($shopId) {
                 $join->on('orders.id', '=', 'order_details.order_id')
                     ->where('orders.shop_id', '=', $shopId)
-                    ->where('orders.order_status', '=', 'complete')
+                    ->whereIn('orders.order_status', ['complete', InterShopTransferStatus::COMPLETED])
                     ->whereNull('orders.deleted_at');
             })
             ->leftJoin('products', 'products.id', '=', 'order_details.product_id')

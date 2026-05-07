@@ -132,6 +132,8 @@
                     'paymentBankName' => $paymentBankName ?? null,
                     'salePayments' => $salePayments ?? collect(),
                     'in_modal' => false,
+                    'linkedInterShopPurchase' => $linkedInterShopPurchase ?? null,
+                    'linkedShopPurchaseRequest' => $linkedShopPurchaseRequest ?? null,
                 ])
             </div>
         </div>

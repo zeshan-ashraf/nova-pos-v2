@@ -19,7 +19,7 @@
         </div>
         <div class="col-6 px-1 mb-3">
             <div class="font-weight-bold text-uppercase" style="font-size: 0.68rem; letter-spacing: 0.04em;">Status</div>
-            <div class="text-capitalize">{{ $purchase->purchase_status }}</div>
+            <div class="text-capitalize">{{ $purchase->purchaseStatusDisplayLabel() }}</div>
         </div>
         <div class="col-6 px-1 mb-3">
             <div class="font-weight-bold text-uppercase" style="font-size: 0.68rem; letter-spacing: 0.04em;">Total</div>

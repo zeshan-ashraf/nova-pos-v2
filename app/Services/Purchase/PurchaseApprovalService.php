@@ -2,6 +2,7 @@
 
 namespace App\Services\Purchase;
 
+use App\Support\InterShopTransferStatus;
 use App\Models\Activity;
 use App\Models\Purchase;
 use App\Models\PurchaseDetail;
@@ -24,7 +25,7 @@ class PurchaseApprovalService
                 ->lockForUpdate()
                 ->findOrFail($purchaseId);
 
-            if (($purchase->purchase_status ?? '') === 'complete') {
+            if (in_array((string) ($purchase->purchase_status ?? ''), ['complete', InterShopTransferStatus::COMPLETED], true)) {
                 throw new \RuntimeException('Purchase has already been received; cannot approve landed cost.');
             }
 

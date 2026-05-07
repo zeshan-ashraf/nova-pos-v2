@@ -75,7 +75,7 @@
                             <td>{{ $purchase->purchase_date }}</td>
                             <td>{{ number_format($purchase->total ?? 0, 2) }}</td>
                             <td>
-                                <span class="badge badge-danger">{{ $purchase->purchase_status }}</span>
+                                <span class="badge badge-danger">{{ $purchase->purchaseStatusDisplayLabel() }}</span>
                             </td>
                             <td>
                                 <div class="d-flex align-items-center list-action">

@@ -484,14 +484,18 @@
                             <td>{{ $purchase->payment_status }}</td>
                             <td>
                                 <span class="badge
-                                    @if($purchase->purchase_status == 'complete')
+                                    @if($purchase->purchase_status == 'complete' || $purchase->purchase_status == \App\Support\InterShopTransferStatus::COMPLETED)
                                         badge-success
-                                    @elseif($purchase->purchase_status == 'pending')
+                                    @elseif($purchase->purchase_status == 'pending' || $purchase->purchase_status == \App\Support\InterShopTransferStatus::PENDING)
                                         badge-danger
+                                    @elseif($purchase->purchase_status == \App\Support\InterShopTransferStatus::APPROVED)
+                                        badge-info
+                                    @elseif($purchase->purchase_status == \App\Support\InterShopTransferStatus::CANCELLED)
+                                        badge-secondary
                                     @else
                                         badge-secondary
                                     @endif">
-                                    {{ $purchase->purchase_status }}
+                                    {{ $purchase->purchaseStatusDisplayLabel() }}
                                 </span>
                             </td>
 
@@ -500,12 +504,15 @@
                                     <a class="btn btn-info mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Details" href="{{ route('purchases.show', $purchase->id) }}">
                                         Details
                                     </a>
-                                    @if(($purchase->landed_cost_status ?? 'pending') !== 'approved')
+                                    @php
+                                        $purchaseLinkedToSourceSale = $purchase->source_sale_id !== null && $purchase->source_sale_id !== '' && (int) $purchase->source_sale_id !== 0;
+                                    @endphp
+                                    @if(($purchase->landed_cost_status ?? 'pending') !== 'approved' && !$purchaseLinkedToSourceSale)
                                     <a class="btn btn-warning mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Edit" href="{{ route('purchases.edit', $purchase->id) }}">
                                         Edit
                                     </a>
                                     @endif
-                                    @if(auth()->user()->can('purchases.delete'))
+                                    @if(auth()->user()->can('purchases.delete') && !$purchaseLinkedToSourceSale)
                                     <button type="button" class="btn btn-danger mr-2 border-none" data-toggle="tooltip" data-placement="top" title="" data-original-title="Delete" onclick="showDeleteModal({{ $purchase->id }})">
                                         <i class="ri-delete-bin-line mr-0"></i>
                                     </button>

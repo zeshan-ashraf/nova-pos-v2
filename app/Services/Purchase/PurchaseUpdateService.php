@@ -9,6 +9,7 @@ use App\Models\PurchasePaymentLog;
 use App\Models\Supplier;
 use App\Services\Ledger\LedgerBalanceService;
 use App\Services\Ledger\PurchaseLedgerService;
+use App\Support\InterShopTransferStatus;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -38,7 +39,7 @@ class PurchaseUpdateService
             if (($locked->landed_cost_status ?? '') === 'approved') {
                 throw new \RuntimeException('Approved purchase cannot be edited');
             }
-            if (($locked->purchase_status ?? '') === 'complete') {
+            if (in_array((string) ($locked->purchase_status ?? ''), ['complete', InterShopTransferStatus::COMPLETED], true)) {
                 throw new \RuntimeException('Cannot edit purchase after it has been received.');
             }
             if ((bool) ($locked->is_system_generated ?? false)) {

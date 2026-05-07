@@ -12,8 +12,7 @@ use App\Models\OrderDetails;
 use App\Models\Customer;
 use App\Models\Shop;
 use App\Models\Purchase;
-use App\Models\PurchaseDetail;
-use App\Models\PurchasePaymentLog;
+use App\Models\ShopPurchaseRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -31,6 +30,8 @@ use App\Services\SalePostingService;
 use App\Services\Stock\StockService;
 use App\Services\SupplierCreditService;
 use App\Services\PurchaseDeletionService;
+use App\Services\InterShopTransferService;
+use App\Support\InterShopTransferStatus;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Illuminate\Support\Facades\Validator;
@@ -44,6 +45,7 @@ class OrderController extends Controller
     public function __construct(
         private StockService $stockService,
         private PurchaseDeletionService $purchaseDeletionService,
+        private InterShopTransferService $interShopTransferService,
     ) {}
 
     /**
@@ -304,7 +306,11 @@ class OrderController extends Controller
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
 
         $ordersQuery = Order::with(['customer', 'shop.parent'])
-            ->where('order_status', 'pending')
+            ->where(function ($q) {
+                $q->where('order_status', 'pending')
+                    ->orWhere('order_status', InterShopTransferStatus::PENDING)
+                    ->orWhere('order_status', InterShopTransferStatus::APPROVED);
+            })
             ->sortable();
 
         // Apply shop filtering
@@ -341,7 +347,10 @@ class OrderController extends Controller
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
 
         $ordersQuery = Order::with(['customer', 'shop.parent'])
-            ->where('order_status', 'complete')
+            ->where(function ($q) {
+                $q->where('order_status', 'complete')
+                    ->orWhere('order_status', InterShopTransferStatus::COMPLETED);
+            })
             ->sortable();
 
         // Apply shop filtering
@@ -515,11 +524,26 @@ class OrderController extends Controller
                         ->orderBy('id', 'DESC')
                         ->get();
 
+        $linkedShopPurchaseRequest = ShopPurchaseRequest::query()
+            ->where('mother_shop_sale_id', $order->id)
+            ->first();
+        $linkedInterShopPurchase = Purchase::withoutGlobalScopes()
+            ->where('source_sale_id', $order->id)
+            ->where('is_system_generated', true)
+            ->first();
+        if (!$linkedInterShopPurchase && $linkedShopPurchaseRequest?->mapped_purchase_id) {
+            $linkedInterShopPurchase = Purchase::withoutGlobalScopes()
+                ->where('id', $linkedShopPurchaseRequest->mapped_purchase_id)
+                ->first();
+        }
+
         return view('orders.view-invoice', [
             'order' => $order,
             'orderDetails' => $orderDetails,
             'paymentBankName' => $paymentBankName,
             'salePayments' => $salePayments,
+            'linkedInterShopPurchase' => $linkedInterShopPurchase,
+            'linkedShopPurchaseRequest' => $linkedShopPurchaseRequest,
         ]);
     }
 
@@ -540,12 +564,27 @@ class OrderController extends Controller
             ->orderBy('id', 'DESC')
             ->get();
 
+        $linkedShopPurchaseRequest = ShopPurchaseRequest::query()
+            ->where('mother_shop_sale_id', $order->id)
+            ->first();
+        $linkedInterShopPurchase = Purchase::withoutGlobalScopes()
+            ->where('source_sale_id', $order->id)
+            ->where('is_system_generated', true)
+            ->first();
+        if (!$linkedInterShopPurchase && $linkedShopPurchaseRequest?->mapped_purchase_id) {
+            $linkedInterShopPurchase = Purchase::withoutGlobalScopes()
+                ->where('id', $linkedShopPurchaseRequest->mapped_purchase_id)
+                ->first();
+        }
+
         $html = view('orders.partials.invoice-detail-content', [
             'order' => $order,
             'orderDetails' => $orderDetails,
             'paymentBankName' => $paymentBankName,
             'salePayments' => $salePayments,
             'in_modal' => true,
+            'linkedInterShopPurchase' => $linkedInterShopPurchase,
+            'linkedShopPurchaseRequest' => $linkedShopPurchaseRequest,
         ])->render();
 
         return response()->json(['html' => $html]);
@@ -575,6 +614,15 @@ class OrderController extends Controller
     {
         $order = Order::findOrFail($request->id);
         $this->ensureShopAccess($order);
+
+        $linkedInterShop = Purchase::withoutGlobalScopes()
+            ->where('source_sale_id', $order->id)
+            ->where('is_system_generated', true)
+            ->exists()
+            || ShopPurchaseRequest::query()->where('mother_shop_sale_id', $order->id)->exists();
+        if ($linkedInterShop) {
+            return Redirect::back()->with('error', 'This transfer uses the inter-shop approval workflow; complete it from the invoice page after the child shop approves.');
+        }
         /*
         // Reduce the stock
         $products = OrderDetails::where('order_id', $order_id)->get();
@@ -1084,17 +1132,43 @@ class OrderController extends Controller
         $childPurchase = Purchase::withoutGlobalScopes()
             ->where('source_sale_id', $order->id)
             ->first();
+
+        $transferRequest = ShopPurchaseRequest::query()
+            ->where('mother_shop_sale_id', $order->id)
+            ->lockForUpdate()
+            ->first();
+
+        $isSystemInterShop = ($childPurchase
+            && (bool) ($childPurchase->is_system_generated ?? false)
+            && $childPurchase->source_sale_id)
+            || ($transferRequest && $transferRequest->type === 'inter_shop_transfer');
+        $fulfilledInterShop = $isSystemInterShop && in_array(
+            (string) $order->order_status,
+            ['complete', InterShopTransferStatus::COMPLETED],
+            true
+        );
+
         if ($childPurchase && !$childPurchase->trashed()) {
             $this->purchaseDeletionService->deletePurchase((int) $childPurchase->id);
         }
 
-        foreach ($order->orderDetails as $orderDetail) {
-            $product = Product::withoutGlobalScope('shop')
-                ->where('id', $orderDetail->product_id)
-                ->lockForUpdate()
-                ->first();
-            if ($product && $orderDetail->quantity > 0) {
-                $product->increment('product_store', $orderDetail->quantity);
+        if ($isSystemInterShop && !$fulfilledInterShop && in_array(
+            (string) $order->order_status,
+            [InterShopTransferStatus::PENDING, InterShopTransferStatus::APPROVED],
+            true
+        )) {
+            $this->interShopTransferService->releaseReservationsForOrder($order);
+        }
+
+        if (!$isSystemInterShop || $fulfilledInterShop) {
+            foreach ($order->orderDetails as $orderDetail) {
+                $product = Product::withoutGlobalScope('shop')
+                    ->where('id', $orderDetail->product_id)
+                    ->lockForUpdate()
+                    ->first();
+                if ($product && $orderDetail->quantity > 0) {
+                    $product->increment('product_store', $orderDetail->quantity);
+                }
             }
         }
 
@@ -1112,7 +1186,13 @@ class OrderController extends Controller
             ->where('source_id', (string) $order->id)
             ->delete();
 
+        $orderIdForShopRequest = (int) $order->id;
+
         $order->delete();
+
+        ShopPurchaseRequest::query()
+            ->where('mother_shop_sale_id', $orderIdForShopRequest)
+            ->delete();
 
         if ($order->customer_id) {
             $balance = $balanceService->getCustomerBalance((int) $order->customer_id, $order->shop_id);
@@ -1287,6 +1367,28 @@ class OrderController extends Controller
             ->findOrFail($id);
         $this->ensureShopAccess($order);
 
+        $linkedTransfer = Purchase::withoutGlobalScopes()
+            ->where('source_sale_id', $order->id)
+            ->where('is_system_generated', true)
+            ->first();
+        $linkedSpr = ShopPurchaseRequest::query()
+            ->where('mother_shop_sale_id', $order->id)
+            ->first();
+        if ($linkedTransfer && in_array(
+            (string) $order->order_status,
+            [InterShopTransferStatus::APPROVED, InterShopTransferStatus::COMPLETED],
+            true
+        )) {
+            return Redirect::route('order.index')->with('error', 'This inter-shop transfer cannot be edited after approval.');
+        }
+        if ($linkedSpr && in_array(
+            (string) $linkedSpr->status,
+            [InterShopTransferStatus::APPROVED, InterShopTransferStatus::COMPLETED],
+            true
+        )) {
+            return Redirect::route('order.index')->with('error', 'This inter-shop transfer cannot be edited after approval.');
+        }
+
         $request->merge(['edited_from_order_id' => $id]);
 
         try {
@@ -1297,7 +1399,15 @@ class OrderController extends Controller
             $childPurchase = Purchase::withoutGlobalScopes()
                 ->where('source_sale_id', $id)
                 ->first();
-            $isShopTransferEdit = $childPurchase && !$childPurchase->trashed();
+            $linkedSprForEdit = ShopPurchaseRequest::query()
+                ->where('mother_shop_sale_id', $id)
+                ->first();
+            $isShopTransferEdit = ($childPurchase && !$childPurchase->trashed())
+                || ($linkedSprForEdit && !in_array(
+                    (string) $linkedSprForEdit->status,
+                    [InterShopTransferStatus::CANCELLED, InterShopTransferStatus::COMPLETED],
+                    true
+                ));
 
             if ($isShopTransferEdit) {
                 DB::transaction(function () use ($id, $balanceService, &$preserved) {
@@ -1312,12 +1422,19 @@ class OrderController extends Controller
                     $childPurchase = Purchase::withoutGlobalScopes()
                         ->where('source_sale_id', $order->id)
                         ->first();
-                    $preservedPurchaseNo = $childPurchase ? $childPurchase->purchase_no : null;
-                    $preservedPurchaseDate = $childPurchase && $childPurchase->purchase_date
-                        ? ($childPurchase->purchase_date instanceof \Carbon\Carbon
+                    $spr = ShopPurchaseRequest::query()
+                        ->where('mother_shop_sale_id', $order->id)
+                        ->first();
+                    $payload = $spr?->payload ?? [];
+                    $preservedPurchaseNo = $childPurchase?->purchase_no ?? ($payload['preserved_purchase_no'] ?? null);
+                    $preservedPurchaseDate = null;
+                    if ($childPurchase && $childPurchase->purchase_date) {
+                        $preservedPurchaseDate = $childPurchase->purchase_date instanceof \Carbon\Carbon
                             ? $childPurchase->purchase_date->format('Y-m-d')
-                            : (string) $childPurchase->purchase_date)
-                        : null;
+                            : (string) $childPurchase->purchase_date;
+                    } elseif (!empty($payload['preserved_purchase_date'])) {
+                        $preservedPurchaseDate = \Carbon\Carbon::parse($payload['preserved_purchase_date'])->format('Y-m-d');
+                    }
 
                     $order->invoice_no = 'DEL-' . $order->id . '-' . $order->invoice_no;
                     $order->save();
@@ -1490,13 +1607,16 @@ class OrderController extends Controller
                 $buyingPrice = $product->buying_price;
                 $buyingPrice = ($buyingPrice !== null && $buyingPrice !== '') ? (float) $buyingPrice : null;
 
+                $physical = (float) ($product->product_store ?? 0);
+                $reserved = (float) ($product->reserved_stock ?? 0);
+
                 return [
                     'id' => $product->id,
                     'text' => $displayText,
                     'name' => $product->product_name,
                     'price' => $unitPrice,
                     'buying_price' => $buyingPrice,
-                    'stock' => $product->product_store ?? 0,
+                    'stock' => max(0, $physical - $reserved),
                     'code' => $productCode,
                 ];
             });
@@ -1621,8 +1741,12 @@ class OrderController extends Controller
         ];
 
         try {
+            // TEMPORARY SWITCH:
+            // Set to true to re-enable "unit price must be above buying price (cost)" validation.
+            $enforceMinSalePriceAboveCost = false;
+
             $validator = Validator::make($request->all(), $rules);
-            $validator->after(function ($validator) use ($request) {
+            $validator->after(function ($validator) use ($request, $enforceMinSalePriceAboveCost) {
                 $productsInput = $request->input('products', []);
                 $productIds = collect($productsInput)
                     ->pluck('product_id')
@@ -1659,22 +1783,24 @@ class OrderController extends Controller
                         continue;
                     }
 
-                    $buying = $productModel->buying_price;
-                    if ($buying === null || $buying === '' || (float) $buying <= 0) {
-                        $validator->errors()->add(
-                            "products.$i.unit_price",
-                            'This product has no valid buying price (cost). Set buying price on the product before invoicing.'
-                        );
+                    if ($enforceMinSalePriceAboveCost) {
+                        $buying = $productModel->buying_price;
+                        if ($buying === null || $buying === '' || (float) $buying <= 0) {
+                            $validator->errors()->add(
+                                "products.$i.unit_price",
+                                'This product has no valid buying price (cost). Set buying price on the product before invoicing.'
+                            );
 
-                        continue;
-                    }
+                            continue;
+                        }
 
-                    $buyingF = (float) $buying;
-                    if ($unit <= $buyingF) {
-                        $validator->errors()->add(
-                            "products.$i.unit_price",
-                            'Unit price must be greater than the product buying price (cost).'
-                        );
+                        $buyingF = (float) $buying;
+                        if ($unit <= $buyingF) {
+                            $validator->errors()->add(
+                                "products.$i.unit_price",
+                                'Unit price must be greater than the product buying price (cost).'
+                            );
+                        }
                     }
                 }
             });
@@ -2033,347 +2159,42 @@ class OrderController extends Controller
                     ->withInput();
             }
 
-            $orderStatus = 'complete';
             $paymentStatus = $due > 0 ? ($pay > 0 ? 'partial' : 'credit') : $paymentMethod1;
 
-            $order_id = null;
-            $purchase_id = null;
-
             try {
-                $runShopTransfer = function () use (
-                    &$order_id, &$purchase_id, $validatedData, $motherShop, $childShop, $supplier,
-                    $systemCustomer, $invoice_no, $subtotal, $totalProducts, $vat, $invoiceDiscount,
-                    $total, $pay, $due, $authUser, $request, $creditService, $supplierCreditService, $orderStatus,
-                    $paymentStatus, $paymentMethod1, $paymentMethod2, $pay1, $pay2, $shopBankId1, $shopBankId2
-                ) {
-                    $orderData = [
-                        'customer_id' => $systemCustomer->id,
-                        'shop_id' => $motherShop->id,
-                        'order_date' => Carbon::parse($validatedData['order_date'])->format('Y-m-d H:i:s'),
-                        'order_status' => $orderStatus,
-                        'total_products' => $totalProducts,
-                        'sub_total' => $subtotal,
-                        'invoice_discount' => $invoiceDiscount,
-                        'vat' => $vat,
-                        'invoice_no' => $invoice_no,
-                        'total' => $total,
-                        'payment_status' => $paymentStatus,
-                        'pay' => $pay,
-                        'due' => $due,
-                        'comment' => $request->input('comment'),
-                    ];
-
-                    $order = Order::create($orderData);
-                    $order_id = $order->id;
-
-                    // Ledger: all entries use source_id = order.id (SalePostingService)
-                    if ($pay1 > 0) {
-                        app(SalePostingService::class)->postSale($order, $pay1, $paymentMethod1, $shopBankId1);
-                    } else {
-                        app(SalePostingService::class)->postSale($order, 0, 'credit');
-                    }
-                    if ($pay2 > 0 && $paymentMethod2) {
-                        app(SalePostingService::class)->postSale($order, $pay2, $paymentMethod2, $shopBankId2);
-                    }
-                    if ($pay1 > 0) {
-                        $this->createPaymentLog($order_id, $pay1, $paymentMethod1, $shopBankId1);
-                    }
-                    if ($pay2 > 0 && $paymentMethod2) {
-                        $this->createPaymentLog($order_id, $pay2, $paymentMethod2, $shopBankId2);
-                    }
-
-                    // 2. Process products: Reduce mother shop stock, add/update child shop products
-                    foreach ($validatedData['products'] as $product) {
-                        if (empty($product['product_id'])) {
-                            continue;
-                        }
-
-                        $motherProduct = Product::findOrFail($product['product_id']);
-
-                        // Commented out for now: require active status and valid selling_price
-                        // if ($motherProduct->status !== 'active' || empty($motherProduct->selling_price) || $motherProduct->selling_price <= 0) {
-                        //     throw new \Exception("Product {$motherProduct->product_name} is not available for sale.");
-                        // }
-
-                        // Validate product belongs to mother shop
-                        if ($motherProduct->shop_id !== $motherShop->id) {
-                            throw new \Exception("Product {$motherProduct->product_name} does not belong to your shop.");
-                        }
-
-                        // Validate stock
-                        if ($motherProduct->product_store < $product['quantity']) {
-                            throw new \Exception("Insufficient stock for product: " . ($motherProduct->product_code ?? $motherProduct->product_name) . ". Available: {$motherProduct->product_store}");
-                        }
-
-                        // Create order detail
-                        OrderDetails::insert([
-                            'order_id' => $order_id,
-                            'product_id' => $product['product_id'],
-                            'quantity' => $product['quantity'],
-                            'unitcost' => $product['unit_price'],
-                            'cost_per_unit' => (float) ($motherProduct->buying_price ?? 0),
-                            'item_discount' => $product['item_discount'] ?? 0,
-                            'total' => $product['total'],
-                            'created_at' => Carbon::now(),
-                            'updated_at' => Carbon::now(),
-                        ]);
-
-                        // Reduce mother shop stock
-                        Product::where('id', $product['product_id'])
-                            ->update(['product_store' => DB::raw('product_store - ' . $product['quantity'])]);
-
-                        // Stock log for mother shop transfer OUT
-                        StockLog::create([
-                            'shop_id' => $motherShop->id,
-                            'product_id' => $motherProduct->id,
-                            'supplier_id' => null,
-                            'qty' => (int) $product['quantity'],
-                            'direction' => 'out',
-                            'source_type' => 'mother_sale',
-                            'source_id' => (string) $order_id,
-                            'price' => (float) ($product['unit_price'] ?? 0),
-                            'stock_qty' => -(int) $product['quantity'],
-                        ]);
-
-                        // Check if child shop already has this SKU (by parent link, code, or name)
-                        $childProduct = $this->findChildShopProductForMotherSale($childShop, $motherProduct);
-
-                        if ($childProduct) {
-                            // Product mapping: ensure child product points to mother/master product.
-                            if (empty($childProduct->parent_product_id)) {
-                                $childProduct->parent_product_id = $motherProduct->id;
-                                $childProduct->save();
-                            }
-                            // Log BEFORE update product_store: product_code, product id, product_store, quantity being added
-                            \Log::info('OrderController shop-transfer: BEFORE update product_store', [
-                                'product_code' => $childProduct->product_code,
-                                'product_id' => $childProduct->id,
-                                'product_store' => $childProduct->product_store,
-                                'quantity' => $product['quantity'],
-                            ]);
-                            // Update stock only (keep existing attributes; child product is in child shop)
-                            Product::withoutGlobalScope('shop')
-                                ->where('id', $childProduct->id)
-                                ->update(['product_store' => DB::raw('product_store + ' . $product['quantity'])]);
-                            $childProduct->refresh();
-                            // Same weighted-average buying_price rule as PurchaseController (single place: StockService)
-                            $this->stockService->updateBuyingPriceAfterPurchaseIn(
-                                $childProduct,
-                                (int) $product['quantity'],
-                                (float) ($product['unit_price'] ?? 0)
-                            );
-                            // Log AFTER update product_store: same info
-                            \Log::info('OrderController shop-transfer: AFTER update product_store', [
-                                'product_code' => $childProduct->product_code,
-                                'product_id' => $childProduct->id,
-                                'product_store' => $childProduct->product_store,
-                                'quantity' => $product['quantity'],
-                            ]);
-                        } else {
-                            // Resolve category for child shop: find by name or create (query child shop, so bypass shop scope)
-                            $motherCategory = Category::withoutGlobalScope('shop')->find($motherProduct->category_id);
-                            $categoryName = $motherCategory ? trim($motherCategory->name) : 'Uncategorized';
-                            $childCategory = Category::withoutGlobalScope('shop')
-                                ->where('shop_id', $childShop->id)
-                                ->whereRaw('LOWER(TRIM(name)) = ?', [strtolower($categoryName)])
-                                ->first();
-                            if (!$childCategory) {
-                                $childCategory = Category::create([
-                                    'name'   => $categoryName,
-                                    'shop_id' => $childShop->id,
-                                    'slug'   => Str::slug($categoryName),
-                                ]);
-                            }
-                            $childCategoryId = $childCategory->id;
-
-                            // Create new product for child shop (same product code as mother shop; unique per shop)
-                            $newChild = Product::create([
-                                'product_name' => $motherProduct->product_name,
-                                'category_id' => $childCategoryId,
-                                'supplier_id' => $supplier->id,
-                                'shop_id' => $childShop->id,
-                                // Product mapping: link child product to mother/master product.
-                                'parent_product_id' => $motherProduct->id,
-                                'product_code' => $motherProduct->product_code,
-                                'product_garage' => $motherProduct->product_garage,
-                                'product_image' => $motherProduct->product_image,
-                                'product_store' => $product['quantity'],
-                                'low_stock_warning' => $motherProduct->low_stock_warning,
-                                'buying_date' => $motherProduct->buying_date,
-                                'expire_date' => $motherProduct->expire_date,
-                                'buying_price' => $product['unit_price'], // Invoice price
-                                'selling_price' => $product['unit_price'], // Same as buying_price
-                                'status' => $motherProduct->status,
-                            ]);
-                        }
-                    }
-
-                    // 3. Purchase invoice number and date: reuse when editing (preserve for reports/P&amp;L).
-                    $purchase_no = $request->filled('preserved_purchase_no')
-                        ? $request->input('preserved_purchase_no')
-                        : IdGenerator::generate([
-                            'table' => 'purchases',
-                            'field' => 'purchase_no',
-                            'length' => 10,
-                            'prefix' => 'PUR-'
-                        ]);
-                    $purchase_date = $request->filled('preserved_purchase_date')
-                        ? Carbon::parse($request->input('preserved_purchase_date'))->format('Y-m-d')
-                        : Carbon::parse($validatedData['order_date'])->format('Y-m-d');
-
-                    // 4. Create Purchase (Purchase Invoice) — link to mother sale for cascade delete
-                    $purchaseData = [
-                        'supplier_id' => $supplier->id,
-                        'shop_id' => $childShop->id,
-                        'source_sale_id' => $order_id,
-                        'is_system_generated' => true,
-                        'purchase_date' => $purchase_date,
-                        'purchase_status' => 'pending',
-                        'total_products' => $totalProducts,
-                        'sub_total' => $subtotal,
-                        'invoice_discount' => $invoiceDiscount,
-                        'vat' => $vat,
-                        'purchase_no' => $purchase_no,
-                        'total' => $total,
-                        'payment_status' => $paymentMethod1,
-                        'pay' => $pay,
-                        'due' => $due,
-                        'comment' => $request->input('comment'),
-                        'created_at' => Carbon::now(),
-                        'updated_at' => Carbon::now(),
-                    ];
-
-                    $purchase = Purchase::create($purchaseData);
-                    $purchase_id = $purchase->id;
-
-                    // 4a. Create purchase payment log before ledger so we can link cash entry for reversal on delete
-                    $paymentLogId = null;
-                    if ($pay > 0) {
-                        $paymentLog = PurchasePaymentLog::create([
-                            'purchase_id' => $purchase_id,
-                            'amount_paid' => $pay,
-                            'type' => 'payment',
-                        ]);
-                        $paymentLogId = $paymentLog->id;
-                    }
-
-                    // 4b. Accounting entries for system-generated child purchase (prevent duplicates).
-                    // Supplier credit = due only (same as PurchaseLedgerService) so ledger and suppliers.credit_amount stay in sync.
-                    if (!AccountTransaction::where('source_type', AccountTransaction::SOURCE_PURCHASE)->where('source_id', $purchase_id)->exists()) {
-                        $transactionDate = $purchase_date;
-                        $descPurchase = 'Purchase ' . $purchase_no;
-
-                        AccountTransaction::create([
-                            'shop_id' => $childShop->id,
-                            'account_type' => AccountTransaction::ACCOUNT_TYPE_PURCHASE,
-                            'account_ref_id' => null,
-                            'direction' => AccountTransaction::DIRECTION_DEBIT,
-                            'amount' => $total,
-                            'source_type' => AccountTransaction::SOURCE_PURCHASE,
-                            'source_id' => $purchase_id,
-                            'description' => $descPurchase,
-                            'transaction_date' => $transactionDate,
-                        ]);
-
-                        // Supplier credit = amount we owe (due only), not total; matches addPending($supplier, $due) for sync.
-                        if ($due > 0) {
-                            AccountTransaction::create([
-                                'shop_id' => $childShop->id,
-                                'account_type' => AccountTransaction::ACCOUNT_TYPE_SUPPLIER,
-                                'account_ref_id' => $supplier->id,
-                                'direction' => AccountTransaction::DIRECTION_CREDIT,
-                                'amount' => $due,
-                                'source_type' => AccountTransaction::SOURCE_PURCHASE,
-                                'source_id' => $purchase_id,
-                                'description' => $descPurchase,
-                                'transaction_date' => $transactionDate,
-                            ]);
-                        }
-
-                        if ($pay > 0 && $paymentLogId !== null) {
-                            $accountType = $paymentMethod1 === 'bank' ? AccountTransaction::ACCOUNT_TYPE_BANK : AccountTransaction::ACCOUNT_TYPE_CASH;
-                            AccountTransaction::create([
-                                'shop_id' => $childShop->id,
-                                'account_type' => $accountType,
-                                'account_ref_id' => null,
-                                'direction' => AccountTransaction::DIRECTION_CREDIT,
-                                'amount' => $pay,
-                                'source_type' => AccountTransaction::SOURCE_PURCHASE_PAYMENT,
-                                'source_id' => $paymentLogId,
-                                'description' => 'Purchase Payment ' . $purchase_no,
-                                'transaction_date' => $transactionDate,
-                            ]);
-                        }
-                    }
-
-                    // 5. Create Purchase Details and stock_logs for child shop purchase
-                    foreach ($validatedData['products'] as $product) {
-                        if (empty($product['product_id'])) {
-                            continue;
-                        }
-
-                        // Find child shop's product (already created/updated above; query child shop, so bypass shop scope)
-                        $motherProduct = Product::findOrFail($product['product_id']);
-                        $childProduct = Product::withoutGlobalScope('shop')
-                            ->where('shop_id', $childShop->id)
-                            ->where('product_code', $motherProduct->product_code)
-                            ->firstOrFail();
-                        //dd($product['quantity'] , $childProduct->product_store,$childProduct->id,$childProduct->product_code);
-                        PurchaseDetail::insert([
-                            'purchase_id' => $purchase_id,
-                            'product_id' => $childProduct->id,
-                            'quantity' => $product['quantity'],
-                            'unitcost' => $product['unit_price'], // Invoice unit_price as purchase unitcost
-                            'item_discount' => $product['item_discount'] ?? 0,
-                            'total' => $product['total'],
-                            'created_at' => Carbon::now(),
-                            'updated_at' => Carbon::now(),
-                        ]);
-
-                        // Stock log for child shop purchase (source_type = purchase, source_id = purchase_id)
-                        if (!empty($product['quantity']) && $product['quantity'] > 0) {
-                            StockLog::create([
-                                'shop_id' => $childShop->id,
-                                'product_id' => $childProduct->id,
-                                'supplier_id' => $supplier->id,
-                                'qty' => (int) $product['quantity'],
-                                'direction' => 'in',
-                                'source_type' => 'purchase',
-                                'source_id' => (string) $purchase_id,
-                                'price' => (float) ($product['unit_price'] ?? 0),
-                                'stock_qty' => (int) $product['quantity'],
-                            ]);
-                        }
-                    }
-
-                    // 6. Handle supplier credit (if due > 0) — keeps suppliers.credit_amount in sync with ledger
-                    if ($due > 0) {
-                        $supplierCreditService->addPending($supplier, $due);
-                    }
-
-                    // 7. Handle customer credit (system customer - but should be 0 usually)
-                    if ($due > 0) {
-                        $creditService->addPending($systemCustomer, $due);
-                    }
-                };
-                if (DB::transactionLevel() > 0) {
-                    $runShopTransfer();
-                } else {
-                    DB::transaction($runShopTransfer);
-                }
+                $this->interShopTransferService->createPendingTransfer(
+                    $request,
+                    $validatedData,
+                    $motherShop,
+                    $childShop,
+                    $supplier,
+                    $systemCustomer,
+                    $invoice_no,
+                    $subtotal,
+                    $totalProducts,
+                    $vat,
+                    $invoiceDiscount,
+                    $total,
+                    $pay,
+                    $due,
+                    $paymentStatus,
+                    $paymentMethod1,
+                    $paymentMethod2,
+                    $pay1,
+                    $pay2,
+                    $shopBankId1,
+                    $shopBankId2,
+                );
 
                 return Redirect::route('invoice.create')->with([
-                    'success' => 'Stock transfer invoice has been created successfully! Purchase invoice has been auto-generated.',
+                    'success' => 'Inter-shop transfer created. It is pending child approval; mother stock is reserved. Ledger and stock movement run when you complete the order after approval.',
                 ]);
 
             } catch (\Exception $e) {
-                if ($order_id) {
-                    Order::where('id', $order_id)->delete();
+                if ($isEdit) {
+                    throw $e;
                 }
-                if ($purchase_id) {
-                    Purchase::where('id', $purchase_id)->delete();
-                }
-                if ($isEdit) throw $e;
+
                 return back()->withErrors(['error' => $e->getMessage()])->withInput();
             }
         }
@@ -2381,6 +2202,62 @@ class OrderController extends Controller
         // Should not reach here
         if ($isEdit) throw \Illuminate\Validation\ValidationException::withMessages(['error' => ['Please select either a customer or a shop.']]);
         return back()->withErrors(['error' => 'Please select either a customer or a shop.'])->withInput();
+    }
+
+    public function completeInterShopTransfer(
+        Order $order,
+        CustomerCreditService $creditService,
+        SupplierCreditService $supplierCreditService
+    ) {
+        $this->ensureShopAccess($order);
+        $userShop = auth()->user()->shop_id;
+        if (!$userShop || (int) $userShop !== (int) $order->shop_id) {
+            abort(403, 'Only the mother shop can complete this transfer.');
+        }
+        try {
+            $this->interShopTransferService->completeTransferByMother(
+                (int) $order->id,
+                (int) $order->shop_id,
+                $creditService,
+                $supplierCreditService
+            );
+        } catch (\Throwable $e) {
+            return Redirect::route('order.orderDetails', $order->id)->with('error', $e->getMessage());
+        }
+
+        return Redirect::route('order.orderDetails', $order->id)->with('success', 'Transfer completed. Stock and accounting have been applied.');
+    }
+
+    public function resetInterShopApproval(Order $order)
+    {
+        $this->ensureShopAccess($order);
+        $userShop = auth()->user()->shop_id;
+        if (!$userShop || (int) $userShop !== (int) $order->shop_id) {
+            abort(403, 'Only the mother shop can reset approval.');
+        }
+        try {
+            $this->interShopTransferService->resetApprovalByMother((int) $order->id, (int) $order->shop_id);
+        } catch (\Throwable $e) {
+            return Redirect::route('order.orderDetails', $order->id)->with('error', $e->getMessage());
+        }
+
+        return Redirect::route('order.orderDetails', $order->id)->with('success', 'Approval has been reset. The child shop must approve again.');
+    }
+
+    public function cancelInterShopTransfer(Order $order)
+    {
+        $this->ensureShopAccess($order);
+        $userShop = auth()->user()->shop_id ? (int) auth()->user()->shop_id : null;
+        if (!$userShop || (int) $userShop !== (int) $order->shop_id) {
+            abort(403, 'Only the mother shop can cancel from this sale. Child shops should cancel from the purchase request.');
+        }
+        try {
+            $this->interShopTransferService->cancelInterShopTransfer((int) $order->id, $userShop);
+        } catch (\Throwable $e) {
+            return Redirect::route('order.orderDetails', $order->id)->with('error', $e->getMessage());
+        }
+
+        return Redirect::route('order.orderDetails', $order->id)->with('success', 'Transfer cancelled. Reserved stock has been released.');
     }
 
 }

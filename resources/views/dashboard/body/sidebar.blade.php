@@ -486,6 +486,13 @@
                                 <i class="fas fa-arrow-right"></i><span>Complete Purchases</span>
                             </a>
                         </li>
+                        @if(auth()->user()->shop_id)
+                        <li class="{{ Request::is('shop-purchase-requests*') ? 'active' : '' }}">
+                            <a href="{{ route('shop-purchase-requests.index') }}">
+                                <i class="fas fa-arrow-right"></i><span>Pending For Approval</span>
+                            </a>
+                        </li>
+                        @endif
                         @if (auth()->user()->can('purchase_returns.create') || auth()->user()->can('purchase_returns.view'))
                         <li class="{{ Request::is('purchase-returns*') ? 'active' : '' }}">
                             <a href="{{ route('purchase-returns.index') }}">

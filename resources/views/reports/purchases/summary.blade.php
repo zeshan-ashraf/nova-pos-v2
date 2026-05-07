@@ -190,7 +190,7 @@
                                     <td>{{ $purchase->payment_status }}</td>
                                     <td>
                                         <span class="badge {{ $purchase->purchase_status == 'complete' ? 'badge-success' : 'badge-danger' }}">
-                                            {{ $purchase->purchase_status }}
+                                            {{ $purchase->purchaseStatusDisplayLabel() }}
                                         </span>
                                     </td>
                                 </tr>

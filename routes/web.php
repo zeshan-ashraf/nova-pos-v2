@@ -28,6 +28,8 @@ use App\Http\Controllers\Dashboard\ActiveShopController;
 use App\Http\Controllers\Dashboard\ShopSwitchController;
 use App\Http\Controllers\Dashboard\SaleReturnController;
 use App\Http\Controllers\Dashboard\PurchaseController;
+use App\Http\Controllers\Dashboard\ShopNotificationController;
+use App\Http\Controllers\Dashboard\ShopPurchaseRequestController;
 use App\Http\Controllers\Dashboard\ReportController;
 use App\Http\Controllers\Dashboard\SalesReportController;
 use App\Http\Controllers\Dashboard\PurchaseReportController;
@@ -73,6 +75,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard/insights', [DashboardController::class, 'getInsights'])->name('dashboard.insights');
     Route::get('/dashboard/inventory-snapshot', [DashboardController::class, 'getInventorySnapshot'])->name('dashboard.inventory-snapshot');
     Route::get('/dashboard/business-pulse', [DashboardController::class, 'getBusinessPulse'])->name('dashboard.business-pulse');
+
+    Route::get('/shop-notifications', [ShopNotificationController::class, 'index'])->name('shop-notifications.index');
+    Route::post('/shop-notifications/{id}/read', [ShopNotificationController::class, 'markRead'])->name('shop-notifications.read');
+    Route::post('/shop-notifications/read-all', [ShopNotificationController::class, 'markAllRead'])->name('shop-notifications.readAll');
     Route::middleware(['mother_shop.super_admin'])->group(function () {
         Route::get('/super-admin/dashboard', [SuperAdminDashboardController::class, 'index'])->name('super-admin.dashboard');
         Route::get('/super-admin/dashboard/kpis', [SuperAdminDashboardController::class, 'kpis'])->name('super-admin.dashboard.kpis');
@@ -242,6 +248,10 @@ Route::middleware(['permission:orders.menu'])->group(function () {
     Route::get('/orders/{id}/edit', [OrderController::class, 'edit'])->name('order.edit');
     Route::post('/orders/{id}/update', [OrderController::class, 'update'])->name('order.update');
 
+    Route::post('/orders/{order}/inter-shop/complete', [OrderController::class, 'completeInterShopTransfer'])->name('order.interShop.complete');
+    Route::post('/orders/{order}/inter-shop/reset-approval', [OrderController::class, 'resetInterShopApproval'])->name('order.interShop.resetApproval');
+    Route::post('/orders/{order}/inter-shop/cancel', [OrderController::class, 'cancelInterShopTransfer'])->name('order.interShop.cancel');
+
 });
 
 // ====== SALE RETURNS ======
@@ -257,6 +267,11 @@ Route::middleware(['permission:sale-returns.menu'])->group(function () {
 
 // ====== PURCHASES ======
 Route::middleware(['permission:purchases.menu'])->group(function () {
+    Route::get('/shop-purchase-requests', [ShopPurchaseRequestController::class, 'index'])->name('shop-purchase-requests.index');
+    Route::get('/shop-purchase-requests/{shopPurchaseRequest}', [ShopPurchaseRequestController::class, 'show'])->name('shop-purchase-requests.show');
+    Route::post('/shop-purchase-requests/{shopPurchaseRequest}/approve', [ShopPurchaseRequestController::class, 'approve'])->name('shop-purchase-requests.approve');
+    Route::post('/shop-purchase-requests/{shopPurchaseRequest}/cancel', [ShopPurchaseRequestController::class, 'cancel'])->name('shop-purchase-requests.cancel');
+
     Route::get('/purchases', [PurchaseController::class, 'index'])->name('purchases.index');
     Route::get('/purchases/create', [PurchaseController::class, 'create'])->name('purchases.create');
     Route::post('/purchases', [PurchaseController::class, 'store'])->name('purchases.store');
@@ -267,6 +282,7 @@ Route::middleware(['permission:purchases.menu'])->group(function () {
     Route::get('/purchases/{purchase_id}/edit', [PurchaseController::class, 'edit'])->name('purchases.edit');
     Route::put('/purchases/{purchase_id}', [PurchaseController::class, 'update'])->name('purchases.update');
     Route::get('/purchases/{purchase_id}', [PurchaseController::class, 'show'])->name('purchases.show');
+    Route::post('/purchases/{purchase}/inter-shop/approve', [PurchaseController::class, 'approveInterShopTransfer'])->name('purchases.interShop.approve');
     Route::put('/purchases/update/status', [PurchaseController::class, 'updateStatus'])->name('purchases.updateStatus');
 
     // Landed cost flow extensions (expenses + approve + receive)

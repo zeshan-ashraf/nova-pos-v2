@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\Expense;
 use App\Models\StockLog;
 use App\Models\Supplier;
+use App\Models\ShopPurchaseRequest;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Dashboard\Traits\ReportTrait;
@@ -26,6 +27,8 @@ use App\Services\Purchase\PurchaseExpenseService;
 use App\Services\Purchase\PurchaseLandedCostService;
 use App\Services\Purchase\PurchaseReceiveService;
 use App\Services\Purchase\PurchaseUpdateService;
+use App\Services\InterShopTransferService;
+use App\Support\InterShopTransferStatus;
 
 class PurchaseController extends Controller
 {
@@ -460,11 +463,14 @@ class PurchaseController extends Controller
         if (($purchase->landed_cost_status ?? '') === 'approved') {
             abort(403, 'Approved purchase cannot be edited');
         }
-        if (($purchase->purchase_status ?? '') === 'complete') {
+        if (in_array((string) ($purchase->purchase_status ?? ''), ['complete', InterShopTransferStatus::COMPLETED], true)) {
             abort(403, 'Cannot edit purchase after it has been received.');
         }
         if ((bool) ($purchase->is_system_generated ?? false)) {
             abort(403, 'System-generated purchase cannot be edited here.');
+        }
+        if ($this->isPurchaseLinkedToSourceSale($purchase)) {
+            abort(403, 'This purchase is linked to a sale order and cannot be edited.');
         }
 
         $authUser = auth()->user();
@@ -513,6 +519,9 @@ class PurchaseController extends Controller
 
         if (($purchase->landed_cost_status ?? '') === 'approved') {
             abort(403, 'Approved purchase cannot be edited');
+        }
+        if ($this->isPurchaseLinkedToSourceSale($purchase)) {
+            abort(403, 'This purchase is linked to a sale order and cannot be updated.');
         }
 
         $rules = [
@@ -657,6 +666,10 @@ class PurchaseController extends Controller
         $purchase = Purchase::findOrFail($request->id);
         $this->ensureShopAccess($purchase);
 
+        if ((bool) ($purchase->is_system_generated ?? false) && $purchase->source_sale_id) {
+            return Redirect::back()->withErrors(['error' => 'This transfer is completed from the mother shop sale after you approve it here.']);
+        }
+
         try {
             $receiveService->receivePurchase((int) $purchase->id);
         } catch (\RuntimeException $e) {
@@ -682,7 +695,7 @@ class PurchaseController extends Controller
             return Redirect::back()->withErrors(['error' => 'Internal purchases do not support landed-cost expenses.']);
         }
 
-        if (($purchase->purchase_status ?? '') === 'complete') {
+        if (in_array((string) ($purchase->purchase_status ?? ''), ['complete', InterShopTransferStatus::COMPLETED], true)) {
             return Redirect::back()->withErrors(['error' => 'Cannot edit purchase after it has been received.']);
         }
 
@@ -744,7 +757,7 @@ class PurchaseController extends Controller
             return Redirect::back()->withErrors(['error' => 'Internal purchases do not support landed-cost expenses.']);
         }
 
-        if (($purchase->purchase_status ?? '') === 'complete') {
+        if (in_array((string) ($purchase->purchase_status ?? ''), ['complete', InterShopTransferStatus::COMPLETED], true)) {
             return Redirect::back()->withErrors(['error' => 'Cannot edit purchase after it has been received.']);
         }
 
@@ -808,7 +821,7 @@ class PurchaseController extends Controller
             return Redirect::back()->withErrors(['error' => 'Internal purchases do not support landed-cost expenses.']);
         }
 
-        if (($purchase->purchase_status ?? '') === 'complete') {
+        if (in_array((string) ($purchase->purchase_status ?? ''), ['complete', InterShopTransferStatus::COMPLETED], true)) {
             return Redirect::back()->withErrors(['error' => 'Cannot edit purchase after it has been received.']);
         }
 
@@ -846,7 +859,7 @@ class PurchaseController extends Controller
             return Redirect::back()->withErrors(['error' => 'Internal purchases skip landed-cost approval.']);
         }
 
-        if (($purchase->purchase_status ?? '') === 'complete') {
+        if (in_array((string) ($purchase->purchase_status ?? ''), ['complete', InterShopTransferStatus::COMPLETED], true)) {
             return Redirect::back()->withErrors(['error' => 'Cannot approve landed cost after purchase is received.']);
         }
 
@@ -880,7 +893,11 @@ class PurchaseController extends Controller
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
 
         $purchasesQuery = Purchase::with(['supplier', 'shop.parent'])
-            ->where('purchase_status', 'pending')
+            ->where(function ($q) {
+                $q->where('purchase_status', 'pending')
+                    ->orWhere('purchase_status', InterShopTransferStatus::PENDING)
+                    ->orWhere('purchase_status', InterShopTransferStatus::APPROVED);
+            })
             ->sortable();
 
         // Apply shop filtering
@@ -920,7 +937,10 @@ class PurchaseController extends Controller
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
 
         $purchasesQuery = Purchase::with(['supplier', 'shop.parent'])
-            ->where('purchase_status', 'complete')
+            ->where(function ($q) {
+                $q->where('purchase_status', 'complete')
+                    ->orWhere('purchase_status', InterShopTransferStatus::COMPLETED);
+            })
             ->sortable();
 
         // Apply shop filtering
@@ -959,6 +979,9 @@ class PurchaseController extends Controller
         if ($purchase->is_system_generated ?? false) {
             return Redirect::back()->with('error', 'System generated purchase cannot be deleted.');
         }
+        if ($this->isPurchaseLinkedToSourceSale($purchase)) {
+            return Redirect::back()->with('error', 'This purchase is linked to a sale order and cannot be deleted.');
+        }
 
         try {
             // Prefer centralized deletion logic if defined, but if not fallback to expanded inline approach
@@ -976,7 +999,7 @@ class PurchaseController extends Controller
                         throw new \RuntimeException('This purchase invoice has already been deleted.');
                     }
 
-                    $shouldReverseStock = ($purchase->purchase_status ?? '') === 'complete';
+                    $shouldReverseStock = in_array((string) ($purchase->purchase_status ?? ''), ['complete', InterShopTransferStatus::COMPLETED], true);
 
                     // 2. Reverse stock only after external purchase has been received.
                     if ($shouldReverseStock) {
@@ -1033,6 +1056,53 @@ class PurchaseController extends Controller
         } catch (\Exception $e) {
             return Redirect::route('purchases.index')->with('error', 'Failed to delete purchase: ' . $e->getMessage());
         }
+    }
+
+    public function approveInterShopTransfer(Purchase $purchase, InterShopTransferService $interShopTransferService)
+    {
+        $purchase = Purchase::withoutGlobalScopes()->findOrFail($purchase->id);
+        $this->ensureShopAccess($purchase);
+        if (!(bool) ($purchase->is_system_generated ?? false) || !$purchase->source_sale_id) {
+            abort(404);
+        }
+        if (!auth()->user()->shop_id || (int) auth()->user()->shop_id !== (int) $purchase->shop_id) {
+            abort(403, 'Only the receiving child shop can approve this transfer.');
+        }
+
+        $spr = ShopPurchaseRequest::query()
+            ->where('mother_shop_sale_id', $purchase->source_sale_id)
+            ->where('child_shop_id', $purchase->shop_id)
+            ->first();
+
+        try {
+            if ($spr) {
+                $interShopTransferService->approveShopPurchaseRequest(
+                    (int) $spr->id,
+                    (int) auth()->user()->shop_id,
+                    (int) auth()->id()
+                );
+            } else {
+                $interShopTransferService->approveTransferPurchase((int) $purchase->id, (int) auth()->id());
+            }
+        } catch (\Throwable $e) {
+            return Redirect::route('purchases.show', $purchase->id)->with('error', $e->getMessage());
+        }
+
+        if ($spr) {
+            return Redirect::route('shop-purchase-requests.show', $spr)->with('success', 'Transfer approved. The mother shop can now complete dispatch.');
+        }
+
+        return Redirect::route('purchases.show', $purchase->id)->with('success', 'Transfer approved. The mother shop can now complete dispatch.');
+    }
+
+    /**
+     * True when this purchase is tied to a mother-shop sale (inter-shop / transfer line).
+     */
+    protected function isPurchaseLinkedToSourceSale(Purchase $purchase): bool
+    {
+        $id = $purchase->source_sale_id;
+
+        return $id !== null && $id !== '' && (int) $id !== 0;
     }
 
     /**

@@ -66,4 +66,9 @@ class Order extends Model
     {
         return $this->hasMany(SaleReturn::class, 'order_id', 'id');
     }
+
+    public function shopPurchaseRequest()
+    {
+        return $this->hasOne(ShopPurchaseRequest::class, 'mother_shop_sale_id');
+    }
 }
