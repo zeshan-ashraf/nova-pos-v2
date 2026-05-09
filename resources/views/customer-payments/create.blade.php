@@ -112,6 +112,7 @@
             @php
                 $dateRange = $dateRange ?? [];
                 $dateFilter = $dateRange['date_filter'] ?? 'all';
+                $paymentMethodFilter = $payment_method_filter ?? request('payment_method_filter', '');
             @endphp
             <div class="card report-filter-card border-primary shadow-sm mt-4">
                 <div class="card-header border-0 py-2">
@@ -120,7 +121,7 @@
                 <div class="card-body pt-0">
                     <form action="{{ route('customer-payments.create') }}" method="GET">
                         <div class="row align-items-end">
-                            <div class="col-md-3 mb-2 mb-md-0">
+                            <div class="col-md-2 mb-2 mb-md-0">
                                 <label for="date_filter" class="form-label">Date Filter</label>
                                 <select class="form-control" name="date_filter" id="date_filter" onchange="toggleCustomerPaymentCustomDates()">
                                     <option value="all" {{ $dateFilter === 'all' ? 'selected' : '' }}>All</option>
@@ -135,13 +136,21 @@
                                     <option value="custom" {{ $dateFilter === 'custom' ? 'selected' : '' }}>Custom Range</option>
                                 </select>
                             </div>
-                            <div class="col-md-3 mb-2 mb-md-0">
+                            <div class="col-md-2 mb-2 mb-md-0">
                                 <label for="filter_customer_id" class="form-label">Customer</label>
                                 <select class="form-control filter-customer-select" id="filter_customer_id" name="customer_id">
                                     <option value="">— All —</option>
                                     @foreach($customers ?? [] as $c)
                                         <option value="{{ $c->id }}" {{ request('customer_id') == $c->id ? 'selected' : '' }}>{{ $c->shopname ? ($c->name ? $c->shopname . ' (' . $c->name . ')' : $c->shopname) : ($c->name ?? '—') }}</option>
                                     @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-2 mb-2 mb-md-0">
+                                <label for="payment_method_filter" class="form-label">Payment Method</label>
+                                <select class="form-control" name="payment_method_filter" id="payment_method_filter">
+                                    <option value="" {{ $paymentMethodFilter === '' ? 'selected' : '' }}>All</option>
+                                    <option value="cash" {{ $paymentMethodFilter === 'cash' ? 'selected' : '' }}>Cash</option>
+                                    <option value="bank" {{ $paymentMethodFilter === 'bank' ? 'selected' : '' }}>Bank</option>
                                 </select>
                             </div>
                             <div class="col-md-2 mb-2 mb-md-0" id="filter_start_date_group" style="display: {{ $dateFilter === 'custom' ? 'block' : 'none' }};">
@@ -152,11 +161,18 @@
                                 <label for="end_date" class="form-label">End Date</label>
                                 <input type="date" class="form-control" id="end_date" name="end_date" value="{{ $dateRange['end_date'] ?? '' }}">
                             </div>
-                            <div class="col-md-2 mb-2 mb-md-0 d-flex align-items-end flex-wrap">
-                                <button type="submit" class="btn btn-primary px-3 py-2 mr-2 mb-2 mb-md-0">
-                                    <i class="ri-search-line mr-1"></i> Filter
-                                </button>
-                                <a href="{{ route('customer-payments.create') }}" class="btn btn-outline-secondary px-3 py-2">Clear</a>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-12 overflow-x-auto">
+                                <div class="customer-payments-filter-actions d-flex flex-row flex-nowrap align-items-center">
+                                    <button type="submit" class="btn btn-primary px-3 py-2 mr-2 mb-0">
+                                        <i class="ri-search-line mr-1"></i> Filter
+                                    </button>
+                                    <a href="{{ route('customer-payments.exportExcel', request()->except('page')) }}" class="btn btn-outline-success px-3 py-2 mr-2 mb-0">
+                                        <i class="fas fa-file-excel mr-1"></i> Export Excel
+                                    </a>
+                                    <a href="{{ route('customer-payments.create') }}" class="btn btn-outline-secondary px-3 py-2 mb-0">Clear</a>
+                                </div>
                             </div>
                         </div>
                     </form>
@@ -169,6 +185,7 @@
                     <form method="get" action="{{ route('customer-payments.create') }}" class="d-flex align-items-center">
                         <input type="hidden" name="date_filter" value="{{ request('date_filter', 'all') }}">
                         <input type="hidden" name="customer_id" value="{{ request('customer_id') }}">
+                        <input type="hidden" name="payment_method_filter" value="{{ request('payment_method_filter') }}">
                         <input type="hidden" name="start_date" value="{{ request('start_date') }}">
                         <input type="hidden" name="end_date" value="{{ request('end_date') }}">
                         <label class="mb-0 mr-2">Show</label>
@@ -184,7 +201,7 @@
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-striped mb-0">
+                        <table class="table table-striped mb-0" id="customerPaymentsTable">
                             <thead class="bg-light text-uppercase">
                                 <tr>
                                     <th>#</th>
@@ -206,7 +223,25 @@
                                     <td>{{ \Carbon\Carbon::parse($p->transaction_date)->format('d M Y') }}</td>
                                     <td>{{ number_format($p->amount, 2) }}</td>
                                     <td>{{ ucfirst($p->payment_method) }}</td>
-                                    <td>{{ $p->description ?? '—' }}</td>
+                                    <td class="text-break">
+                                        @php
+                                            $payDesc = (string) ($p->description ?? '');
+                                        @endphp
+                                        @if($payDesc === '')
+                                            —
+                                        @elseif(mb_strlen($payDesc) <= 15)
+                                            {{ $payDesc }}
+                                        @else
+                                            <span class="cp-desc-wrap d-inline-block">
+                                                <span class="cp-desc-collapsed">
+                                                    {{ \Illuminate\Support\Str::substr($payDesc, 0, 15) }}<button type="button" class="btn btn-link btn-sm p-0 align-baseline cp-desc-more text-decoration-none" aria-expanded="false" title="Show full description">....</button>
+                                                </span>
+                                                <span class="cp-desc-expanded d-none">
+                                                    {{ $payDesc }} <button type="button" class="btn btn-link btn-sm p-0 align-baseline cp-desc-less text-decoration-none" aria-expanded="true" title="Show less">less</button>
+                                                </span>
+                                            </span>
+                                        @endif
+                                    </td>
                                     <td>
                                         <div class="d-flex align-items-center">
                                             <div class="btn-group mr-2">
@@ -300,6 +335,24 @@
             }, { passive: false });
         }
     })();
+
+    document.getElementById('customerPaymentsTable')?.addEventListener('click', function(e) {
+        var more = e.target.closest('.cp-desc-more');
+        var less = e.target.closest('.cp-desc-less');
+        if (!more && !less) return;
+        e.preventDefault();
+        var wrap = (more || less).closest('.cp-desc-wrap');
+        if (!wrap) return;
+        var collapsed = wrap.querySelector('.cp-desc-collapsed');
+        var expanded = wrap.querySelector('.cp-desc-expanded');
+        if (more) {
+            collapsed.classList.add('d-none');
+            expanded.classList.remove('d-none');
+        } else {
+            expanded.classList.add('d-none');
+            collapsed.classList.remove('d-none');
+        }
+    });
 
     document.querySelectorAll('.delete-payment').forEach(function(button) {
         button.addEventListener('click', function() {

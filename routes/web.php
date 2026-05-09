@@ -192,6 +192,7 @@ Route::get('/customers/{customer}/ledger', [CustomerController::class, 'ledger']
 Route::get('/customers/{customer}/ledger/pdf', [CustomerController::class, 'ledgerPdf'])->name('customers.ledgerPdf');
 
 Route::middleware(['permission:customer_payment.menu'])->group(function () {
+    Route::get('/customer-payments/export', [CustomerPaymentController::class, 'exportExcel'])->name('customer-payments.exportExcel');
     Route::get('/customer-payments/create', [CustomerPaymentController::class, 'create'])->name('customer-payments.create');
     Route::get('/customer-payments/{id}/content', [CustomerPaymentController::class, 'paymentDetailContent'])->name('customer-payments.content');
     Route::get('/customer-payments/{id}/print-a4', [CustomerPaymentController::class, 'printA4'])->name('customer-payments.printA4');

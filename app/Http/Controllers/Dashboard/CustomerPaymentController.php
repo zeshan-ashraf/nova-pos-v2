@@ -13,6 +13,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Redirect;
 use App\Support\ActiveShop;
+use Illuminate\Database\Eloquent\Builder;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Brick\Math\BigDecimal;
 use Brick\Math\Exception\MathException as BrickMathException;
 use Brick\Math\RoundingMode;
@@ -50,72 +54,8 @@ class CustomerPaymentController extends Controller
             $row = 15;
         }
 
-        $dateFilter = $request->input('date_filter', 'all');
-        $startDate = null;
-        $endDate = null;
-
-        if ($dateFilter !== 'all') {
-            switch ($dateFilter) {
-                case 'today':
-                    $startDate = Carbon::today();
-                    $endDate = Carbon::today();
-                    break;
-                case 'yesterday':
-                    $startDate = Carbon::yesterday();
-                    $endDate = Carbon::yesterday();
-                    break;
-                case 'this_week':
-                    $startDate = Carbon::now()->startOfWeek();
-                    $endDate = Carbon::now()->endOfWeek();
-                    break;
-                case 'last_week':
-                    $startDate = Carbon::now()->subWeek()->startOfWeek();
-                    $endDate = Carbon::now()->subWeek()->endOfWeek();
-                    break;
-                case 'this_month':
-                    $startDate = Carbon::now()->startOfMonth();
-                    $endDate = Carbon::now()->endOfMonth();
-                    break;
-                case 'last_month':
-                    $startDate = Carbon::now()->subMonth()->startOfMonth();
-                    $endDate = Carbon::now()->subMonth()->endOfMonth();
-                    break;
-                case 'this_year':
-                    $startDate = Carbon::now()->startOfYear();
-                    $endDate = Carbon::now()->endOfYear();
-                    break;
-                case 'last_year':
-                    $startDate = Carbon::now()->subYear()->startOfYear();
-                    $endDate = Carbon::now()->subYear()->endOfYear();
-                    break;
-                case 'custom':
-                    $startDateInput = $request->input('start_date');
-                    $endDateInput = $request->input('end_date');
-                    $startDate = $startDateInput ? Carbon::parse($startDateInput)->startOfDay() : Carbon::today()->startOfDay();
-                    $endDate = $endDateInput ? Carbon::parse($endDateInput)->endOfDay() : Carbon::today()->endOfDay();
-                    break;
-                default:
-                    $dateFilter = 'all';
-                    break;
-            }
-        }
-
-        // All customer payments: rows with source_type = customer_payment and account_type = customer (one per payment)
-        $paymentRowsQuery = AccountTransaction::query()
-            ->where('source_type', AccountTransaction::SOURCE_CUSTOMER_PAYMENT)
-            ->where('account_type', AccountTransaction::ACCOUNT_TYPE_CUSTOMER)
-            ->when($visibleShopIds->isNotEmpty(), fn ($q) => $q->whereIn('shop_id', $visibleShopIds));
-
-        if ($request->filled('customer_id')) {
-            $paymentRowsQuery->where('account_ref_id', (int) $request->input('customer_id'));
-        }
-
-        if ($dateFilter !== 'all' && $startDate && $endDate) {
-            $paymentRowsQuery->whereBetween('transaction_date', [
-                $startDate->format('Y-m-d H:i:s'),
-                $endDate->format('Y-m-d H:i:s'),
-            ]);
-        }
+        $listFilters = $this->resolveCustomerPaymentsListFilters($request);
+        $paymentRowsQuery = $this->customerPaymentsFilteredQuery($request, $visibleShopIds, $listFilters);
 
         $paymentRowsQuery
             ->orderBy('transaction_date', 'desc')
@@ -160,10 +100,98 @@ class CustomerPaymentController extends Controller
             'shopBanks' => $shopBanks,
             'payments' => $paymentRows,
             'dateRange' => [
-                'date_filter' => $dateFilter,
-                'start_date' => $startDate?->format('Y-m-d'),
-                'end_date' => $endDate?->format('Y-m-d'),
+                'date_filter' => $listFilters['date_filter'],
+                'start_date' => $listFilters['start_date']?->format('Y-m-d'),
+                'end_date' => $listFilters['end_date']?->format('Y-m-d'),
             ],
+            'payment_method_filter' => $listFilters['payment_method_filter'],
+        ]);
+    }
+
+    /**
+     * Excel export for the filtered customer payments list (all matching rows, not paginated).
+     */
+    public function exportExcel(Request $request): StreamedResponse
+    {
+        $authUser = auth()->user();
+        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+        $listFilters = $this->resolveCustomerPaymentsListFilters($request);
+        $rows = $this->customerPaymentsFilteredQuery($request, $visibleShopIds, $listFilters)
+            ->orderBy('transaction_date', 'desc')
+            ->orderBy('id', 'desc')
+            ->get();
+
+        $customerIds = $rows->pluck('account_ref_id')->unique()->filter()->values()->all();
+        $customersById = $customerIds ? Customer::whereIn('id', $customerIds)->get()->keyBy('id') : collect();
+        $shopIds = $rows->pluck('shop_id')->unique()->filter()->values()->all();
+        $shopsById = $shopIds ? Shop::whereIn('id', $shopIds)->get()->keyBy('id') : collect();
+
+        $paymentMethodByKey = [];
+        if ($rows->isNotEmpty()) {
+            $cashBankQuery = AccountTransaction::query()
+                ->where('source_type', AccountTransaction::SOURCE_CUSTOMER_PAYMENT)
+                ->whereIn('account_type', [AccountTransaction::ACCOUNT_TYPE_CASH, AccountTransaction::ACCOUNT_TYPE_BANK])
+                ->when($visibleShopIds->isNotEmpty(), fn ($q) => $q->whereIn('shop_id', $visibleShopIds))
+                ->whereIn('transaction_date', $rows->pluck('transaction_date')->unique()->values()->all());
+            foreach ($cashBankQuery->get() as $r) {
+                $key = $r->shop_id . '|' . $r->transaction_date . '|' . (string) $r->amount . '|' . (string) ($r->description ?? '');
+                $paymentMethodByKey[$key] = $r->account_type;
+            }
+        }
+
+        $filename = 'customer-payments-' . now()->format('Y-m-d_His') . '.xlsx';
+        $grandTotal = (float) $rows->sum('amount');
+
+        return new StreamedResponse(function () use ($rows, $filename, $grandTotal, $customersById, $shopsById, $paymentMethodByKey) {
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->fromArray([
+                'Receipt No',
+                'Shop',
+                'Customer',
+                'Date',
+                'Amount',
+                'Method',
+                'Description',
+                'Payment ID',
+            ], null, 'A1');
+
+            $rowIndex = 2;
+            foreach ($rows as $paymentRow) {
+                $cust = $customersById->get($paymentRow->account_ref_id);
+                $customerDisplay = $cust?->shopname ?: $cust?->name ?: '—';
+                $pk = $paymentRow->shop_id . '|' . $paymentRow->transaction_date . '|' . (string) $paymentRow->amount . '|' . (string) ($paymentRow->description ?? '');
+                $acctType = $paymentMethodByKey[$pk] ?? null;
+                $methodLabel = $acctType === AccountTransaction::ACCOUNT_TYPE_BANK
+                    ? 'Bank'
+                    : ($acctType === AccountTransaction::ACCOUNT_TYPE_CASH ? 'Cash' : '—');
+                $sheet->fromArray([
+                    $paymentRow->receipt_no ?? '—',
+                    $shopsById->get($paymentRow->shop_id)?->name ?? '—',
+                    $customerDisplay,
+                    Carbon::parse($paymentRow->transaction_date)->format('Y-m-d'),
+                    number_format((float) $paymentRow->amount, 2, '.', ''),
+                    $methodLabel,
+                    $paymentRow->description ?? '',
+                    $paymentRow->id,
+                ], null, 'A' . $rowIndex);
+                $rowIndex++;
+            }
+
+            $sheet->setCellValue('D' . $rowIndex, 'Total');
+            $sheet->setCellValue('E' . $rowIndex, number_format($grandTotal, 2, '.', ''));
+            $sheet->getStyle('D' . $rowIndex . ':E' . $rowIndex)->getFont()->setBold(true);
+
+            foreach (range('A', 'H') as $col) {
+                $sheet->getColumnDimension($col)->setAutoSize(true);
+            }
+
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+        }, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Cache-Control' => 'max-age=0',
         ]);
     }
 
@@ -385,6 +413,115 @@ class CustomerPaymentController extends Controller
         }
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * @return array{date_filter: string, start_date: ?Carbon, end_date: ?Carbon, payment_method_filter: string}
+     */
+    protected function resolveCustomerPaymentsListFilters(Request $request): array
+    {
+        $dateFilter = $request->input('date_filter', 'all');
+        $startDate = null;
+        $endDate = null;
+
+        if ($dateFilter !== 'all') {
+            switch ($dateFilter) {
+                case 'today':
+                    $startDate = Carbon::today();
+                    $endDate = Carbon::today();
+                    break;
+                case 'yesterday':
+                    $startDate = Carbon::yesterday();
+                    $endDate = Carbon::yesterday();
+                    break;
+                case 'this_week':
+                    $startDate = Carbon::now()->startOfWeek();
+                    $endDate = Carbon::now()->endOfWeek();
+                    break;
+                case 'last_week':
+                    $startDate = Carbon::now()->subWeek()->startOfWeek();
+                    $endDate = Carbon::now()->subWeek()->endOfWeek();
+                    break;
+                case 'this_month':
+                    $startDate = Carbon::now()->startOfMonth();
+                    $endDate = Carbon::now()->endOfMonth();
+                    break;
+                case 'last_month':
+                    $startDate = Carbon::now()->subMonth()->startOfMonth();
+                    $endDate = Carbon::now()->subMonth()->endOfMonth();
+                    break;
+                case 'this_year':
+                    $startDate = Carbon::now()->startOfYear();
+                    $endDate = Carbon::now()->endOfYear();
+                    break;
+                case 'last_year':
+                    $startDate = Carbon::now()->subYear()->startOfYear();
+                    $endDate = Carbon::now()->subYear()->endOfYear();
+                    break;
+                case 'custom':
+                    $startDateInput = $request->input('start_date');
+                    $endDateInput = $request->input('end_date');
+                    $startDate = $startDateInput ? Carbon::parse($startDateInput)->startOfDay() : Carbon::today()->startOfDay();
+                    $endDate = $endDateInput ? Carbon::parse($endDateInput)->endOfDay() : Carbon::today()->endOfDay();
+                    break;
+                default:
+                    $dateFilter = 'all';
+                    break;
+            }
+        }
+
+        return [
+            'date_filter' => $dateFilter,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'payment_method_filter' => $request->input('payment_method_filter', ''),
+        ];
+    }
+
+    /**
+     * Base query for the customer-payment list sharing the same filters as the create-page table / export.
+     *
+     * @param  \Illuminate\Support\Collection|array<int, int>  $visibleShopIds
+     */
+    protected function customerPaymentsFilteredQuery(Request $request, $visibleShopIds, array $filters): Builder
+    {
+        $query = AccountTransaction::query()
+            ->where('source_type', AccountTransaction::SOURCE_CUSTOMER_PAYMENT)
+            ->where('account_type', AccountTransaction::ACCOUNT_TYPE_CUSTOMER)
+            ->when($visibleShopIds->isNotEmpty(), fn ($q) => $q->whereIn('shop_id', $visibleShopIds));
+
+        if ($request->filled('customer_id')) {
+            $query->where('account_ref_id', (int) $request->input('customer_id'));
+        }
+
+        $dateFilter = $filters['date_filter'];
+        $startDate = $filters['start_date'];
+        $endDate = $filters['end_date'];
+        if ($dateFilter !== 'all' && $startDate && $endDate) {
+            $query->whereBetween('transaction_date', [
+                $startDate->format('Y-m-d H:i:s'),
+                $endDate->format('Y-m-d H:i:s'),
+            ]);
+        }
+
+        $paymentMethodFilter = $filters['payment_method_filter'];
+        if (in_array($paymentMethodFilter, ['cash', 'bank'], true)) {
+            $siblingAccountType = $paymentMethodFilter === 'cash'
+                ? AccountTransaction::ACCOUNT_TYPE_CASH
+                : AccountTransaction::ACCOUNT_TYPE_BANK;
+            $table = (new AccountTransaction())->getTable();
+            $query->whereExists(function ($sub) use ($siblingAccountType, $table) {
+                $sub->select(DB::raw(1))
+                    ->from($table . ' as cp_pay_method_sibling')
+                    ->whereColumn('cp_pay_method_sibling.source_id', $table . '.source_id')
+                    ->whereColumn('cp_pay_method_sibling.shop_id', $table . '.shop_id')
+                    ->whereNull('cp_pay_method_sibling.deleted_at')
+                    ->where('cp_pay_method_sibling.source_type', AccountTransaction::SOURCE_CUSTOMER_PAYMENT)
+                    ->where('cp_pay_method_sibling.account_type', $siblingAccountType);
+            });
+        }
+
+        return $query;
     }
 
     protected function resolvePaymentForPrint(int $id, LedgerBalanceService $balanceService): array
