@@ -194,6 +194,8 @@ Route::get('/customers/{customer}/ledger/pdf', [CustomerController::class, 'ledg
 Route::middleware(['permission:customer_payment.menu'])->group(function () {
     Route::get('/customer-payments/create', [CustomerPaymentController::class, 'create'])->name('customer-payments.create');
     Route::get('/customer-payments/{id}/content', [CustomerPaymentController::class, 'paymentDetailContent'])->name('customer-payments.content');
+    Route::get('/customer-payments/{id}/print-a4', [CustomerPaymentController::class, 'printA4'])->name('customer-payments.printA4');
+    Route::get('/customer-payments/{id}/print-receipt', [CustomerPaymentController::class, 'printReceipt'])->name('customer-payments.printReceipt');
     Route::post('/customer-payments', [CustomerPaymentController::class, 'store'])->name('customer-payments.store');
     Route::delete('/customer-payments/{id}', [CustomerPaymentController::class, 'destroy'])->name('customer-payments.destroy');
 });

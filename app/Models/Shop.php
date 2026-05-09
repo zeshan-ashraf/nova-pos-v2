@@ -23,6 +23,7 @@ class Shop extends Model
         'parent_shop_id',
         'status',
         'invoice_policy',
+        'print_note',
     ];
 
     protected $casts = [

@@ -1,0 +1,407 @@
+/* Shared customer payment print styles — slip aesthetic + A4 variant */
+html,
+body {
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    color: #2d2d2d;
+    line-height: 1.45;
+    background: #e8e8e8;
+}
+
+body.customer-payment-print-a4 {
+    background: #fff;
+}
+
+.print-doc {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ----- Slip shell (thermal + A4 use same tokens) ----- */
+.cp-slip {
+    background: linear-gradient(180deg, #f3f3f3 0%, #fdfdfd 45%, #f7f7f7 100%);
+    border-radius: 6px;
+    box-shadow: 6px 8px 18px rgba(0, 0, 0, 0.12);
+    padding: 16px 18px 20px;
+    box-sizing: border-box;
+}
+
+.cp-slip-head {
+    text-align: center;
+}
+
+.cp-slip-title {
+    margin: 0 0 6px;
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #1a1a1a;
+}
+
+.cp-slip-shop {
+    font-size: 14px;
+    font-weight: 600;
+    color: #3d3d3d;
+}
+
+.cp-sep {
+    height: 0;
+    margin: 10px 0;
+    border: none;
+    border-top: 1px dashed #8a8a8a;
+}
+
+.cp-dbl-sep {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 12px 0;
+}
+
+.cp-dbl-sep span {
+    display: block;
+    border-top: 1px dashed #6b6b6b;
+}
+
+.cp-meta-block {
+    font-size: 12px;
+    color: #333;
+}
+
+.cp-meta-line {
+    display: flex;
+    justify-content: flex-start;
+    gap: 8px;
+    margin: 4px 0;
+    align-items: baseline;
+}
+
+.cp-meta-label {
+    flex: 0 0 auto;
+    min-width: 4.5rem;
+    font-weight: 600;
+    color: #444;
+}
+
+.cp-meta-label::after {
+    content: ":";
+}
+
+.cp-meta-val {
+    flex: 1 1 auto;
+    text-align: left;
+    word-break: break-word;
+}
+
+.cp-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin: 5px 0;
+    font-size: 12px;
+}
+
+.cp-line span:first-child {
+    color: #3d3d3d;
+}
+
+.cp-line span:last-child {
+    font-weight: 600;
+    text-align: right;
+    color: #111;
+}
+
+.cp-line--strong span:first-child {
+    font-weight: 700;
+}
+
+.cp-line--strong span:last-child {
+    font-weight: 800;
+}
+
+.cp-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    padding-top: 6px;
+    font-size: 18px;
+    font-weight: 800;
+    color: #111;
+}
+
+.cp-total span:first-child {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.cp-note-block {
+    margin-top: 10px;
+    font-size: 11px;
+    color: #454545;
+    white-space: pre-wrap;
+    line-height: 1.35;
+}
+
+.cp-thanks {
+    margin-top: 14px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #222;
+}
+
+.cp-legal {
+    margin-top: 8px;
+    text-align: center;
+    font-size: 10px;
+    color: #6b7280;
+}
+
+/* Balance block — prominence without changing fields */
+.cp-balance-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #555;
+    margin: 8px 0 4px;
+    text-align: center;
+}
+
+.cp-sign-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 16px;
+    margin-top: 16px;
+}
+
+.cp-sign-box {
+    border-top: 1px solid #6b6b6b;
+    padding-top: 6px;
+    font-size: 11px;
+    text-align: center;
+    color: #444;
+}
+
+/* ----- Thermal ----- */
+.print-thermal {
+    width: 3in;
+    max-width: 100%;
+    margin: 16px auto;
+    padding: 0 8px 20px;
+}
+
+.print-thermal .cp-slip {
+    padding: 14px 14px 16px;
+}
+
+.print-thermal .cp-slip-title {
+    font-size: 16px;
+    letter-spacing: 0.1em;
+}
+
+.print-thermal .cp-slip-shop {
+    font-size: 13px;
+}
+
+.print-thermal .cp-line,
+.print-thermal .cp-meta-block {
+    font-size: 11px;
+}
+
+.print-thermal .cp-total {
+    font-size: 16px;
+}
+
+.print-thermal .cp-sign-row {
+    gap: 10px;
+}
+
+/* ----- A4: classic document layout (not thermal slip) ----- */
+.print-a4 {
+    max-width: 210mm;
+    margin: 0 auto;
+    padding: 12mm 14mm 16mm;
+    background: #fff;
+    box-sizing: border-box;
+}
+
+.print-a4 .print-header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.print-a4 .d-flex {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.print-a4 .print-logo {
+    width: 72px;
+    height: 72px;
+    object-fit: contain;
+}
+
+.print-a4 .print-shop h2 {
+    margin: 0 0 4px;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #212529;
+}
+
+.print-a4 .print-muted {
+    color: #6c757d;
+    font-size: 0.95rem;
+}
+
+.print-a4 .print-title {
+    text-align: right;
+}
+
+.print-a4 .print-title h1 {
+    margin: 0 0 8px;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #212529;
+}
+
+.print-a4 .print-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+@media (max-width: 640px) {
+    .print-a4 .print-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.print-a4 .print-card {
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 12px 14px;
+    background: #fff;
+}
+
+.print-a4 .print-card h4 {
+    margin: 0 0 10px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #343a40;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.print-a4 .kv {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 6px 0;
+    font-size: 0.9rem;
+    border-bottom: 1px dotted #e9ecef;
+}
+
+.print-a4 .kv:last-child {
+    border-bottom: none;
+}
+
+.print-a4 .kv .k {
+    color: #6c757d;
+    flex-shrink: 0;
+}
+
+.print-a4 .kv .v {
+    font-weight: 600;
+    text-align: right;
+    color: #212529;
+    word-break: break-word;
+}
+
+.print-a4 .print-note {
+    margin-top: 16px;
+    padding: 12px 14px;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    white-space: pre-wrap;
+    line-height: 1.45;
+    color: #495057;
+}
+
+.print-a4 .sign-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 32px;
+    margin-top: 70px;
+}
+
+.print-a4 .sign-box {
+    border-top: 1px solid #343a40;
+    padding-top: 8px;
+    text-align: center;
+    font-size: 0.85rem;
+    color: #495057;
+}
+
+.print-a4 .print-footer {
+    margin-top: 24px;
+    text-align: center;
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+@media print {
+    @page {
+        size: A4;
+        margin: 10mm;
+    }
+
+    body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .print-a4 {
+        max-width: none;
+        padding: 0;
+        margin: 0;
+        background: #fff !important;
+    }
+
+    .print-thermal {
+        width: 3in !important;
+        margin: 0 auto !important;
+        padding: 0 4px !important;
+    }
+
+    .print-thermal .cp-slip {
+        box-shadow: none;
+        background: linear-gradient(180deg, #fafafa 0%, #fff 50%, #f8f8f8 100%);
+    }
+
+    .no-print {
+        display: none !important;
+    }
+}
+

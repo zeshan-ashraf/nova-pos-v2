@@ -47,6 +47,7 @@ class AccountTransaction extends Model
         'amount',
         'source_type',
         'source_id',
+        'receipt_no',
         'description',
         'transaction_date',
     ];

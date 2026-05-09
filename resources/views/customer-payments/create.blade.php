@@ -15,6 +15,29 @@
                     <button type="button" class="close" data-dismiss="alert" aria-label="Close"><i class="ri-close-line"></i></button>
                 </div>
             @endif
+            @if(session('print_customer_payment_id'))
+                <div class="card border-success mb-3">
+                    <div class="card-body d-flex flex-wrap justify-content-between align-items-center">
+                        <div class="mb-2 mb-md-0">
+                            <h6 class="mb-1 text-success">Payment saved successfully</h6>
+                            <small class="text-muted">Print this payment now.</small>
+                        </div>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-success dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                Print
+                            </button>
+                            <div class="dropdown-menu dropdown-menu-right">
+                                <a class="dropdown-item" href="{{ route('customer-payments.printA4', session('print_customer_payment_id')) }}" target="_blank">
+                                    <i class="fas fa-file-alt"></i> A4
+                                </a>
+                                <a class="dropdown-item" href="{{ route('customer-payments.printReceipt', session('print_customer_payment_id')) }}" target="_blank">
+                                    <i class="fas fa-receipt"></i> Receipt
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            @endif
             @if (session()->has('error'))
                 <div class="alert text-white bg-danger" role="alert">
                     <div class="iq-alert-text">{{ session('error') }}</div>
@@ -165,6 +188,7 @@
                             <thead class="bg-light text-uppercase">
                                 <tr>
                                     <th>#</th>
+                                    <th>Receipt No</th>
                                     <th>Customer</th>
                                     <th>Date</th>
                                     <th>Amount</th>
@@ -177,18 +201,34 @@
                                 @forelse($payments as $index => $p)
                                 <tr>
                                     <td>{{ $payments->firstItem() + $index }}</td>
+                                    <td>{{ $p->receipt_no ?? '—' }}</td>
                                     <td>{{ $p->customer_name }}</td>
                                     <td>{{ \Carbon\Carbon::parse($p->transaction_date)->format('d M Y') }}</td>
                                     <td>{{ number_format($p->amount, 2) }}</td>
                                     <td>{{ ucfirst($p->payment_method) }}</td>
                                     <td>{{ $p->description ?? '—' }}</td>
                                     <td>
-                                        <button type="button" class="btn btn-danger btn-sm delete-payment" data-id="{{ $p->id }}">Delete</button>
+                                        <div class="d-flex align-items-center">
+                                            <div class="btn-group mr-2">
+                                                <button type="button" class="btn btn-success btn-sm dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                    Print
+                                                </button>
+                                                <div class="dropdown-menu dropdown-menu-right">
+                                                    <a class="dropdown-item" href="{{ route('customer-payments.printA4', $p->id) }}" target="_blank">
+                                                        <i class="fas fa-file-alt"></i> A4
+                                                    </a>
+                                                    <a class="dropdown-item" href="{{ route('customer-payments.printReceipt', $p->id) }}" target="_blank">
+                                                        <i class="fas fa-receipt"></i> Receipt
+                                                    </a>
+                                                </div>
+                                            </div>
+                                            <button type="button" class="btn btn-danger btn-sm delete-payment" data-id="{{ $p->id }}">Delete</button>
+                                        </div>
                                     </td>
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="7" class="text-center text-muted py-4">No customer payments recorded yet.</td>
+                                    <td colspan="8" class="text-center text-muted py-4">No customer payments recorded yet.</td>
                                 </tr>
                                 @endforelse
                             </tbody>
@@ -249,6 +289,17 @@
             minimumResultsForSearch: 0
         });
     }
+
+    (function() {
+        var amountInput = document.getElementById('amount');
+        if (amountInput) {
+            amountInput.addEventListener('wheel', function(e) {
+                if (document.activeElement === amountInput) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
+        }
+    })();
 
     document.querySelectorAll('.delete-payment').forEach(function(button) {
         button.addEventListener('click', function() {

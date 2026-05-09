@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Models\AccountTransaction;
 use App\Models\Customer;
+use App\Models\Shop;
 use App\Http\Controllers\Controller;
 use App\Services\CustomerCreditService;
 use App\Services\Ledger\LedgerBalanceService;
@@ -12,6 +13,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Redirect;
 use App\Support\ActiveShop;
+use Brick\Math\BigDecimal;
+use Brick\Math\Exception\MathException as BrickMathException;
+use Brick\Math\RoundingMode;
 
 class CustomerPaymentController extends Controller
 {
@@ -139,6 +143,8 @@ class CustomerPaymentController extends Controller
             $key = $row->shop_id . '|' . $row->transaction_date . '|' . (string)$row->amount . '|' . (string)($row->description ?? '');
             return (object)[
                 'id' => $row->id,
+                'source_id' => $row->source_id,
+                'receipt_no' => $row->receipt_no,
                 'customer_id' => $row->account_ref_id,
                 'customer_name' => $customersById->get($row->account_ref_id)?->shopname ?: $customersById->get($row->account_ref_id)?->name ?? '—',
                 'transaction_date' => $row->transaction_date,
@@ -192,43 +198,83 @@ class CustomerPaymentController extends Controller
             return Redirect::back()->withErrors(['shop_bank_id' => 'Please select a bank when payment method is Bank.'])->withInput();
         }
 
-        $amount = (float) $validated['amount'];
+        // Parse from the posted string so values like 200 are not corrupted by IEEE-754 floats
+        // before Eloquent's decimal:2 cast (BigDecimal HALF_UP), which could otherwise store 199.99.
+        try {
+            $amountMoney = BigDecimal::of(trim((string) $validated['amount']))
+                ->toScale(2, RoundingMode::HALF_UP);
+        } catch (BrickMathException $e) {
+            return Redirect::back()->withErrors(['amount' => 'Enter a valid amount.'])->withInput();
+        }
+
+        if ($amountMoney->compareTo(BigDecimal::of('0.01')) < 0) {
+            return Redirect::back()->withErrors(['amount' => 'Amount must be at least 0.01.'])->withInput();
+        }
+
+        $amountMoneyString = (string) $amountMoney;
+        $amount = (float) $amountMoneyString;
         $transactionDate = Carbon::parse($validated['payment_date'])->toDateString();
         $isBank = $validated['payment_method'] === 'bank';
         $accountRefId = $isBank ? (int) $validated['shop_bank_id'] : null;
 
-        DB::transaction(function () use ($validated, $shopId, $amount, $transactionDate, $isBank, $accountRefId, $customer, $creditService) {
-            // Row 1: Cash/Bank DEBIT — money received (asset increase)
+        $createdCustomerRowId = DB::transaction(function () use ($validated, $shopId, $amount, $amountMoneyString, $transactionDate, $isBank, $accountRefId, $customer, $creditService) {
+            $receiptNo = $this->nextCustomerPaymentReceiptNo(Carbon::parse($transactionDate));
+
+            // Row 1: Customer CREDIT — receivable decrease (customer owes less)
+            $customerRow = AccountTransaction::create([
+                'shop_id' => $shopId,
+                'account_type' => AccountTransaction::ACCOUNT_TYPE_CUSTOMER,
+                'account_ref_id' => $validated['customer_id'],
+                'direction' => AccountTransaction::DIRECTION_CREDIT,
+                'amount' => $amountMoneyString,
+                'source_type' => AccountTransaction::SOURCE_CUSTOMER_PAYMENT,
+                'source_id' => null,
+                'receipt_no' => $receiptNo,
+                'description' => $validated['description'] ?? 'Customer payment',
+                'transaction_date' => $transactionDate,
+            ]);
+            $groupId = (int) $customerRow->id;
+            $customerRow->source_id = $groupId;
+            $customerRow->save();
+
+            // Row 2: Cash/Bank DEBIT — money received (asset increase)
             AccountTransaction::create([
                 'shop_id' => $shopId,
                 'account_type' => $isBank ? AccountTransaction::ACCOUNT_TYPE_BANK : AccountTransaction::ACCOUNT_TYPE_CASH,
                 'account_ref_id' => $accountRefId,
                 'direction' => AccountTransaction::DIRECTION_DEBIT,
-                'amount' => $amount,
+                'amount' => $amountMoneyString,
                 'source_type' => AccountTransaction::SOURCE_CUSTOMER_PAYMENT,
-                'source_id' => null,
-                'description' => $validated['description'] ?? 'Customer payment',
-                'transaction_date' => $transactionDate,
-            ]);
-
-            // Row 2: Customer CREDIT — receivable decrease (customer owes less)
-            AccountTransaction::create([
-                'shop_id' => $shopId,
-                'account_type' => AccountTransaction::ACCOUNT_TYPE_CUSTOMER,
-                'account_ref_id' => $validated['customer_id'],
-                'direction' => AccountTransaction::DIRECTION_CREDIT,
-                'amount' => $amount,
-                'source_type' => AccountTransaction::SOURCE_CUSTOMER_PAYMENT,
-                'source_id' => null,
+                'source_id' => $groupId,
+                'receipt_no' => $receiptNo,
                 'description' => $validated['description'] ?? 'Customer payment',
                 'transaction_date' => $transactionDate,
             ]);
 
             // Sync customers.credit_amount (decrease by payment amount)
             $creditService->applyPayment($customer, $amount);
+
+            return $groupId;
         });
 
-        return Redirect::route('customer-payments.create')->with('success', 'Customer payment recorded successfully.');
+        return Redirect::route('customer-payments.create')->with([
+            'success' => 'Customer payment recorded successfully.',
+            'print_customer_payment_id' => $createdCustomerRowId,
+        ]);
+    }
+
+    public function printA4(int $id, LedgerBalanceService $balanceService)
+    {
+        $payment = $this->resolvePaymentForPrint($id, $balanceService);
+
+        return view('customer-payments.print-a4', $payment);
+    }
+
+    public function printReceipt(int $id, LedgerBalanceService $balanceService)
+    {
+        $payment = $this->resolvePaymentForPrint($id, $balanceService);
+
+        return view('customer-payments.print-receipt', $payment);
     }
 
     /**
@@ -339,5 +385,119 @@ class CustomerPaymentController extends Controller
         }
 
         return response()->json(['success' => true]);
+    }
+
+    protected function resolvePaymentForPrint(int $id, LedgerBalanceService $balanceService): array
+    {
+        $authUser = auth()->user();
+        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+
+        $customerRow = AccountTransaction::query()
+            ->where('source_type', AccountTransaction::SOURCE_CUSTOMER_PAYMENT)
+            ->where('account_type', AccountTransaction::ACCOUNT_TYPE_CUSTOMER)
+            ->findOrFail($id);
+
+        if ($visibleShopIds->isNotEmpty() && !$visibleShopIds->contains($customerRow->shop_id)) {
+            abort(404);
+        }
+
+        $groupId = (int) ($customerRow->source_id ?: $customerRow->id);
+        if ((int) ($customerRow->source_id ?? 0) !== $groupId) {
+            $customerRow->source_id = $groupId;
+            $customerRow->save();
+        }
+
+        $sibling = AccountTransaction::query()
+            ->where('source_type', AccountTransaction::SOURCE_CUSTOMER_PAYMENT)
+            ->whereIn('account_type', [AccountTransaction::ACCOUNT_TYPE_CASH, AccountTransaction::ACCOUNT_TYPE_BANK])
+            ->where('shop_id', $customerRow->shop_id)
+            ->where('source_id', $groupId)
+            ->orderBy('id')
+            ->first();
+
+        if (!$sibling) {
+            $sibling = AccountTransaction::query()
+                ->where('source_type', AccountTransaction::SOURCE_CUSTOMER_PAYMENT)
+                ->whereIn('account_type', [AccountTransaction::ACCOUNT_TYPE_CASH, AccountTransaction::ACCOUNT_TYPE_BANK])
+                ->where('shop_id', $customerRow->shop_id)
+                ->whereDate('transaction_date', $customerRow->transaction_date)
+                ->where('amount', $customerRow->amount)
+                ->orderBy('id')
+                ->first();
+        }
+
+        $receiptNo = $customerRow->receipt_no;
+        if (!$receiptNo) {
+            $receiptNo = $this->nextCustomerPaymentReceiptNo(Carbon::parse($customerRow->transaction_date));
+            $customerRow->receipt_no = $receiptNo;
+            $customerRow->save();
+            if ($sibling) {
+                $sibling->receipt_no = $receiptNo;
+                $sibling->source_id = $groupId;
+                $sibling->save();
+            }
+        }
+
+        $customer = Customer::find($customerRow->account_ref_id);
+        $shop = Shop::find($customerRow->shop_id);
+        $paymentMethod = $sibling?->account_type === AccountTransaction::ACCOUNT_TYPE_BANK ? 'Bank' : 'Cash';
+        $bankName = null;
+        if ($sibling && $sibling->account_type === AccountTransaction::ACCOUNT_TYPE_BANK && $sibling->account_ref_id) {
+            $bankName = DB::table('bank_shop')
+                ->where('bank_shop.id', $sibling->account_ref_id)
+                ->join('banks', 'bank_shop.bank_id', '=', 'banks.id')
+                ->value('banks.name');
+        }
+
+        $asOfAfter = (float) AccountTransaction::query()
+            ->where('account_type', AccountTransaction::ACCOUNT_TYPE_CUSTOMER)
+            ->where('account_ref_id', $customerRow->account_ref_id)
+            ->where('shop_id', $customerRow->shop_id)
+            ->where(function ($q) use ($customerRow) {
+                $q->whereDate('transaction_date', '<', $customerRow->transaction_date)
+                    ->orWhere(function ($inner) use ($customerRow) {
+                        $inner->whereDate('transaction_date', $customerRow->transaction_date)
+                            ->where('id', '<=', $customerRow->id);
+                    });
+            })
+            ->selectRaw("SUM(CASE WHEN direction = 'debit' THEN amount ELSE -amount END) as balance")
+            ->value('balance') ?? 0.0;
+
+        $beforeBalance = $asOfAfter + (float) $customerRow->amount;
+        $latestBalance = $balanceService->getCustomerBalance((int) $customerRow->account_ref_id, (int) $customerRow->shop_id);
+
+        return [
+            'transaction' => $customerRow,
+            'customer' => $customer,
+            'shop' => $shop,
+            'payment_method' => $paymentMethod,
+            'bank_name' => $bankName,
+            'receipt_no' => $receiptNo,
+            'before_balance' => $beforeBalance,
+            'after_balance' => $asOfAfter,
+            'latest_balance' => $latestBalance,
+            'received_by' => auth()->user(),
+        ];
+    }
+
+    protected function nextCustomerPaymentReceiptNo(Carbon $date): string
+    {
+        $year = $date->format('Y');
+        $prefix = 'CPR-' . $year . '-';
+
+        $latest = AccountTransaction::query()
+            ->where('source_type', AccountTransaction::SOURCE_CUSTOMER_PAYMENT)
+            ->whereNotNull('receipt_no')
+            ->where('receipt_no', 'like', $prefix . '%')
+            ->lockForUpdate()
+            ->orderByDesc('id')
+            ->value('receipt_no');
+
+        $nextNumber = 1;
+        if ($latest && preg_match('/^CPR-\d{4}-(\d+)$/', (string) $latest, $m)) {
+            $nextNumber = ((int) $m[1]) + 1;
+        }
+
+        return $prefix . str_pad((string) $nextNumber, 4, '0', STR_PAD_LEFT);
     }
 }
