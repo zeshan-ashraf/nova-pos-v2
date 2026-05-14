@@ -1741,9 +1741,7 @@ class OrderController extends Controller
         ];
 
         try {
-            // TEMPORARY SWITCH:
-            // Set to true to re-enable "unit price must be above buying price (cost)" validation.
-            $enforceMinSalePriceAboveCost = false;
+            $enforceMinSalePriceAboveCost = (bool) config('invoice.enforce_unit_price_above_buying', false);
 
             $validator = Validator::make($request->all(), $rules);
             $validator->after(function ($validator) use ($request, $enforceMinSalePriceAboveCost) {

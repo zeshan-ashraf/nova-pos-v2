@@ -978,9 +978,8 @@
     /**
      * Live check: unit price must be strictly greater than buying_price; buying_price must be valid (> 0).
      */
-    // TEMPORARY SWITCH:
-    // Set to true to re-enable client-side "unit price must be above buying price (cost)" validation.
-    var ENFORCE_INVOICE_UNIT_PRICE_ABOVE_BUYING = false;
+    // Mirrors config('invoice.enforce_unit_price_above_buying') — set ENFORCE_INVOICE_UNIT_ABOVE_BUYING=true in .env
+    var ENFORCE_INVOICE_UNIT_PRICE_ABOVE_BUYING = @json((bool) config('invoice.enforce_unit_price_above_buying', false));
 
     function validateInvoiceRowUnitPriceVsBuying($row) {
         if (!ENFORCE_INVOICE_UNIT_PRICE_ABOVE_BUYING) {

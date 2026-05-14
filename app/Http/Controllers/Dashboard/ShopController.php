@@ -97,6 +97,7 @@ class ShopController extends Controller
 
         $validatedData['is_parent'] = $request->boolean('is_parent');
         $validatedData['status'] = $request->boolean('status');
+        $validatedData['enforce_invoice_unit_above_cost'] = $request->boolean('enforce_invoice_unit_above_cost');
         $validatedData['parent_shop_id'] = $validatedData['is_parent'] ? null : $request->input('parent_shop_id');
 
         if ($validatedData['is_parent'] === false && $validatedData['parent_shop_id'] === null) {
