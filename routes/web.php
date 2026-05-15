@@ -78,8 +78,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard/business-pulse', [DashboardController::class, 'getBusinessPulse'])->name('dashboard.business-pulse');
 
     Route::get('/shop-notifications', [ShopNotificationController::class, 'index'])->name('shop-notifications.index');
-    Route::post('/shop-notifications/{id}/read', [ShopNotificationController::class, 'markRead'])->name('shop-notifications.read');
     Route::post('/shop-notifications/read-all', [ShopNotificationController::class, 'markAllRead'])->name('shop-notifications.readAll');
+    Route::post('/shop-notifications/{id}/read', [ShopNotificationController::class, 'markRead'])
+        ->whereNumber('id')
+        ->name('shop-notifications.read');
     Route::middleware(['mother_shop.super_admin'])->group(function () {
         Route::get('/super-admin/dashboard', [SuperAdminDashboardController::class, 'index'])->name('super-admin.dashboard');
         Route::get('/super-admin/dashboard/kpis', [SuperAdminDashboardController::class, 'kpis'])->name('super-admin.dashboard.kpis');

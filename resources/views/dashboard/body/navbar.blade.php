@@ -242,11 +242,18 @@
 (function () {
     var notifUrl = @json(route('shop-notifications.index'));
     var readAllUrl = @json(route('shop-notifications.readAll'));
-    var notifReadBase = @json(rtrim(url('/shop-notifications'), '/'));
+    var notifReadUrlTemplate = @json(route('shop-notifications.read', ['id' => '__ID__']));
     var orderDetailsPrefix = @json(url('/orders/details'));
     var shopPurchaseRequestPrefix = @json(url('/shop-purchase-requests'));
-    var csrfMeta = document.querySelector('meta[name="csrf-token"]');
-    var token = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+    function shopNotifCsrfToken() {
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta && meta.getAttribute('content')) {
+            return meta.getAttribute('content');
+        }
+        var inp = document.querySelector('input[name="_token"]');
+        return inp ? inp.value : '';
+    }
 
     function notifRow(n) {
         var d = n.data || {};
@@ -332,11 +339,12 @@
                         e.stopPropagation();
                         var id = a.getAttribute('data-id');
                         var href = a.getAttribute('href') || '#';
+                        var token = shopNotifCsrfToken();
                         if (!id || !token) {
                             if (href && href !== '#') window.location.href = href;
                             return;
                         }
-                        fetch(notifReadBase + '/' + encodeURIComponent(id) + '/read', {
+                        fetch(notifReadUrlTemplate.replace('__ID__', encodeURIComponent(id)), {
                             method: 'POST',
                             headers: {
                                 'X-CSRF-TOKEN': token,
@@ -391,6 +399,7 @@
         markAllBtn.addEventListener('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
+            var token = shopNotifCsrfToken();
             if (!token) return;
             fetch(readAllUrl, {
                 method: 'POST',
