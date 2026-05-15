@@ -107,6 +107,12 @@ class ReportController extends Controller
                         'permission' => 'reports.cash-flow',
                         'description' => 'Cash inflow and outflow analysis'
                     ],
+                    [
+                        'name' => 'Day Book',
+                        'route' => 'reports.financial.day-book',
+                        'permission' => 'financial_reports.day_book',
+                        'description' => 'Unified cash day book: sales, expenses, and customer receipts'
+                    ],
                 ]
             ],
             'credit' => [

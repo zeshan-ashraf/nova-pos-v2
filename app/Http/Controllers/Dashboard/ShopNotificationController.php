@@ -51,7 +51,15 @@ class ShopNotificationController extends Controller
             ->whereKey($id)
             ->update(['is_read' => true]);
 
-        return response()->json(['ok' => (bool) $updated]);
+        $unreadCount = ShopNotification::query()
+            ->where('shop_id', $shopId)
+            ->where('is_read', false)
+            ->count();
+
+        return response()->json([
+            'ok' => (bool) $updated,
+            'unread_count' => $unreadCount,
+        ]);
     }
 
     public function markAllRead(): JsonResponse
@@ -66,6 +74,9 @@ class ShopNotificationController extends Controller
             ->where('is_read', false)
             ->update(['is_read' => true]);
 
-        return response()->json(['ok' => true]);
+        return response()->json([
+            'ok' => true,
+            'unread_count' => 0,
+        ]);
     }
 }

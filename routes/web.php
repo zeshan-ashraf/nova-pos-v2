@@ -34,6 +34,7 @@ use App\Http\Controllers\Dashboard\ReportController;
 use App\Http\Controllers\Dashboard\SalesReportController;
 use App\Http\Controllers\Dashboard\PurchaseReportController;
 use App\Http\Controllers\Dashboard\FinancialReportController;
+use App\Http\Controllers\Dashboard\DayBookReportController;
 use App\Http\Controllers\Dashboard\CreditReportController;
 use App\Http\Controllers\Dashboard\InventoryReportController;
 use App\Http\Controllers\Dashboard\PaymentReportController;
@@ -411,6 +412,12 @@ Route::middleware(['permission:reports.menu'])->group(function () {
         Route::get('/reports/financial/expense', [FinancialReportController::class, 'expense'])->name('reports.financial.expense');
         Route::get('/reports/financial/cash-flow', [FinancialReportController::class, 'cashFlow'])->name('reports.financial.cash-flow');
         Route::get('/reports/cash-flow', [ReportController::class, 'cashFlow'])->name('reports.cash-flow');
+        Route::get('/reports/financial/day-book', [DayBookReportController::class, 'index'])
+            ->middleware('permission:financial_reports.day_book')
+            ->name('reports.financial.day-book');
+        Route::get('/reports/financial/day-book/export', [DayBookReportController::class, 'exportExcel'])
+            ->middleware('permission:financial_reports.day_book')
+            ->name('reports.financial.day-book.export');
     });
     
     // Credit Reports

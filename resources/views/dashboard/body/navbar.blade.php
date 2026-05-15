@@ -242,6 +242,7 @@
 (function () {
     var notifUrl = @json(route('shop-notifications.index'));
     var readAllUrl = @json(route('shop-notifications.readAll'));
+    var notifReadBase = @json(rtrim(url('/shop-notifications'), '/'));
     var orderDetailsPrefix = @json(url('/orders/details'));
     var shopPurchaseRequestPrefix = @json(url('/shop-purchase-requests'));
     var csrfMeta = document.querySelector('meta[name="csrf-token"]');
@@ -267,6 +268,26 @@
     }
 
     var __shopNotifLastFetch = 0;
+
+    function updateShopNotifBadge(count) {
+        var toggle = document.getElementById('shopNotifDropdown');
+        if (!toggle) return;
+        var badge = toggle.querySelector('.badge.badge-danger');
+        if (count < 1) {
+            if (badge) badge.remove();
+            return;
+        }
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'badge badge-danger position-absolute';
+            badge.style.top = '2px';
+            badge.style.right = '2px';
+            badge.style.fontSize = '0.65rem';
+            toggle.appendChild(badge);
+        }
+        badge.textContent = count > 99 ? '99+' : String(count);
+    }
+
     function loadShopNotifications() {
         var el = document.getElementById('shopNotifList');
         if (!el) return;
@@ -293,18 +314,55 @@
                 }
                 if (!rows.length) {
                     el.innerHTML = '<div class="px-3 py-3 text-muted small">No notifications.</div>';
+                    if (typeof data.unread_count === 'number') {
+                        updateShopNotifBadge(data.unread_count);
+                    }
                     return;
                 }
                 el.innerHTML = rows.map(notifRow).join('');
+                if (typeof data.unread_count === 'number') {
+                    updateShopNotifBadge(data.unread_count);
+                }
                 el.querySelectorAll('.notif-item').forEach(function (a) {
-                    a.addEventListener('click', function () {
+                    a.addEventListener('click', function (e) {
+                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
+                            return;
+                        }
+                        e.preventDefault();
+                        e.stopPropagation();
                         var id = a.getAttribute('data-id');
-                        if (!id || !token) return;
-                        fetch(@json(url('/shop-notifications')) + '/' + id + '/read', {
+                        var href = a.getAttribute('href') || '#';
+                        if (!id || !token) {
+                            if (href && href !== '#') window.location.href = href;
+                            return;
+                        }
+                        fetch(notifReadBase + '/' + encodeURIComponent(id) + '/read', {
                             method: 'POST',
-                            headers: { 'X-CSRF-TOKEN': token, 'Accept': 'application/json' },
+                            headers: {
+                                'X-CSRF-TOKEN': token,
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Content-Type': 'application/json',
+                            },
                             credentials: 'same-origin',
-                        });
+                            body: '{}',
+                        })
+                            .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
+                            .then(function (data) {
+                                a.classList.remove('font-weight-bold');
+                                a.classList.add('text-muted');
+                                if (typeof data.unread_count === 'number') {
+                                    updateShopNotifBadge(data.unread_count);
+                                }
+                                if (href && href !== '#') {
+                                    window.location.href = href;
+                                }
+                            })
+                            .catch(function () {
+                                if (href && href !== '#') {
+                                    window.location.href = href;
+                                }
+                            });
                     });
                 });
             })
@@ -336,9 +394,26 @@
             if (!token) return;
             fetch(readAllUrl, {
                 method: 'POST',
-                headers: { 'X-CSRF-TOKEN': token, 'Accept': 'application/json' },
-                credentials: 'same-origin'
-            }).then(function () { window.location.reload(); });
+                headers: {
+                    'X-CSRF-TOKEN': token,
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'same-origin',
+                body: '{}',
+            })
+                .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
+                .then(function (data) {
+                    if (typeof data.unread_count === 'number') {
+                        updateShopNotifBadge(data.unread_count);
+                    }
+                    __shopNotifLastFetch = 0;
+                    loadShopNotifications();
+                })
+                .catch(function () {
+                    window.location.reload();
+                });
         });
     }
 })();

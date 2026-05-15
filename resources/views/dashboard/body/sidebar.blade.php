@@ -200,6 +200,13 @@
                                     </a>
                                 </li>
                                 @endif
+                                @if (auth()->user()->can('financial_reports.day_book'))
+                                <li class="{{ Request::is('reports/financial/day-book*') ? 'active' : '' }}">
+                                    <a href="{{ route('reports.financial.day-book') }}">
+                                        <i class="fas fa-circle" style="font-size: 6px; vertical-align: middle;"></i><span>Day Book</span>
+                                    </a>
+                                </li>
+                                @endif
                             </ul>
                         </li>
                         @endif
