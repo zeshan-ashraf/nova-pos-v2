@@ -70,6 +70,8 @@ class DayBookReportService
             ->join('orders', 'orders.id', '=', 'account_transactions.source_id')
             ->whereNull('orders.deleted_at')
             ->leftJoin('customers', 'customers.id', '=', 'orders.customer_id')
+            ->leftJoin('bank_shop', 'bank_shop.id', '=', 'account_transactions.account_ref_id')
+            ->leftJoin('banks', 'banks.id', '=', 'bank_shop.bank_id')
             ->select([
                 'account_transactions.id',
                 'account_transactions.transaction_date',
@@ -80,6 +82,7 @@ class DayBookReportService
                 'orders.customer_id',
                 'customers.shopname',
                 'customers.name as customer_name',
+                'banks.name as bank_name',
             ]);
 
         return $base->get()->map(function ($row) {
@@ -94,6 +97,7 @@ class DayBookReportService
 
             $isBank = $row->account_type === AccountTransaction::ACCOUNT_TYPE_BANK;
             $channel = $isBank ? 'BANK' : 'CASH';
+            $title = $this->titleWithBankName('Sale — ' . $channel, $isBank, $row->bank_name ?? null);
 
             return (object) [
                 'sort_date' => $sortDate,
@@ -103,7 +107,7 @@ class DayBookReportService
                 'type' => 'SALE',
                 'particular' => $customerLabel,
                 'net_amount' => $net,
-                'title' => 'Sale — ' . $channel,
+                'title' => $title,
                 'amount_in_cash' => $isBank ? 0.0 : $net,
                 'amount_out_cash' => 0.0,
                 'amount_in_online' => $isBank ? $net : 0.0,
@@ -131,6 +135,8 @@ class DayBookReportService
             ->leftJoin('activities', 'activities.id', '=', 'account_transactions.source_id')
             ->leftJoin('expenses', 'expenses.id', '=', 'activities.expense_id')
             ->leftJoin('customers', 'customers.id', '=', 'activities.customer_id')
+            ->leftJoin('bank_shop', 'bank_shop.id', '=', 'account_transactions.account_ref_id')
+            ->leftJoin('banks', 'banks.id', '=', 'bank_shop.bank_id')
             ->select([
                 'account_transactions.id',
                 'account_transactions.transaction_date',
@@ -142,6 +148,7 @@ class DayBookReportService
                 'expenses.expense_title',
                 'customers.shopname',
                 'customers.name as customer_name',
+                'banks.name as bank_name',
             ]);
 
         return $base->get()->map(function ($row) {
@@ -158,6 +165,7 @@ class DayBookReportService
             $title = $custTitle !== '' ? $custTitle : $category;
 
             $isBank = $row->account_type === AccountTransaction::ACCOUNT_TYPE_BANK;
+            $title = $this->titleWithBankName($title, $isBank, $row->bank_name ?? null);
 
             return (object) [
                 'sort_date' => $sortDate,
@@ -199,6 +207,8 @@ class DayBookReportService
                     ->whereNull('cust.deleted_at');
             })
             ->leftJoin('customers', 'customers.id', '=', 'cust.account_ref_id')
+            ->leftJoin('bank_shop', 'bank_shop.id', '=', 'pay.account_ref_id')
+            ->leftJoin('banks', 'banks.id', '=', 'bank_shop.bank_id')
             ->where('pay.source_type', $st)
             ->whereIn('pay.account_type', [
                 AccountTransaction::ACCOUNT_TYPE_CASH,
@@ -218,6 +228,7 @@ class DayBookReportService
                 'cust.receipt_no as cust_receipt_no',
                 'customers.shopname',
                 'customers.name as customer_name',
+                'banks.name as bank_name',
             ])
             ->get();
 
@@ -225,14 +236,14 @@ class DayBookReportService
             $net = (float) $row->amount;
             $sortDate = Carbon::parse($row->transaction_date)->format('Y-m-d');
             $title = trim((string) ($row->shopname ?: $row->customer_name ?: '')) ?: '—';
+            $isBank = $row->account_type === AccountTransaction::ACCOUNT_TYPE_BANK;
+            $title = $this->titleWithBankName($title, $isBank, $row->bank_name ?? null);
             $ref = trim((string) ($row->pay_receipt_no ?: $row->cust_receipt_no ?: ''));
             if ($ref === '') {
                 $ref = 'CP-' . $row->id;
             }
             $desc = trim((string) ($row->pay_description ?? ''));
             $particular = $desc !== '' ? $desc : 'Customer payment';
-
-            $isBank = $row->account_type === AccountTransaction::ACCOUNT_TYPE_BANK;
 
             return (object) [
                 'sort_date' => $sortDate,
@@ -249,6 +260,21 @@ class DayBookReportService
                 'amount_out_online' => 0.0,
             ];
         });
+    }
+
+    /** Append bank name to title for bank (online) ledger legs. */
+    protected function titleWithBankName(string $title, bool $isBank, ?string $bankName): string
+    {
+        if (! $isBank) {
+            return $title;
+        }
+
+        $name = trim((string) $bankName);
+        if ($name === '') {
+            return $title;
+        }
+
+        return $title . ' - ' . $name;
     }
 
     /** @param  \Illuminate\Support\Collection<int, object>  $rows */
