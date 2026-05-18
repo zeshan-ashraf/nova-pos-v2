@@ -30,6 +30,7 @@ use App\Services\SalePostingService;
 use App\Services\Stock\StockService;
 use App\Services\SupplierCreditService;
 use App\Services\PurchaseDeletionService;
+use App\Services\HoldInvoiceService;
 use App\Services\InterShopTransferService;
 use App\Support\InterShopTransferStatus;
 use Illuminate\Support\Str;
@@ -46,6 +47,7 @@ class OrderController extends Controller
         private StockService $stockService,
         private PurchaseDeletionService $purchaseDeletionService,
         private InterShopTransferService $interShopTransferService,
+        private HoldInvoiceService $holdInvoiceService,
     ) {}
 
     /**
@@ -1160,7 +1162,9 @@ class OrderController extends Controller
             $this->interShopTransferService->releaseReservationsForOrder($order);
         }
 
-        if (!$isSystemInterShop || $fulfilledInterShop) {
+        if ((string) $order->order_status === HoldInvoiceService::STATUS_HOLD) {
+            $this->holdInvoiceService->releaseHoldStock($order);
+        } elseif (!$isSystemInterShop || $fulfilledInterShop) {
             foreach ($order->orderDetails as $orderDetail) {
                 $product = Product::withoutGlobalScope('shop')
                     ->where('id', $orderDetail->product_id)
@@ -1290,6 +1294,9 @@ class OrderController extends Controller
             'shopBanks' => $shopBanks,
             'isEdit' => false,
             'order' => null,
+            'isHoldReload' => false,
+            'holdOrder' => null,
+            'invoiceReloadPayload' => null,
             'openOrderDetailsAfterSaveId' => $openOrderDetailsAfterSaveId,
         ]);
     }
@@ -1302,6 +1309,10 @@ class OrderController extends Controller
         $order = Order::with(['orderDetails.product', 'customer', 'paymentLogs'])
             ->findOrFail($id);
         $this->ensureShopAccess($order);
+
+        if ((string) $order->order_status === HoldInvoiceService::STATUS_HOLD) {
+            return Redirect::route('order.reload', $order->id);
+        }
 
         $authUser = auth()->user();
         $customersQuery = Customer::query()
@@ -1347,6 +1358,9 @@ class OrderController extends Controller
             'shopBanks' => $shopBanks,
             'isEdit' => true,
             'order' => $order,
+            'isHoldReload' => false,
+            'holdOrder' => null,
+            'invoiceReloadPayload' => null,
             'openOrderDetailsAfterSaveId' => null,
         ]);
     }
@@ -1608,7 +1622,6 @@ class OrderController extends Controller
                 $buyingPrice = ($buyingPrice !== null && $buyingPrice !== '') ? (float) $buyingPrice : null;
 
                 $physical = (float) ($product->product_store ?? 0);
-                $reserved = (float) ($product->reserved_stock ?? 0);
 
                 return [
                     'id' => $product->id,
@@ -1616,7 +1629,7 @@ class OrderController extends Controller
                     'name' => $product->product_name,
                     'price' => $unitPrice,
                     'buying_price' => $buyingPrice,
-                    'stock' => max(0, $physical - $reserved),
+                    'stock' => max(0, $physical),
                     'code' => $productCode,
                 ];
             });
@@ -1640,6 +1653,64 @@ class OrderController extends Controller
             'success' => true,
             'categories' => $categories
         ]);
+    }
+
+    /**
+     * When enabled via config, unit price must be >= product buying_price (selling below cost is blocked).
+     *
+     * @param  array<int, array<string, mixed>>  $productsInput
+     * @return array<string, array<int, string>>
+     */
+    protected function invoiceUnitPriceVsBuyingErrors(array $productsInput): array
+    {
+        if (! (bool) config('invoice.enforce_unit_price_above_buying', false)) {
+            return [];
+        }
+
+        $productIds = collect($productsInput)
+            ->pluck('product_id')
+            ->filter(fn ($id) => $id !== null && $id !== '' && (int) $id > 0)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+        $productsById = $productIds->isNotEmpty()
+            ? Product::whereIn('id', $productIds)->get()->keyBy('id')
+            : collect();
+
+        $errors = [];
+        foreach ($productsInput as $i => $product) {
+            $pid = $product['product_id'] ?? null;
+            if ($pid === null || $pid === '' || (int) $pid <= 0) {
+                continue;
+            }
+            $unit = isset($product['unit_price']) ? (float) $product['unit_price'] : 0;
+            if ($unit <= 0) {
+                $errors["products.$i.unit_price"][] = 'Unit price must be greater than zero for each selected product.';
+
+                continue;
+            }
+
+            $productModel = $productsById->get((int) $pid);
+            if (! $productModel) {
+                $errors["products.$i.product_id"][] = 'Selected product could not be found.';
+
+                continue;
+            }
+
+            $buying = $productModel->buying_price;
+            if ($buying === null || $buying === '' || (float) $buying <= 0) {
+                $errors["products.$i.unit_price"][] = 'This product has no valid buying price (cost). Set buying price on the product before invoicing.';
+
+                continue;
+            }
+
+            $buyingF = (float) $buying;
+            if ($unit < $buyingF) {
+                $errors["products.$i.unit_price"][] = 'Unit price cannot be less than the product buying price (cost).';
+            }
+        }
+
+        return $errors;
     }
 
     /**
@@ -1703,10 +1774,424 @@ class OrderController extends Controller
     }
 
     /**
+     * Hold draft invoice: reserve stock only (reserved_stock), status = hold.
+     */
+    public function holdInvoice(Request $request)
+    {
+        $authUser = auth()->user();
+        if (!$authUser->shop_id) {
+            return back()->withErrors(['customer_id' => 'You must belong to a shop to hold invoices.'])->withInput();
+        }
+
+        if ($request->filled('shop_id') && !$request->filled('customer_id')) {
+            return back()->withErrors(['shop_id' => 'Hold is only available for customer invoices, not shop transfers.'])->withInput();
+        }
+
+        $rules = [
+            'customer_id' => 'required|numeric',
+            'order_date' => 'required|date',
+            'vat' => 'numeric|nullable|min:0',
+            'invoice_discount' => 'numeric|nullable|min:0',
+            'products' => 'required|array|min:1',
+            'products.*.product_id' => 'required|numeric',
+            'products.*.quantity' => 'required|numeric|min:0.001',
+            'products.*.unit_price' => 'required|numeric|min:0',
+            'products.*.total' => 'required|numeric|min:0',
+            'products.*.item_discount' => 'nullable|numeric|min:0',
+            'hold_order_id' => 'nullable|integer',
+        ];
+
+        try {
+            $validatedData = Validator::make($request->all(), $rules)->validate();
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
+        }
+
+        $lines = $this->holdInvoiceService->normalizeProductLines($validatedData['products']);
+        if ($lines === []) {
+            return back()->withErrors(['products' => 'Please add at least one product to the invoice.'])->withInput();
+        }
+
+        $customer = Customer::findOrFail($validatedData['customer_id']);
+        if ((int) $customer->shop_id !== (int) $authUser->shop_id) {
+            return back()->withErrors(['customer_id' => 'The selected customer does not belong to your shop.'])->withInput();
+        }
+
+        $vat = (float) ($validatedData['vat'] ?? 0);
+        $invoiceDiscount = (float) ($validatedData['invoice_discount'] ?? 0);
+        $totals = $this->holdInvoiceService->calculateTotals($lines, $vat, $invoiceDiscount);
+        $shopId = (int) $authUser->shop_id;
+
+        $existingHold = null;
+        if ($request->filled('hold_order_id')) {
+            $existingHold = Order::with('orderDetails')
+                ->whereKey((int) $request->input('hold_order_id'))
+                ->where('shop_id', $shopId)
+                ->firstOrFail();
+            $this->ensureShopAccess($existingHold);
+            if ((string) $existingHold->order_status !== HoldInvoiceService::STATUS_HOLD) {
+                return back()->withErrors(['hold_order_id' => 'This order is not on hold.'])->withInput();
+            }
+        }
+
+        try {
+            DB::transaction(function () use (
+                $request,
+                $validatedData,
+                $lines,
+                $totals,
+                $shopId,
+                $customer,
+                $vat,
+                $invoiceDiscount,
+                $existingHold
+            ) {
+                $this->holdInvoiceService->assertSufficientStock($lines, $shopId, $existingHold);
+
+                $orderDate = Carbon::parse($validatedData['order_date'])->format('Y-m-d H:i:s');
+                $comment = $request->input('comment');
+
+                if ($existingHold) {
+                    $order = Order::lockForUpdate()->findOrFail($existingHold->id);
+                    $order->update([
+                        'customer_id' => $customer->id,
+                        'order_date' => $orderDate,
+                        'total_products' => $totals['total_products'],
+                        'sub_total' => $totals['subtotal'],
+                        'invoice_discount' => $invoiceDiscount,
+                        'vat' => $vat,
+                        'total' => $totals['total'],
+                        'pay' => 0,
+                        'due' => $totals['total'],
+                        'payment_status' => HoldInvoiceService::STATUS_HOLD,
+                        'comment' => $comment,
+                    ]);
+                    $this->holdInvoiceService->syncHoldOrderLines($order, $lines, $shopId);
+
+                    return;
+                }
+
+                $invoiceNo = IdGenerator::generate([
+                    'table' => 'orders',
+                    'field' => 'invoice_no',
+                    'length' => 10,
+                    'prefix' => 'INV-',
+                ]);
+
+                $order = Order::create([
+                    'customer_id' => $customer->id,
+                    'shop_id' => $shopId,
+                    'order_date' => $orderDate,
+                    'order_status' => HoldInvoiceService::STATUS_HOLD,
+                    'total_products' => $totals['total_products'],
+                    'sub_total' => $totals['subtotal'],
+                    'invoice_discount' => $invoiceDiscount,
+                    'vat' => $vat,
+                    'invoice_no' => $invoiceNo,
+                    'total' => $totals['total'],
+                    'payment_status' => HoldInvoiceService::STATUS_HOLD,
+                    'pay' => 0,
+                    'due' => $totals['total'],
+                    'comment' => $comment,
+                ]);
+
+                $this->holdInvoiceService->insertOrderDetails($order, $lines, $shopId);
+                $this->holdInvoiceService->applyHoldStock($order, $lines, $shopId);
+            });
+        } catch (InvalidArgumentException $e) {
+            return back()->withErrors(['products' => $e->getMessage()])->withInput();
+        } catch (\Exception $e) {
+            return back()->withErrors(['products' => $e->getMessage()])->withInput();
+        }
+
+        $message = $existingHold
+            ? 'Held invoice updated. Stock reservation adjusted.'
+            : 'Invoice placed on hold. Stock has been reserved.';
+
+        return Redirect::route('invoice.create')->with('success', $message);
+    }
+
+    /**
+     * Reload a held invoice onto the create invoice screen (no stock changes).
+     */
+    public function reloadOrder(int $id)
+    {
+        $order = Order::with(['orderDetails.product', 'customer', 'paymentLogs'])->findOrFail($id);
+        $this->ensureShopAccess($order);
+
+        if ((string) $order->order_status !== HoldInvoiceService::STATUS_HOLD) {
+            return Redirect::route('order.index')->with('error', 'Only held invoices can be reloaded.');
+        }
+
+        $authUser = auth()->user();
+        $customersQuery = Customer::query()
+            ->where(function ($query) {
+                $query->where('is_system', false)
+                    ->orWhere('is_system', 0)
+                    ->orWhereNull('is_system');
+            });
+        if ($authUser->shop_id) {
+            $customersQuery->where('shop_id', $authUser->shop_id);
+        } else {
+            $customersQuery->whereRaw('1 = 0');
+        }
+
+        $productsQuery = Product::where('status', 'active')
+            ->whereNotNull('selling_price')
+            ->where('selling_price', '>', 0);
+        if ($authUser->shop_id) {
+            $productsQuery->where('shop_id', $authUser->shop_id);
+        } else {
+            $productsQuery->whereRaw('1 = 0');
+        }
+
+        $childShops = collect();
+        $shopBanks = $this->getShopBanksByShopId($authUser->shop_id);
+
+        return view('orders.create-invoice', [
+            'customers' => $customersQuery->orderBy('shopname')->get(),
+            'products' => $productsQuery->orderBy('product_name')->get(),
+            'childShops' => $childShops,
+            'categories' => Category::orderBy('name')->get(),
+            'shopBanks' => $shopBanks,
+            'isEdit' => false,
+            'order' => $order,
+            'isHoldReload' => true,
+            'holdOrder' => $order,
+            'invoiceReloadPayload' => $this->holdInvoiceService->buildReloadPayload($order),
+            'openOrderDetailsAfterSaveId' => null,
+        ]);
+    }
+
+    /**
+     * Cancel a held invoice and release reserved stock.
+     */
+    public function cancelHoldOrder(int $id)
+    {
+        $order = Order::with('orderDetails')->findOrFail($id);
+        $this->ensureShopAccess($order);
+
+        if ((string) $order->order_status !== HoldInvoiceService::STATUS_HOLD) {
+            return Redirect::route('order.index')->with('error', 'Only held invoices can be cancelled this way.');
+        }
+
+        DB::transaction(function () use ($order) {
+            $locked = Order::lockForUpdate()->findOrFail($order->id);
+            if ((string) $locked->order_status !== HoldInvoiceService::STATUS_HOLD) {
+                throw new \RuntimeException('Order is no longer on hold.');
+            }
+            $this->holdInvoiceService->releaseHoldStock($locked);
+            $locked->update(['order_status' => HoldInvoiceService::STATUS_CANCELLED]);
+        });
+
+        return Redirect::route('order.index')->with('success', 'Held invoice cancelled. Reserved stock has been released.');
+    }
+
+    /**
+     * Finalize a held invoice: release reserved_stock, status complete, ledger/payments — no product_store change.
+     */
+    protected function completeHeldInvoice(Request $request, CustomerCreditService $creditService)
+    {
+        $authUser = auth()->user();
+        $holdOrderId = (int) $request->input('hold_order_id');
+        $holdOrder = Order::with(['orderDetails', 'customer'])->findOrFail($holdOrderId);
+        $this->ensureShopAccess($holdOrder);
+
+        if ((string) $holdOrder->order_status !== HoldInvoiceService::STATUS_HOLD) {
+            return back()->withErrors(['hold_order_id' => 'This invoice is not on hold.'])->withInput();
+        }
+
+        if ($request->filled('shop_id') && !$request->filled('customer_id')) {
+            return back()->withErrors(['shop_id' => 'Complete held invoice using the customer flow only.'])->withInput();
+        }
+
+        $rules = [
+            'customer_id' => 'required|numeric',
+            'order_date' => 'required|date',
+            'payment_method_1' => 'required|string|in:cash,bank,cheque,credit',
+            'pay_1' => 'required|numeric|min:0',
+            'shop_bank_id_1' => 'nullable|numeric|exists:bank_shop,id',
+            'payment_method_2' => 'nullable|string|in:cash,bank,cheque,credit',
+            'pay_2' => 'nullable|numeric|min:0',
+            'shop_bank_id_2' => 'nullable|numeric|exists:bank_shop,id',
+            'vat' => 'numeric|nullable|min:0',
+            'invoice_discount' => 'numeric|nullable|min:0',
+            'products' => 'required|array|min:1',
+            'products.*.product_id' => 'required|numeric',
+            'products.*.quantity' => 'required|numeric|min:0.001',
+            'products.*.unit_price' => 'required|numeric|min:0',
+            'products.*.total' => 'required|numeric|min:0',
+            'products.*.item_discount' => 'nullable|numeric|min:0',
+            'hold_order_id' => 'required|integer',
+        ];
+
+        try {
+            $validatedData = Validator::make($request->all(), $rules)->validate();
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
+        }
+
+        $lines = $this->holdInvoiceService->normalizeProductLines($validatedData['products']);
+        if ($lines === []) {
+            return back()->withErrors(['products' => 'Please add at least one product to the invoice.'])->withInput();
+        }
+
+        $buyingPriceErrors = $this->invoiceUnitPriceVsBuyingErrors($validatedData['products']);
+        if ($buyingPriceErrors !== []) {
+            return back()->withErrors($buyingPriceErrors)->withInput();
+        }
+
+        $customer = Customer::findOrFail($validatedData['customer_id']);
+        if ((int) $customer->shop_id !== (int) $authUser->shop_id) {
+            return back()->withErrors(['customer_id' => 'The selected customer does not belong to your shop.'])->withInput();
+        }
+
+        $pay1 = (float) ($validatedData['pay_1'] ?? 0);
+        $pay2 = (float) ($validatedData['pay_2'] ?? 0);
+        $paymentMethod1 = $validatedData['payment_method_1'];
+        $paymentMethod2 = $validatedData['payment_method_2'] ?? null;
+        $shopBankId1 = !empty($validatedData['shop_bank_id_1']) ? (int) $validatedData['shop_bank_id_1'] : null;
+        $shopBankId2 = !empty($validatedData['shop_bank_id_2']) ? (int) $validatedData['shop_bank_id_2'] : null;
+
+        if (in_array($paymentMethod1, ['bank', 'cheque']) && empty($shopBankId1)) {
+            return back()->withErrors(['shop_bank_id_1' => 'Please select a bank for Payment 1.'])->withInput();
+        }
+        if ($pay2 > 0 && in_array($paymentMethod2 ?? '', ['bank', 'cheque']) && empty($shopBankId2)) {
+            return back()->withErrors(['shop_bank_id_2' => 'Please select a bank for Payment 2.'])->withInput();
+        }
+
+        $vat = (float) ($validatedData['vat'] ?? 0);
+        $invoiceDiscount = (float) ($validatedData['invoice_discount'] ?? 0);
+        $totals = $this->holdInvoiceService->calculateTotals($lines, $vat, $invoiceDiscount);
+        $total = $totals['total'];
+
+        $payPaid = 0.0;
+        if (in_array($paymentMethod1, ['cash', 'bank', 'cheque'], true)) {
+            $payPaid += $pay1;
+        }
+        if ($paymentMethod2 && in_array($paymentMethod2, ['cash', 'bank', 'cheque'], true)) {
+            $payPaid += $pay2;
+        }
+        $pay = $payPaid;
+        $due = max(0, $total - $pay);
+
+        if ($customer->is_walkin && abs($pay - $total) > 0.01) {
+            return back()->withErrors(['pay_1' => 'Walk-in sale must be fully paid.'])->withInput();
+        }
+
+        $shopId = (int) $authUser->shop_id;
+        $orderDate = Carbon::parse($validatedData['order_date'])->format('Y-m-d H:i:s');
+        $paymentStatus = $due > 0 ? ($pay > 0 ? 'partial' : 'credit') : $paymentMethod1;
+
+        try {
+            DB::transaction(function () use (
+                $holdOrderId,
+                $holdOrder,
+                $lines,
+                $totals,
+                $validatedData,
+                $customer,
+                $vat,
+                $invoiceDiscount,
+                $total,
+                $pay,
+                $due,
+                $paymentStatus,
+                $orderDate,
+                $shopId,
+                $pay1,
+                $pay2,
+                $paymentMethod1,
+                $paymentMethod2,
+                $shopBankId1,
+                $shopBankId2,
+                $creditService,
+                $request
+            ) {
+                $order = Order::lockForUpdate()->findOrFail($holdOrderId);
+                if ((string) $order->order_status !== HoldInvoiceService::STATUS_HOLD) {
+                    throw new \RuntimeException('Order is no longer on hold.');
+                }
+
+                $this->holdInvoiceService->assertSufficientStock($lines, $shopId, $order);
+                $this->holdInvoiceService->syncHoldStockForComplete($order, $lines, $shopId);
+
+                $order->update([
+                    'customer_id' => $customer->id,
+                    'order_date' => $orderDate,
+                    'order_status' => 'complete',
+                    'total_products' => $totals['total_products'],
+                    'sub_total' => $totals['subtotal'],
+                    'invoice_discount' => $invoiceDiscount,
+                    'vat' => $vat,
+                    'total' => $total,
+                    'payment_status' => $paymentStatus,
+                    'pay' => $pay,
+                    'due' => $due,
+                    'comment' => $request->input('comment'),
+                ]);
+
+                OrderDetails::where('order_id', $order->id)->delete();
+                $this->holdInvoiceService->insertOrderDetails($order, $lines, $shopId);
+                $order->load('orderDetails');
+                $this->holdInvoiceService->clearReservationForOrder($order);
+
+                if ($pay1 > 0) {
+                    app(SalePostingService::class)->postSale($order, $pay1, $paymentMethod1, $shopBankId1);
+                } else {
+                    app(SalePostingService::class)->postSale($order, 0, 'credit');
+                }
+                if ($pay2 > 0 && $paymentMethod2) {
+                    app(SalePostingService::class)->postSale($order, $pay2, $paymentMethod2, $shopBankId2);
+                }
+
+                if ($pay1 > 0) {
+                    $this->createPaymentLog($order->id, $pay1, $paymentMethod1, $shopBankId1);
+                }
+                if ($pay2 > 0 && $paymentMethod2) {
+                    $this->createPaymentLog($order->id, $pay2, $paymentMethod2, $shopBankId2);
+                }
+
+                if ($due > 0) {
+                    $creditService->addPending($customer, $due);
+                }
+            });
+        } catch (InvalidArgumentException $e) {
+            return back()->withErrors(['products' => $e->getMessage()])->withInput();
+        } catch (\Exception $e) {
+            return back()->withErrors(['products' => $e->getMessage()])->withInput();
+        }
+
+        $warning = null;
+        if ($creditService->exceedsLimit($customer, $due)) {
+            $warning = 'Credit limit exceeded for this customer. Invoice saved on credit.';
+        }
+
+        if ($request->input('print_after_create') == '1') {
+            session(['print_order_id' => $holdOrderId]);
+
+            return Redirect::route('invoice.create')->with([
+                'success' => 'Held invoice completed successfully!',
+                'warning' => $warning,
+                'open_print_tab' => true,
+            ]);
+        }
+
+        return Redirect::route('order.orderDetails', $holdOrderId)->with([
+            'success' => 'Held invoice completed successfully!',
+            'warning' => $warning,
+        ]);
+    }
+
+    /**
      * Store a newly created invoice.
      */
     public function storeInvoice(Request $request, CustomerCreditService $creditService, SupplierCreditService $supplierCreditService)
     {
+        if ($request->filled('hold_order_id')) {
+            return $this->completeHeldInvoice($request, $creditService);
+        }
+
         // Log the request for debugging
         \Log::info('Invoice creation request received', [
             'customer_id' => $request->input('customer_id'),
@@ -1741,64 +2226,11 @@ class OrderController extends Controller
         ];
 
         try {
-            $enforceMinSalePriceAboveCost = (bool) config('invoice.enforce_unit_price_above_buying', false);
-
             $validator = Validator::make($request->all(), $rules);
-            $validator->after(function ($validator) use ($request, $enforceMinSalePriceAboveCost) {
-                $productsInput = $request->input('products', []);
-                $productIds = collect($productsInput)
-                    ->pluck('product_id')
-                    ->filter(fn ($id) => $id !== null && $id !== '' && (int) $id > 0)
-                    ->map(fn ($id) => (int) $id)
-                    ->unique()
-                    ->values();
-                $productsById = $productIds->isNotEmpty()
-                    ? Product::whereIn('id', $productIds)->get()->keyBy('id')
-                    : collect();
-
-                foreach ($productsInput as $i => $product) {
-                    $pid = $product['product_id'] ?? null;
-                    if ($pid === null || $pid === '' || (int) $pid <= 0) {
-                        continue;
-                    }
-                    $unit = isset($product['unit_price']) ? (float) $product['unit_price'] : 0;
-                    if ($unit <= 0) {
-                        $validator->errors()->add(
-                            "products.$i.unit_price",
-                            'Unit price must be greater than zero for each selected product.'
-                        );
-
-                        continue;
-                    }
-
-                    $productModel = $productsById->get((int) $pid);
-                    if (! $productModel) {
-                        $validator->errors()->add(
-                            "products.$i.product_id",
-                            'Selected product could not be found.'
-                        );
-
-                        continue;
-                    }
-
-                    if ($enforceMinSalePriceAboveCost) {
-                        $buying = $productModel->buying_price;
-                        if ($buying === null || $buying === '' || (float) $buying <= 0) {
-                            $validator->errors()->add(
-                                "products.$i.unit_price",
-                                'This product has no valid buying price (cost). Set buying price on the product before invoicing.'
-                            );
-
-                            continue;
-                        }
-
-                        $buyingF = (float) $buying;
-                        if ($unit <= $buyingF) {
-                            $validator->errors()->add(
-                                "products.$i.unit_price",
-                                'Unit price must be greater than the product buying price (cost).'
-                            );
-                        }
+            $validator->after(function ($validator) use ($request) {
+                foreach ($this->invoiceUnitPriceVsBuyingErrors($request->input('products', [])) as $key => $messages) {
+                    foreach ($messages as $message) {
+                        $validator->errors()->add($key, $message);
                     }
                 }
             });

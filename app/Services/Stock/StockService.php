@@ -149,6 +149,70 @@ class StockService
     }
 
     /**
+     * Hold invoice line: stock out on product_store; pair with reserved_stock increment in HoldInvoiceService.
+     */
+    public function holdStock(
+        Product $product,
+        int $qty,
+        int $orderId,
+        float $unitPrice = 0,
+        ?float $costPerUnit = null,
+        $holdDate = null
+    ): StockLog {
+        $this->validator->validateOutOperation($product, $qty, 'hold', (string) $orderId);
+
+        $cost = $costPerUnit !== null ? $costPerUnit : (float) ($product->buying_price ?? 0);
+        $adjustmentDate = $holdDate
+            ? (\is_string($holdDate) ? $holdDate : \Illuminate\Support\Carbon::parse($holdDate)->toDateString())
+            : null;
+
+        return $this->insertAndUpdate(
+            $product,
+            $qty,
+            'out',
+            'hold',
+            (string) $orderId,
+            $unitPrice,
+            null,
+            null,
+            $adjustmentDate,
+            $cost
+        );
+    }
+
+    /**
+     * Release held stock back to product_store (cancel hold or reduce held qty).
+     */
+    public function holdReleaseStock(
+        Product $product,
+        int $qty,
+        int $orderId,
+        float $unitPrice = 0,
+        ?float $costPerUnit = null,
+        $holdDate = null
+    ): StockLog {
+        $this->validator->validateInOperation($qty, 'hold_release', (string) $orderId, null);
+
+        $cost = $costPerUnit !== null ? $costPerUnit : (float) ($product->buying_price ?? 0);
+        $adjustmentDate = $holdDate
+            ? (\is_string($holdDate) ? $holdDate : \Illuminate\Support\Carbon::parse($holdDate)->toDateString())
+            : null;
+
+        return $this->insertAndUpdate(
+            $product,
+            $qty,
+            'in',
+            'hold_release',
+            (string) $orderId,
+            $unitPrice,
+            null,
+            null,
+            $adjustmentDate,
+            $cost
+        );
+    }
+
+    /**
      * Record stock for a sale return (stock in, source_type = sale_return).
      * $returnDate (optional) sets stock_logs.adjustment_date (Y-m-d or Carbon/DateTime).
      */

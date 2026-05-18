@@ -182,7 +182,15 @@
 
             <div class="invoice-form-container" id="invoiceFormContainer">
                 <div class="invoice-header">
-                    <h4>{{ ($isEdit ?? false) ? 'Edit Invoice' : 'Create New Invoice' }}</h4>
+                    <h4>
+                        @if(!empty($isHoldReload))
+                            Complete held invoice
+                        @elseif($isEdit ?? false)
+                            Edit Invoice
+                        @else
+                            Create New Invoice
+                        @endif
+                    </h4>
                 </div>
                 @if($isEdit ?? false)
                 <div id="invoiceEditLoadingOverlay" class="position-fixed w-100 h-100 d-flex align-items-center justify-content-center" style="left:0;top:0;background:rgba(255,255,255,0.85);z-index:9999;display:none !important;">
@@ -190,6 +198,14 @@
                         <div class="spinner-border text-primary mb-2" style="width:3rem;height:3rem;" role="status"><span class="sr-only">Loading...</span></div>
                         <p class="text-muted mb-0">Loading invoice...</p>
                     </div>
+                </div>
+                @endif
+
+                @if(!empty($isHoldReload) && !empty($holdOrder))
+                <div class="alert alert-info mb-3">
+                    <i class="ri-pause-circle-line"></i>
+                    Reloading held invoice <strong>{{ $holdOrder->invoice_no }}</strong>.
+                    Stock was moved out at hold (<code>product_store</code> reduced). Use <strong>Update hold</strong> to change lines, or <strong>Complete sale</strong> to finalize (clears reserved qty only; no second stock deduction).
                 </div>
                 @endif
                 
@@ -215,6 +231,10 @@
                     @csrf
                     @if($isEdit ?? false)
                     <input type="hidden" name="edited_from_order_id" value="{{ $order->id }}">
+                    @endif
+                    @if(!empty($isHoldReload) && !empty($holdOrder))
+                    <input type="hidden" name="hold_order_id" id="hold_order_id" value="{{ $holdOrder->id }}">
+                    <input type="hidden" name="invoice_no" value="{{ $holdOrder->invoice_no }}">
                     @endif
 
                     <!-- Customer/Shop and Date Section -->
@@ -567,11 +587,27 @@
                     <!-- Submit Button -->
                     <div class="mt-4">
                         <button type="button" class="btn btn-primary btn-lg" id="createInvoiceBtn">
-                            <span class="btn-text"><i class="ri-file-add-line"></i> {{ ($isEdit ?? false) ? 'Update' : 'Save' }}</span>
+                            <span class="btn-text"><i class="ri-file-add-line"></i>
+                                @if(!empty($isHoldReload))
+                                    Complete sale
+                                @else
+                                    {{ ($isEdit ?? false) ? 'Update' : 'Save' }}
+                                @endif
+                            </span>
                             <span class="btn-spinner d-none"><span class="spinner-border spinner-border-sm mr-1" role="status"></span> Processing...</span>
                         </button>
-                        <a href="{{ route('order.index') }}" class="btn btn-secondary btn-lg">Cancel</a>
-                        <button type="button" class="btn btn-success btn-lg" id="createAndPrintInvoiceBtn" @if($isEdit ?? false) style="display:none;" @endif>
+                        @if(empty($isEdit) && empty($isHoldReload))
+                        <button type="button" class="btn btn-warning btn-lg" id="holdInvoiceBtn">
+                            <i class="ri-pause-circle-line"></i> HOLD
+                        </button>
+                        @elseif(!empty($isHoldReload))
+                        <button type="button" class="btn btn-warning btn-lg" id="holdInvoiceBtn">
+                            <i class="ri-pause-circle-line"></i> Update hold
+                        </button>
+                        <button type="button" class="btn btn-outline-danger btn-lg" id="cancelHoldBtn" data-cancel-url="{{ route('order.cancelHold', $holdOrder->id) }}">Cancel hold</button>
+                        @endif
+                        <a href="{{ route('order.index') }}" class="btn btn-secondary btn-lg">Back</a>
+                        <button type="button" class="btn btn-success btn-lg" id="createAndPrintInvoiceBtn" @if(($isEdit ?? false) || !empty($isHoldReload)) style="display:none;" @endif>
                             <i class="ri-printer-line"></i> Save & Print
                         </button>
                     </div>
@@ -760,11 +796,15 @@
             })->toArray();
         @endphp
         var invoiceOldInput = @json($invoiceOldInput);
+        var invoiceHoldUrl = @json(route('invoice.hold'));
+        var invoiceStoreUrl = @json(route('invoice.store'));
         var productIdToText = @json($productIdToText);
         var productIdToCode = @json($productIdToCode);
         var productIdToBuyingPrice = @json($productIdToBuyingPrice);
 
-        @if(!empty($isEdit) && !empty($order))
+        @if(!empty($isHoldReload) && !empty($invoiceReloadPayload))
+        window.invoiceEditData = @json($invoiceReloadPayload);
+        @elseif(!empty($isEdit) && !empty($order))
         @php
             $invoiceEditPayload = [
                 'customer_id' => $order->customer_id,
@@ -976,7 +1016,7 @@
     }
 
     /**
-     * Live check: unit price must be strictly greater than buying_price; buying_price must be valid (> 0).
+     * Live check: unit price must not be below buying_price (equal is allowed); buying_price must be valid (> 0).
      */
     // Mirrors config('invoice.enforce_unit_price_above_buying') — set ENFORCE_INVOICE_UNIT_ABOVE_BUYING=true in .env
     var ENFORCE_INVOICE_UNIT_PRICE_ABOVE_BUYING = @json((bool) config('invoice.enforce_unit_price_above_buying', false));
@@ -1002,8 +1042,8 @@
             setInvoiceRowUnitPriceBuyingError($row, 'This product has no valid buying price (cost). Set buying price on the product before invoicing.');
             return false;
         }
-        if (unit <= cost) {
-            setInvoiceRowUnitPriceBuyingError($row, 'Unit price must be greater than the product buying price (cost).');
+        if (unit < cost) {
+            setInvoiceRowUnitPriceBuyingError($row, 'Unit price cannot be less than the product buying price (cost).');
             return false;
         }
         clearInvoiceRowUnitPriceBuyingFeedback($row);
@@ -2382,6 +2422,56 @@
         $('#saveCustomerBtn').prop('disabled', false);
         $('#saveCustomerBtnText').text('Save');
         $('#saveCustomerSpinner').addClass('d-none');
+    });
+
+    $(document).on('click', '#holdInvoiceBtn', function(e) {
+        e.preventDefault();
+        var $invoiceForm = $('#invoiceForm');
+        if (!$invoiceForm.length || $invoiceForm.data('submitting')) {
+            return;
+        }
+        if (!validateInvoiceProductRowsStrict()) {
+            return;
+        }
+        if (!validateInvoiceAllUnitPricesVsBuying()) {
+            return;
+        }
+        var customerId = $('#customer_id').val();
+        if (!customerId) {
+            if (typeof showInvoiceValidationModal === 'function') {
+                showInvoiceValidationModal('Please select a customer before holding the invoice.');
+            } else {
+                alert('Please select a customer before holding the invoice.');
+            }
+            return;
+        }
+        $invoiceForm.attr('action', invoiceHoldUrl);
+        $invoiceForm.attr('novalidate', 'novalidate');
+        $invoiceForm.find('[name="payment_method_1"], [name="pay_1"], [name="payment_method_2"], [name="pay_2"]').prop('required', false);
+        var $btn = $('#holdInvoiceBtn');
+        $btn.prop('disabled', true);
+        $invoiceForm.data('submitting', true);
+        $invoiceForm.submit();
+    });
+
+    $(document).on('click', '#cancelHoldBtn', function() {
+        if (!confirm('Cancel this held invoice and release reserved stock?')) {
+            return;
+        }
+        var url = $(this).data('cancel-url');
+        var token = (document.querySelector('meta[name="csrf-token"]') && document.querySelector('meta[name="csrf-token"]').getAttribute('content'))
+            || $('input[name="_token"]').val();
+        if (!url || !token) {
+            return;
+        }
+        var $f = $('<form method="POST"></form>').attr('action', url);
+        $f.append($('<input type="hidden" name="_token">').val(token));
+        $('body').append($f);
+        $f.submit();
+    });
+
+    $(document).on('click', '#createInvoiceBtn', function() {
+        $('#invoiceForm').attr('action', invoiceStoreUrl).removeAttr('novalidate');
     });
 
     });

@@ -183,6 +183,7 @@ Route::middleware(['permission:pos.menu'])->group(function () {
 Route::middleware(['permission:advance.pos.menu'])->group(function () {
     // Invoice Creation
     Route::get('/invoice/create', [OrderController::class, 'createInvoice'])->name('invoice.create');
+    Route::post('/invoice/hold', [OrderController::class, 'holdInvoice'])->name('invoice.hold');
     Route::post('/invoice/store', [OrderController::class, 'storeInvoice'])->name('invoice.store');
 });
 
@@ -253,6 +254,8 @@ Route::middleware(['permission:orders.menu'])->group(function () {
     // Order Edit (invoice)
     Route::get('/orders/{id}/edit', [OrderController::class, 'edit'])->name('order.edit');
     Route::post('/orders/{id}/update', [OrderController::class, 'update'])->name('order.update');
+    Route::get('/orders/{id}/reload', [OrderController::class, 'reloadOrder'])->name('order.reload')->whereNumber('id');
+    Route::post('/orders/{id}/cancel-hold', [OrderController::class, 'cancelHoldOrder'])->name('order.cancelHold')->whereNumber('id');
 
     Route::post('/orders/{order}/inter-shop/complete', [OrderController::class, 'completeInterShopTransfer'])->name('order.interShop.complete');
     Route::post('/orders/{order}/inter-shop/reset-approval', [OrderController::class, 'resetInterShopApproval'])->name('order.interShop.resetApproval');

@@ -99,14 +99,26 @@
                             <th>@sortablelink('product_code', 'Code')</th>
                             <th>@sortablelink('category.name', 'category')</th>
                             <th>@sortablelink('supplier.name', 'supplier')</th>
-                            <th>Shop</th>
                             <th>Cost</th>
                             <th>Stock</th>
+                            <th>Reserved</th>
                             <th>Status</th>
                             <th>Action</th>
                         </tr>
                     </thead>
                     <tbody class="ligth-body">
+                        @php
+                            $formatProductQty = static function (float $n): string {
+                                if (abs($n) < 0.0000001) {
+                                    return '0';
+                                }
+                                if (abs($n - round($n)) < 0.0000001) {
+                                    return (string) (int) round($n);
+                                }
+
+                                return rtrim(rtrim(sprintf('%.3f', $n), '0'), '.');
+                            };
+                        @endphp
                         @forelse ($products as $product)
                         <tr>
                             <td>{{ (($products->currentPage() * $products->perPage()) - $products->perPage()) + $loop->iteration  }}</td>
@@ -114,13 +126,6 @@
                             <td>{{ $product->product_code ?? '—' }}</td>
                             <td>{{ $product->same_shop_category?->name ?? $product->category?->name ?? '–' }}</td>
                             <td>{{ $product->supplier ? $product->supplier->name : 'N/A' }}</td>
-                            <td>
-                                @if($product->shop)
-                                    <span class="badge bg-primary">{{ $product->shop->name }}</span>
-                                @else
-                                    <span class="badge bg-secondary">Unassigned</span>
-                                @endif
-                            </td>
                             <td>{{ $product->buying_price }}</td>
                             <td>
                                 @php
@@ -141,6 +146,16 @@
                                 <span class="badge rounded-pill {{ $badgeClass }}">{{ $stock }}</span>
                                 @if ($stock < $lowStockThreshold)
                                     <small class="text-muted d-block">{{ $badgeText }}</small>
+                                @endif
+                            </td>
+                            <td>
+                                @php
+                                    $reserved = (float) ($product->reserved_stock ?? 0);
+                                @endphp
+                                @if($reserved > 0)
+                                    <span class="badge rounded-pill bg-info text-white" title="Held on draft invoices (product_store already reduced)">{{ $formatProductQty($reserved) }}</span>
+                                @else
+                                    <span class="text-muted">0</span>
                                 @endif
                             </td>
                             <td>

@@ -24,6 +24,8 @@ class StockValidator
         'theft',
         'purchase_edit_reverse', // audit trail when reversing child purchase for mother-sale edit
         'mother_sale',           // child shop stock in from mother shop transfer
+        'hold',                  // invoice draft hold (stock out)
+        'hold_release',          // cancel hold / adjust hold qty down (stock in)
     ];
 
     public const DIRECTIONS = ['in', 'out'];

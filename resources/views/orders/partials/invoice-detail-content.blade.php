@@ -143,6 +143,10 @@
                         <span class="badge badge-secondary">Cancelled</span>
                     @elseif($order->order_status == 'pending')
                         <span class="badge badge-warning">Pending</span>
+                    @elseif($order->order_status == \App\Services\HoldInvoiceService::STATUS_HOLD)
+                        <span class="badge badge-info">On hold</span>
+                    @elseif($order->order_status == \App\Services\HoldInvoiceService::STATUS_CANCELLED)
+                        <span class="badge badge-secondary">Cancelled (hold)</span>
                     @else
                         <span class="badge badge-secondary">{{ $order->order_status }}</span>
                     @endif
@@ -173,7 +177,13 @@
                 </form>
             @endif
         @endif
-        @if(!$interShopMotherContext && $order->order_status != 'complete')
+        @if(!$interShopMotherContext && $order->order_status == \App\Services\HoldInvoiceService::STATUS_HOLD)
+            <a href="{{ route('order.reload', $order->id) }}" class="btn btn-warning btn-lg mr-2"><i class="ri-play-line mr-1"></i> Reload &amp; complete</a>
+            <form action="{{ route('order.cancelHold', $order->id) }}" method="POST" class="d-inline mr-2" onsubmit="return confirm('Cancel this held invoice and release reserved stock?');">
+                @csrf
+                <button type="submit" class="btn btn-outline-danger btn-lg">Cancel hold</button>
+            </form>
+        @elseif(!$interShopMotherContext && $order->order_status != 'complete')
             <button type="button" class="btn btn-success btn-lg mr-2" data-toggle="modal" data-target="#completeOrderModal" onclick="showCompleteOrderModal({{ $order->id }}, '{{ addslashes($order->invoice_no) }}')"><i class="ri-check-line mr-1"></i> Complete Order</button>
         @endif
         <a href="{{ route('order.invoiceDownload', $order->id) }}" class="btn btn-primary btn-lg" target="_blank"><i class="ri-printer-line mr-1"></i> Print</a>

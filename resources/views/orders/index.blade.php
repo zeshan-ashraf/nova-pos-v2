@@ -766,9 +766,15 @@
                                     <a class="btn btn-sm btn-info mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Details" href="{{ route('order.orderDetails', $order->id) }}">
                                         Details
                                     </a>
+                                    @if(($order->order_status ?? '') === \App\Services\HoldInvoiceService::STATUS_HOLD)
+                                    <a class="btn btn-sm btn-warning mr-2" data-toggle="tooltip" data-placement="top" title="Reload held invoice" href="{{ route('order.reload', $order->id) }}">
+                                        Reload
+                                    </a>
+                                    @elseif(($order->order_status ?? '') !== \App\Services\HoldInvoiceService::STATUS_CANCELLED)
                                     <a class="btn btn-sm btn-warning mr-2" data-toggle="tooltip" data-placement="top" title="" data-original-title="Edit Invoice" href="{{ route('order.edit', $order->id) }}">
                                         Edit
                                     </a>
+                                    @endif
                                     <div class="btn-group mr-2">
                                         <button type="button" class="btn btn-sm btn-success dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                                             Print
