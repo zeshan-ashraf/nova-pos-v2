@@ -69,6 +69,7 @@ Route::get('/', function () {
 // DEFAULT DASHBOARD & PROFILE
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth'])->name('dashboard');
+    Route::get('/dashboard/data', [DashboardController::class, 'data'])->name('dashboard.data');
     Route::get('/dashboard/kpis', [DashboardController::class, 'getKPIs'])->name('dashboard.kpis');
     Route::get('/dashboard/financial-kpis', [DashboardController::class, 'getFinancialKpis'])->name('dashboard.financial-kpis');
     Route::get('/dashboard/activities', [DashboardController::class, 'getActivities'])->name('dashboard.activities');

@@ -15,9 +15,7 @@
         <link rel="stylesheet" href="{{ asset('assets/vendor/line-awesome/dist/line-awesome/css/line-awesome.min.css') }}">
         <link rel="stylesheet" href="{{ asset('assets/vendor/remixicon/fonts/remixicon.css') }}">
 
-        @if (request()->route()->getName() !== 'dashboard')
         <link rel="stylesheet" href="{{ asset('assets/css/custom.css') }}?v={{ filemtime(public_path('assets/css/custom.css')) }}">
-        @endif
 
         <style>
             :root {
@@ -47,9 +45,7 @@
                 padding-bottom: 8px;
             }
 
-            .iq-sidebar {
-                padding-top: 64px;
-            }
+            /* Sidebar top offset: custom.css sets padding-top for logo row */
 
             .content-page {
                /* padding-top: 85px;*/

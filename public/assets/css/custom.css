@@ -1,4 +1,4 @@
-/* Custom General CSS - Applied to all pages except login and dashboard */
+/* Custom General CSS - Applied to all authenticated app pages (login uses its own layout) */
 
 /*
  * Sortable column headers (@sortablelink, manual links) — change hue app-wide:

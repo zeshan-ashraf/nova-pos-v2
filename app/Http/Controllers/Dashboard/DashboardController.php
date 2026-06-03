@@ -12,6 +12,7 @@ use App\Models\Shop;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use App\Services\Dashboard\DashboardDataService;
 use App\Support\ActiveShop;
 use App\Support\InterShopTransferStatus;
 use App\Support\MotherShopSuperAdmin;
@@ -21,40 +22,47 @@ class DashboardController extends Controller
 {
     use ReportTrait;
 
-    public function index(Request $request){
-        $visibleShopIds = $this->dashboardScopeShopIds();
+    public function index(Request $request, DashboardDataService $dashboardData)
+    {
+        $shopId = (int) (auth()->user()?->shop_id ?? 0);
         $dateRange = $this->getDateRange($request);
-        $financialKpis = $this->buildShopFinancialKpis($dateRange);
-        $groupBy = $request->input('group_by');
-        $ordersOverview = $this->buildOrdersOverviewSeries($dateRange, $groupBy);
-        $revenueVsCost = $this->buildRevenueVsCostSeries($dateRange, $groupBy);
-
-        $ordersQuery = Order::query();
-        $productsQuery = Product::query();
-
-        // Apply strict dashboard shop scope.
-        if ($visibleShopIds->isEmpty()) {
-            $ordersQuery->whereRaw('1 = 0');
-            $productsQuery->whereRaw('1 = 0');
-        } else {
-            $ordersQuery->whereIn('shop_id', $visibleShopIds->all());
-            $productsQuery->whereIn('shop_id', $visibleShopIds->all());
-        }
+        $dashboard = $dashboardData->build($shopId, $dateRange);
 
         return view('dashboard.index', [
-            'total_paid' => (clone $ordersQuery)->sum('pay'),
-            'total_due' => (clone $ordersQuery)->sum('due'),
-            'complete_orders' => (clone $ordersQuery)->whereIn('order_status', ['complete', InterShopTransferStatus::COMPLETED])->count(),
-            'customer_total_due' => $financialKpis['total_due'],
-            'net_cash' => $financialKpis['net_cash'],
-            'total_sales' => $financialKpis['total_sales'],
-            'profit' => $financialKpis['profit'],
-            'orders_overview' => $ordersOverview,
-            'revenue_vs_cost' => $revenueVsCost,
+            'dashboard' => $dashboard,
             'dateRange' => $dateRange,
-            'products' => (clone $productsQuery)->orderBy('product_store')->take(5)->get(),
-            'new_products' => (clone $productsQuery)->orderBy('buying_date')->take(2)->get(),
+            'shopId' => $shopId,
+            // Legacy keys kept for any external references
+            'orders_overview' => $dashboard['orders_overview'],
+            'revenue_vs_cost' => $dashboard['revenue_vs_cost'],
+            'total_sales' => $dashboard['kpis']['filtered_sales']['value'] ?? 0,
+            'profit' => $dashboard['kpis']['today_profit']['value'] ?? 0,
+            'customer_total_due' => $dashboard['kpis']['total_receivables']['value'] ?? 0,
+            'net_cash' => $dashboard['kpis']['cash_in_hand']['value'] ?? 0,
         ]);
+    }
+
+    /**
+     * JSON payload for dashboard AJAX refresh (date filters).
+     */
+    public function data(Request $request, DashboardDataService $dashboardData)
+    {
+        $request->validate([
+            'date_filter' => 'nullable|string|in:today,yesterday,this_week,last_week,this_month,last_month,this_year,last_year,custom,all_time,weekly,monthly',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+        ]);
+
+        if ($request->filled('weekly')) {
+            $request->merge(['date_filter' => 'this_week']);
+        } elseif ($request->filled('monthly')) {
+            $request->merge(['date_filter' => 'this_month']);
+        }
+
+        $shopId = (int) (auth()->user()?->shop_id ?? 0);
+        $dateRange = $this->getDateRange($request);
+
+        return response()->json($dashboardData->build($shopId, $dateRange));
     }
 
     /**
