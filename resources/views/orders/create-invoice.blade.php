@@ -533,10 +533,11 @@
                                         <option value="credit">Credit</option>
                                     </select>
                                     <span class="bank-inline-wrap" id="bank_select_row_1" style="display: none;">
-                                        <select class="form-control d-inline-block" id="shop_bank_id_1" name="shop_bank_id_1" style="width: 180px;">
+                                        <span class="summary-label ml-1">Bank <span class="text-danger bank-required-mark-1">*</span></span>
+                                        <select class="form-control d-inline-block @error('shop_bank_id_1') is-invalid @enderror" id="shop_bank_id_1" name="shop_bank_id_1" style="width: 180px;">
                                             <option value="">Select Bank</option>
                                             @foreach($shopBanks ?? [] as $sb)
-                                            <option value="{{ $sb->id }}">{{ $sb->name }}</option>
+                                            <option value="{{ $sb->id }}" @selected(old('shop_bank_id_1') == $sb->id)>{{ $sb->name }}</option>
                                             @endforeach
                                         </select>
                                     </span>
@@ -554,10 +555,11 @@
                                         <option value="credit">Credit</option>
                                     </select>
                                     <span class="bank-inline-wrap" id="bank_select_row_2" style="display: none;">
-                                        <select class="form-control d-inline-block" id="shop_bank_id_2" name="shop_bank_id_2" style="width: 180px;">
+                                        <span class="summary-label ml-1">Bank <span class="text-danger bank-required-mark-2">*</span></span>
+                                        <select class="form-control d-inline-block @error('shop_bank_id_2') is-invalid @enderror" id="shop_bank_id_2" name="shop_bank_id_2" style="width: 180px;">
                                             <option value="">Select Bank</option>
                                             @foreach($shopBanks ?? [] as $sb)
-                                            <option value="{{ $sb->id }}">{{ $sb->name }}</option>
+                                            <option value="{{ $sb->id }}" @selected(old('shop_bank_id_2') == $sb->id)>{{ $sb->name }}</option>
                                             @endforeach
                                         </select>
                                     </span>
@@ -1318,7 +1320,9 @@
         }
         // Trigger customer change so details (and walk-in => cash) are applied on reload
         if (o.customer_id) {
-            setTimeout(function() { $('#customer_id').trigger('change'); }, 100);
+            setTimeout(function() { $('#customer_id').trigger('change'); syncPaymentBankFields(); }, 100);
+        } else {
+            syncPaymentBankFields();
         }
     }
 
@@ -1405,6 +1409,7 @@
                     $('#pay_2').val(parseFloat(logs[1].amount_paid || 0));
                     if (logs[1].shop_bank_id) $('#shop_bank_id_2').val(logs[1].shop_bank_id);
                 }
+                if (typeof syncPaymentBankFields === 'function') syncPaymentBankFields();
                 // Only trigger customer change after delay when NOT edit shop-transfer (avoids re-applying Customer button state).
                 if (!d.customer_is_system || !d.customer_child_shop_id) {
                     setTimeout(function() { $('#customer_id').trigger('change'); }, 100);
@@ -1711,6 +1716,145 @@
         $('#payment_validation_error_text').text('');
     }
 
+    function moneyEqual(a, b) {
+        return Math.round((parseFloat(a) || 0) * 100) === Math.round((parseFloat(b) || 0) * 100);
+    }
+
+    function isWalkInCustomerSelected() {
+        const $opt = $('#customer_id option:selected');
+        if (!$opt.length || !$opt.val()) {
+            return false;
+        }
+        return $opt.data('is-walkin') == 1 || $opt.data('is-walkin') === true;
+    }
+
+    function syncWalkInPaymentMethodOptions() {
+        const walkIn = isWalkInCustomerSelected();
+        ['#payment_method_1', '#payment_method_2'].forEach(function (selector) {
+            $(selector).find('option').each(function () {
+                const value = $(this).val();
+                if (value === 'credit' || value === 'cheque') {
+                    $(this).prop('disabled', walkIn);
+                } else if (value !== '') {
+                    $(this).prop('disabled', false);
+                }
+            });
+        });
+        if (walkIn) {
+            const method1 = $('#payment_method_1').val();
+            $('#payment_method_2 option[value="cash"]').prop('disabled', method1 === 'cash');
+            if (method1 === 'credit' || method1 === 'cheque') {
+                $('#payment_method_1').val('cash');
+            }
+            const method2 = $('#payment_method_2').val();
+            if (method2 === 'credit' || method2 === 'cheque') {
+                $('#payment_method_2').val('');
+            }
+        }
+    }
+
+    function applyWalkInCustomerUi() {
+        $('#customerInfoCard').hide();
+        $('#credit_warning_row').hide();
+        syncWalkInPaymentMethodOptions();
+        if (!$('#payment_method_1').val() || $('#payment_method_1').val() === 'credit' || $('#payment_method_1').val() === 'cheque') {
+            $('#payment_method_1').val('cash');
+        }
+        $('#payment_method_1').trigger('change');
+    }
+
+    function paymentMethodNeedsBank(method) {
+        return method === 'bank' || method === 'cheque';
+    }
+
+    function syncPaymentBankFields() {
+        const method1 = $('#payment_method_1').val();
+        const method2 = $('#payment_method_2').val();
+        const needBank1 = paymentMethodNeedsBank(method1);
+        const needBank2 = paymentMethodNeedsBank(method2);
+
+        if (needBank1) {
+            $('#bank_select_row_1').show();
+            $('#shop_bank_id_1').prop('required', true).attr('aria-required', 'true');
+        } else {
+            $('#bank_select_row_1').hide();
+            $('#shop_bank_id_1').prop('required', false).removeAttr('aria-required').val('').removeClass('is-invalid');
+        }
+
+        if (needBank2) {
+            $('#bank_select_row_2').show();
+            $('#shop_bank_id_2').prop('required', true).attr('aria-required', 'true');
+        } else {
+            $('#bank_select_row_2').hide();
+            $('#shop_bank_id_2').prop('required', false).removeAttr('aria-required').val('').removeClass('is-invalid');
+        }
+    }
+
+    function validatePaymentBankSelections() {
+        const method1 = $('#payment_method_1').val();
+        const method2 = $('#payment_method_2').val();
+
+        if (paymentMethodNeedsBank(method1) && !$('#shop_bank_id_1').val()) {
+            showPaymentError('Please select a bank for Payment 1.');
+            $('#shop_bank_id_1').addClass('is-invalid').focus();
+            return false;
+        }
+
+        if (method2 && paymentMethodNeedsBank(method2) && !$('#shop_bank_id_2').val()) {
+            showPaymentError('Please select a bank for Payment 2.');
+            $('#shop_bank_id_2').addClass('is-invalid').focus();
+            return false;
+        }
+
+        $('#shop_bank_id_1, #shop_bank_id_2').removeClass('is-invalid');
+        return true;
+    }
+
+    function resetWalkInCustomerUi() {
+        syncWalkInPaymentMethodOptions();
+        syncPaymentBankFields();
+    }
+
+    function validateWalkInPaymentSubmission(invoiceTotal, pay1, pay2, payTotal, paymentMethod1, paymentMethod2) {
+        if (!validatePaymentBankSelections()) {
+            return false;
+        }
+        if (!['cash', 'bank'].includes(paymentMethod1)) {
+            showPaymentError('Walk-in sales only support Cash or Bank payment.');
+            $('#payment_method_1').focus();
+            return false;
+        }
+        if (pay2 > 0) {
+            if (!paymentMethod2) {
+                showPaymentError('Please select a payment method for Payment 2.');
+                $('#payment_method_2').focus();
+                return false;
+            }
+            if (!['cash', 'bank'].includes(paymentMethod2)) {
+                showPaymentError('Walk-in sales only support Cash or Bank payment.');
+                $('#payment_method_2').focus();
+                return false;
+            }
+            if (paymentMethod1 === 'cash' && paymentMethod2 === 'cash') {
+                showPaymentError('Walk-in split payment cannot use Cash for both payments.');
+                $('#payment_method_2').focus();
+                return false;
+            }
+            if (paymentMethod1 === 'bank' && paymentMethod2 === 'bank' &&
+                $('#shop_bank_id_1').val() === $('#shop_bank_id_2').val()) {
+                showPaymentError('Walk-in split payment requires two different bank accounts.');
+                $('#shop_bank_id_2').focus();
+                return false;
+            }
+        }
+        if (!moneyEqual(payTotal, invoiceTotal)) {
+            showPaymentError('Walk-in sale must be fully paid. Payment total must equal invoice total.');
+            $('#pay_1').focus();
+            return false;
+        }
+        return true;
+    }
+
     // Calculate due amount (pay = pay_1 + pay_2, due = total - pay)
     function calculateDue() {
         const invoiceTotal = parseFloat($('#invoice_total_hidden').val()) || 0;
@@ -1741,25 +1885,21 @@
             $('#payment_method_2').val('');
             $('#shop_bank_id_2').val('');
             $('#bank_select_row_2').hide();
-            $('#bank_select_row_1').hide();
-            $('#shop_bank_id_1').val('').prop('required', false);
         } else if (method === 'bank' || method === 'cheque') {
             var row2 = document.getElementById('payment_row_2_block');
             if (row2) row2.style.removeProperty('display');
             $('#pay_1').prop('disabled', false).attr('name', 'pay_1');
             $('#pay_1_credit_submit').attr('name', 'pay_1_credit_submit');
-            $('#bank_select_row_1').show();
-            $('#shop_bank_id_1').prop('required', true);
             $('#pay_1').val(invoiceTotal.toFixed(2));
         } else if (method === 'cash') {
             var row2 = document.getElementById('payment_row_2_block');
             if (row2) row2.style.removeProperty('display');
             $('#pay_1').prop('disabled', false).attr('name', 'pay_1');
             $('#pay_1_credit_submit').attr('name', 'pay_1_credit_submit');
-            $('#bank_select_row_1').hide();
-            $('#shop_bank_id_1').val('').prop('required', false);
             $('#pay_1').val(invoiceTotal.toFixed(2));
         }
+        syncWalkInPaymentMethodOptions();
+        syncPaymentBankFields();
         calculateDue();
     });
 
@@ -1767,20 +1907,20 @@
     $(document).on('change', '#payment_method_2', function() {
         clearPaymentError();
         const method = $(this).val();
-        if (method === 'bank' || method === 'cheque') {
-            $('#bank_select_row_2').show();
-            $('#shop_bank_id_2').prop('required', true);
-        } else {
-            $('#bank_select_row_2').hide();
-            $('#shop_bank_id_2').val('').prop('required', false);
-        }
         if (method === 'credit') {
             const invoiceTotal = parseFloat($('#invoice_total_hidden').val()) || 0;
             const pay1 = parseFloat($('#pay_1').val()) || 0;
             const due = Math.max(0, invoiceTotal - pay1);
             $('#pay_2').val(due.toFixed(2));
         }
+        syncWalkInPaymentMethodOptions();
+        syncPaymentBankFields();
         calculateDue();
+    });
+
+    $(document).on('change', '#shop_bank_id_1, #shop_bank_id_2', function() {
+        $(this).removeClass('is-invalid');
+        clearPaymentError();
     });
     
     // Check credit limit and show warning
@@ -1863,12 +2003,11 @@
                     const isWalkIn = customer.is_walkin === 1 || customer.is_walkin === true;
                     
                     if (isWalkIn) {
-                        // Hide customer info panel for walk-in customers
-                        $customerInfoCard.hide();
-                        // Walk-in: first payment method should be cash
-                        $('#payment_method_1').val('cash').trigger('change');
+                        applyWalkInCustomerUi();
                         return;
                     }
+
+                    resetWalkInCustomerUi();
                     
                     // Update customer information (left side)
                     $('#customerName').text(customer.name || '-');
@@ -1953,6 +2092,13 @@
 
     $(document).on('change', '#customer_id', function() {
         const $selected = $('#customer_id option:selected');
+        const isWalkInOpt = $selected.data('is-walkin') == 1 || $selected.data('is-walkin') === true;
+        if (isWalkInOpt) {
+            applyWalkInCustomerUi();
+        } else {
+            resetWalkInCustomerUi();
+        }
+
         const isSystem = $selected.data('is-system') == 1 || $selected.data('is-system') === true;
         const childShopId = $selected.data('child-shop-id') || '';
 
@@ -2134,35 +2280,29 @@
         const pay2 = parseFloat($('#pay_2').val()) || 0;
         const payTotal = pay1 + pay2;
         const paymentMethod2 = $('#payment_method_2').val();
+
+        if (!validatePaymentBankSelections()) {
+            e.preventDefault();
+            return false;
+        }
+
+        if (isWalkInCustomerSelected()) {
+            if (!validateWalkInPaymentSubmission(invoiceTotal, pay1, pay2, payTotal, paymentMethod1, paymentMethod2)) {
+                e.preventDefault();
+                return false;
+            }
+        } else {
         const method1NonCredit = ['cash','bank','cheque'].indexOf(paymentMethod1) !== -1;
         const method2NonCredit = paymentMethod2 && ['cash','bank','cheque'].indexOf(paymentMethod2) !== -1;
         const hasCredit = paymentMethod1 === 'credit' || paymentMethod2 === 'credit';
 
-        // Payment 1: bank/cheque requires bank selected
-        if (paymentMethod1 === 'bank' || paymentMethod1 === 'cheque') {
-            if (!$('#shop_bank_id_1').val()) {
-                e.preventDefault();
-                showPaymentError('Please select a bank for Payment 1.');
-                $('#shop_bank_id_1').focus();
-                return false;
-            }
-        }
-
-        // If second payment amount > 0, require method 2 and bank when bank/cheque
+        // If second payment amount > 0, require method 2
         if (pay2 > 0) {
             if (!paymentMethod2) {
                 e.preventDefault();
                 showPaymentError('Please select a payment method for Payment 2.');
                 $('#payment_method_2').focus();
                 return false;
-            }
-            if (paymentMethod2 === 'bank' || paymentMethod2 === 'cheque') {
-                if (!$('#shop_bank_id_2').val()) {
-                    e.preventDefault();
-                    showPaymentError('Please select a bank for Payment 2.');
-                    $('#shop_bank_id_2').focus();
-                    return false;
-                }
             }
         }
 
@@ -2194,6 +2334,7 @@
             showPaymentError('Pay amount total is less than the invoice total. One payment method must be Credit for the remaining due amount.');
             $('#pay_1').focus();
             return false;
+        }
         }
 
         clearPaymentError();

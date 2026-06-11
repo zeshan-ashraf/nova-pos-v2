@@ -33,12 +33,14 @@
                                             <div class="col-md-12">
                                                 <div class="form-group">
                                                     <label for="payment_status">Payment</label>
-                                                    <select class="form-control @error('payment_status') is-invalid @enderror" name="payment_status">
+                                                    <select class="form-control @error('payment_status') is-invalid @enderror" name="payment_status" id="pos_payment_status">
                                                         <option selected="" disabled="">-- Select Payment --</option>
-                                                        <option value="HandCash">HandCash</option>
-                                                        <option value="Cheque">Cheque</option>
-                                                        <option value="Bank">Bank</option>
-                                                        <option value="Due">Due</option>
+                                                        <option value="HandCash" @if(old('payment_status') === 'HandCash') selected @endif>HandCash</option>
+                                                        <option value="Bank" @if(old('payment_status') === 'Bank') selected @endif>Bank</option>
+                                                        @if(!($customer->is_walkin ?? false))
+                                                        <option value="Cheque" @if(old('payment_status') === 'Cheque') selected @endif>Cheque</option>
+                                                        <option value="Due" @if(old('payment_status') === 'Due') selected @endif>Due</option>
+                                                        @endif
                                                     </select>
                                                     @error('payment_status')
                                                     <div class="invalid-feedback">
@@ -47,10 +49,24 @@
                                                     @enderror
                                                 </div>
                                             </div>
+                                            <div class="col-md-12 pos-bank-row" id="pos_bank_row" style="display: none;">
+                                                <div class="form-group">
+                                                    <label for="shop_bank_id">Bank <span class="text-danger">*</span></label>
+                                                    <select class="form-control @error('shop_bank_id') is-invalid @enderror" name="shop_bank_id" id="shop_bank_id" required>
+                                                        <option value="">Select Bank</option>
+                                                        @foreach($shopBanks ?? [] as $sb)
+                                                        <option value="{{ $sb->id }}" @if(old('shop_bank_id') == $sb->id) selected @endif>{{ $sb->name }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                    @error('shop_bank_id')
+                                                    <div class="invalid-feedback">{{ $message }}</div>
+                                                    @enderror
+                                                </div>
+                                            </div>
                                             <div class="col-md-12">
                                                 <div class="form-group">
                                                     <label for="pay">Pay Now</label>
-                                                    <input type="text" class="form-control @error('pay') is-invalid @enderror" id="pay" name="pay" value="{{ old('pay') }}">
+                                                    <input type="text" class="form-control @error('pay') is-invalid @enderror" id="pay" name="pay" value="{{ old('pay', ($customer->is_walkin ?? false) ? ($cartTotal ?? '') : '') }}">
                                                     @error('pay')
                                                     <div class="invalid-feedback">
                                                         {{ $message }}
@@ -176,4 +192,30 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var paymentSelect = document.getElementById('pos_payment_status');
+    var bankRow = document.getElementById('pos_bank_row');
+    var bankSelect = document.getElementById('shop_bank_id');
+    if (!paymentSelect || !bankRow) return;
+
+    function syncPosBankRow() {
+        var showBank = paymentSelect.value === 'Bank';
+        bankRow.style.display = showBank ? 'block' : 'none';
+        if (bankSelect) {
+            bankSelect.required = showBank;
+            if (!showBank) {
+                bankSelect.value = '';
+                bankSelect.removeAttribute('required');
+            } else {
+                bankSelect.setAttribute('required', 'required');
+            }
+        }
+    }
+
+    paymentSelect.addEventListener('change', syncPosBankRow);
+    syncPosBankRow();
+});
+</script>
 @endsection

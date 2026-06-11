@@ -30,6 +30,8 @@ use App\Services\SalePostingService;
 use App\Services\Stock\StockService;
 use App\Services\SupplierCreditService;
 use App\Services\PurchaseDeletionService;
+use App\Services\InvoicePaymentValidator;
+use App\Services\WalkInPaymentValidator;
 use App\Services\HoldInvoiceService;
 use App\Services\InterShopTransferService;
 use App\Support\InterShopTransferStatus;
@@ -407,6 +409,7 @@ class OrderController extends Controller
             'payment_status' => 'required|string|in:HandCash,Cheque,Due,Bank',
             'pay' => 'numeric|nullable',
             'due' => 'numeric|nullable',
+            'shop_bank_id' => 'nullable|numeric|exists:bank_shop,id',
         ];
 
         $invoice_no = IdGenerator::generate([
@@ -450,9 +453,33 @@ class OrderController extends Controller
         $validatedData['created_at'] = Carbon::now();
 
         $total = (float) Cart::total();
-        if ($customer->is_walkin && abs($payAmount - $total) > 0.01) {
-            return back()->withErrors(['pay' => 'Walk-in sale must be fully paid.'])
-                ->withInput();
+        $shopBankId = !empty($validatedData['shop_bank_id']) ? (int) $validatedData['shop_bank_id'] : null;
+
+        try {
+            app(WalkInPaymentValidator::class)->validatePosPayment(
+                $customer,
+                $total,
+                $validatedData['payment_status'],
+                (float) $payAmount,
+                $shopBankId
+            );
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
+        }
+
+        if ($validatedData['payment_status'] === 'Bank') {
+            if (!$shopBankId) {
+                return back()->withErrors(['shop_bank_id' => 'Please select a bank for this payment.'])->withInput();
+            }
+            if ($authUser->shop_id && !DB::table('bank_shop')->where('id', $shopBankId)->where('shop_id', $authUser->shop_id)->exists()) {
+                return back()->withErrors(['shop_bank_id' => 'The selected bank is not valid for your shop.'])->withInput();
+            }
+        }
+
+        if ($customer->is_walkin) {
+            $validatedData['due'] = 0;
+            $validatedData['pay'] = $total;
+            $payAmount = $total;
         }
 
         $paymentMethod = match ($validatedData['payment_status'] ?? 'Due') {
@@ -468,7 +495,7 @@ class OrderController extends Controller
             $order = Order::create($validatedData);
             $order_id = $order->id;
 
-            app(SalePostingService::class)->postSale($order, (float) $payAmount, $paymentMethod, null);
+            app(SalePostingService::class)->postSale($order, (float) $payAmount, $paymentMethod, $shopBankId);
 
             // Increase customer credit by pending amount (if any)
             $creditService->addPending($customer, $validatedData['due']);
@@ -2053,11 +2080,16 @@ class OrderController extends Controller
         $shopBankId1 = !empty($validatedData['shop_bank_id_1']) ? (int) $validatedData['shop_bank_id_1'] : null;
         $shopBankId2 = !empty($validatedData['shop_bank_id_2']) ? (int) $validatedData['shop_bank_id_2'] : null;
 
-        if (in_array($paymentMethod1, ['bank', 'cheque']) && empty($shopBankId1)) {
-            return back()->withErrors(['shop_bank_id_1' => 'Please select a bank for Payment 1.'])->withInput();
-        }
-        if ($pay2 > 0 && in_array($paymentMethod2 ?? '', ['bank', 'cheque']) && empty($shopBankId2)) {
-            return back()->withErrors(['shop_bank_id_2' => 'Please select a bank for Payment 2.'])->withInput();
+        try {
+            app(InvoicePaymentValidator::class)->validateBankSelections(
+                $paymentMethod1,
+                $shopBankId1,
+                $paymentMethod2,
+                $shopBankId2,
+                (int) $authUser->shop_id
+            );
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
         }
 
         $vat = (float) ($validatedData['vat'] ?? 0);
@@ -2075,8 +2107,19 @@ class OrderController extends Controller
         $pay = $payPaid;
         $due = max(0, $total - $pay);
 
-        if ($customer->is_walkin && abs($pay - $total) > 0.01) {
-            return back()->withErrors(['pay_1' => 'Walk-in sale must be fully paid.'])->withInput();
+        if ($customer->is_walkin) {
+            try {
+                app(WalkInPaymentValidator::class)->validateInvoicePayments($customer, $total, [
+                    'method1' => $paymentMethod1,
+                    'pay1' => $pay1,
+                    'bank1' => $shopBankId1,
+                    'method2' => $paymentMethod2,
+                    'pay2' => $pay2,
+                    'bank2' => $shopBankId2,
+                ]);
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                return back()->withErrors($e->errors())->withInput();
+            }
         }
 
         $shopId = (int) $authUser->shop_id;
@@ -2256,28 +2299,20 @@ class OrderController extends Controller
                 return $err;
             }
 
-            // Payment 1: bank/cheque requires shop_bank_id_1 and must belong to user's shop
-            if (in_array($validatedData['payment_method_1'], ['bank', 'cheque'])) {
-                if (empty($validatedData['shop_bank_id_1'])) {
-                    if ($isEdit) throw \Illuminate\Validation\ValidationException::withMessages(['shop_bank_id_1' => ['Please select a bank for Payment 1.']]);
-                    return back()->withErrors(['shop_bank_id_1' => 'Please select a bank for Payment 1.'])->withInput();
+            // Bank / Cheque requires a shop bank account for each payment line that uses it
+            try {
+                app(InvoicePaymentValidator::class)->validateBankSelections(
+                    $validatedData['payment_method_1'],
+                    !empty($validatedData['shop_bank_id_1']) ? (int) $validatedData['shop_bank_id_1'] : null,
+                    $validatedData['payment_method_2'] ?? null,
+                    !empty($validatedData['shop_bank_id_2']) ? (int) $validatedData['shop_bank_id_2'] : null,
+                    (int) $authUser->shop_id
+                );
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                if ($isEdit) {
+                    throw $e;
                 }
-                if (!DB::table('bank_shop')->where('id', $validatedData['shop_bank_id_1'])->where('shop_id', $authUser->shop_id)->exists()) {
-                    if ($isEdit) throw \Illuminate\Validation\ValidationException::withMessages(['shop_bank_id_1' => ['The selected bank is not valid for your shop.']]);
-                    return back()->withErrors(['shop_bank_id_1' => 'The selected bank is not valid for your shop.'])->withInput();
-                }
-            }
-
-            $pay2 = (float) ($validatedData['pay_2'] ?? 0);
-            if ($pay2 > 0 && in_array($validatedData['payment_method_2'] ?? '', ['bank', 'cheque'])) {
-                if (empty($validatedData['shop_bank_id_2'])) {
-                    if ($isEdit) throw \Illuminate\Validation\ValidationException::withMessages(['shop_bank_id_2' => ['Please select a bank for Payment 2.']]);
-                    return back()->withErrors(['shop_bank_id_2' => 'Please select a bank for Payment 2.'])->withInput();
-                }
-                if (!DB::table('bank_shop')->where('id', $validatedData['shop_bank_id_2'])->where('shop_id', $authUser->shop_id)->exists()) {
-                    if ($isEdit) throw \Illuminate\Validation\ValidationException::withMessages(['shop_bank_id_2' => ['The selected bank is not valid for your shop.']]);
-                    return back()->withErrors(['shop_bank_id_2' => 'The selected bank is not valid for your shop.'])->withInput();
-                }
+                return back()->withErrors($e->errors())->withInput();
             }
         } catch (\Illuminate\Validation\ValidationException $e) {
             if ($request->filled('edited_from_order_id')) {
@@ -2345,9 +2380,22 @@ class OrderController extends Controller
             $pay = $payPaid;
             $due = max(0, $total - $pay);
 
-            if ($customer->is_walkin && abs($pay - $total) > 0.01) {
-                if ($isEdit) throw \Illuminate\Validation\ValidationException::withMessages(['pay_1' => ['Walk-in sale must be fully paid.']]);
-                return back()->withErrors(['pay_1' => 'Walk-in sale must be fully paid.'])->withInput();
+            if ($customer->is_walkin) {
+                try {
+                    app(WalkInPaymentValidator::class)->validateInvoicePayments($customer, $total, [
+                        'method1' => $paymentMethod1,
+                        'pay1' => $pay1,
+                        'bank1' => $shopBankId1,
+                        'method2' => $paymentMethod2,
+                        'pay2' => $pay2,
+                        'bank2' => $shopBankId2,
+                    ]);
+                } catch (\Illuminate\Validation\ValidationException $e) {
+                    if ($isEdit) {
+                        throw $e;
+                    }
+                    return back()->withErrors($e->errors())->withInput();
+                }
             }
 
             $method1NonCredit = in_array($paymentMethod1, ['cash', 'bank', 'cheque']);

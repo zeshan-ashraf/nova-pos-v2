@@ -36,14 +36,15 @@ class SalePostingService
         $totalAmount = (float) $sale->total;
         $shopId = (int) $sale->shop_id;
 
-        // No customer or walk-in: do not touch customer ledger; full payment required
+        // No customer or walk-in: do not touch customer ledger; payment slices posted separately
         $isWalkin = !$customer || (bool) $customer->is_walkin;
 
-        // Unit-test style validations:
-        // - Walk-in sale cannot be partial (reject if paidAmount != totalAmount)
-        // - Registered customer sale can be partial (no extra check)
-        if ($isWalkin && abs($paidAmount - $totalAmount) > 0.001) {
-            throw new InvalidArgumentException('Walk-in sale must be fully paid.');
+        if ($isWalkin && !in_array($paymentMethod, ['cash', 'bank'], true)) {
+            throw new InvalidArgumentException('Walk-in sales only support cash or bank payment.');
+        }
+
+        if ($isWalkin && $paidAmount <= 0) {
+            throw new InvalidArgumentException('Walk-in payment amount must be greater than zero.');
         }
 
         $transactionDate = $sale->order_date
@@ -67,14 +68,15 @@ class SalePostingService
             $entries = [];
 
             if ($isWalkin) {
-                // OPTION 2 — Walk-in: only Cash/Bank debit + Sale credit (full payment already validated)
+                // OPTION 2 — Walk-in: Sale credit once; each payment posts a Cash/Bank debit slice
                 if ($totalAmount <= 0) {
                     return;
                 }
+                $this->ensureWalkInSaleCreditExists($sale, $totalAmount, $shopId, $saleId, $description, $transactionDate);
                 $accountType = $this->resolveCashOrBank($paymentMethod);
                 $accountRefId = ($accountType === AccountTransaction::ACCOUNT_TYPE_BANK && $shopBankId) ? $shopBankId : null;
-                $entries[] = $this->entry($shopId, $accountType, $accountRefId, AccountTransaction::DIRECTION_DEBIT, $totalAmount, $saleId, $description, $transactionDate);
-                $entries[] = $this->entry($shopId, AccountTransaction::ACCOUNT_TYPE_SALE, null, AccountTransaction::DIRECTION_CREDIT, $totalAmount, $saleId, $description, $transactionDate);
+                $paymentDesc = 'Payment – Invoice ' . ($sale->invoice_no ?? (string) $sale->id);
+                $entries[] = $this->entry($shopId, $accountType, $accountRefId, AccountTransaction::DIRECTION_DEBIT, $paidAmount, $saleId, $paymentDesc, $transactionDate);
             } else {
                 // OPTION 1 — Registered customer: (1) Customer debit, (2) Sale credit
                 if ($totalAmount > 0) {
@@ -98,6 +100,41 @@ class SalePostingService
 
             $this->validateDebitCreditBalance($saleId);
         });
+    }
+
+    /**
+     * Ensure walk-in sale credit exists once for the full invoice total. Idempotent.
+     */
+    private function ensureWalkInSaleCreditExists(
+        Order $sale,
+        float $totalAmount,
+        int $shopId,
+        int $saleId,
+        string $description,
+        string $transactionDate
+    ): void {
+        $exists = AccountTransaction::query()
+            ->where('source_type', AccountTransaction::SOURCE_SALE)
+            ->where('source_id', $saleId)
+            ->where('account_type', AccountTransaction::ACCOUNT_TYPE_SALE)
+            ->where('direction', AccountTransaction::DIRECTION_CREDIT)
+            ->where('shop_id', $shopId)
+            ->exists();
+
+        if ($exists) {
+            return;
+        }
+
+        AccountTransaction::create($this->entry(
+            $shopId,
+            AccountTransaction::ACCOUNT_TYPE_SALE,
+            null,
+            AccountTransaction::DIRECTION_CREDIT,
+            $totalAmount,
+            $saleId,
+            $description,
+            $transactionDate
+        ));
     }
 
     /**

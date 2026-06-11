@@ -7,7 +7,7 @@ use App\Models\Product;
 use App\Models\Customer;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
-use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\DB;
 use Gloudemans\Shoppingcart\Facades\Cart;
 use App\Support\ActiveShop;
 
@@ -128,10 +128,22 @@ class PosController extends Controller
         $validatedData = $request->validate($rules);
         $customer = Customer::where('id', $validatedData['customer_id'])->first();
         $content = Cart::content();
+        $authUser = auth()->user();
+        $shopBanks = collect();
+        if ($authUser->shop_id) {
+            $shopBanks = DB::table('bank_shop')
+                ->where('bank_shop.shop_id', $authUser->shop_id)
+                ->join('banks', 'bank_shop.bank_id', '=', 'banks.id')
+                ->select('bank_shop.id', 'banks.name')
+                ->orderBy('banks.name')
+                ->get();
+        }
 
         return view('pos.create-invoice', [
             'customer' => $customer,
-            'content' => $content
+            'content' => $content,
+            'shopBanks' => $shopBanks,
+            'cartTotal' => Cart::total(),
         ]);
     }
 
