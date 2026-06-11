@@ -2179,14 +2179,13 @@ class OrderController extends Controller
                 $order->load('orderDetails');
                 $this->holdInvoiceService->clearReservationForOrder($order);
 
-                if ($pay1 > 0) {
-                    app(SalePostingService::class)->postSale($order, $pay1, $paymentMethod1, $shopBankId1);
-                } else {
-                    app(SalePostingService::class)->postSale($order, 0, 'credit');
-                }
-                if ($pay2 > 0 && $paymentMethod2) {
-                    app(SalePostingService::class)->postSale($order, $pay2, $paymentMethod2, $shopBankId2);
-                }
+                app(SalePostingService::class)->postOrderPayments(
+                    $order,
+                    ['amount' => $pay1, 'method' => $paymentMethod1, 'bank' => $shopBankId1],
+                    ($pay2 > 0 && $paymentMethod2)
+                        ? ['amount' => $pay2, 'method' => $paymentMethod2, 'bank' => $shopBankId2]
+                        : null
+                );
 
                 if ($pay1 > 0) {
                     $this->createPaymentLog($order->id, $pay1, $paymentMethod1, $shopBankId1);
@@ -2439,14 +2438,13 @@ class OrderController extends Controller
                     $order_id = $order->id;
 
                     // Ledger: all entries use source_id = order.id (SalePostingService)
-                    if ($pay1 > 0) {
-                        app(SalePostingService::class)->postSale($order, $pay1, $paymentMethod1, $shopBankId1);
-                    } else {
-                        app(SalePostingService::class)->postSale($order, 0, 'credit');
-                    }
-                    if ($pay2 > 0 && $paymentMethod2) {
-                        app(SalePostingService::class)->postSale($order, $pay2, $paymentMethod2, $shopBankId2);
-                    }
+                    app(SalePostingService::class)->postOrderPayments(
+                        $order,
+                        ['amount' => $pay1, 'method' => $paymentMethod1, 'bank' => $shopBankId1],
+                        ($pay2 > 0 && $paymentMethod2)
+                            ? ['amount' => $pay2, 'method' => $paymentMethod2, 'bank' => $shopBankId2]
+                            : null
+                    );
 
                     // Payment logs for history only (do not drive ledger source_id)
                     if ($pay1 > 0) {
