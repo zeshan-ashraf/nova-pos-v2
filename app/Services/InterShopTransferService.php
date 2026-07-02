@@ -736,7 +736,10 @@ class InterShopTransferService
             }
 
             foreach ($purchase->purchaseDetails as $pd) {
-                $childProduct = $pd->product;
+                // Resolve without the shop global scope: completion runs in the mother-shop
+                // request context, so the eager-loaded relation would be filtered to the mother
+                // shop and return null for the child product, skipping the child stock log.
+                $childProduct = Product::withoutGlobalScope('shop')->find((int) $pd->product_id);
                 if (!$childProduct) {
                     continue;
                 }
