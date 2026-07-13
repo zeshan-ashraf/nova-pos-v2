@@ -60,10 +60,18 @@
                                 <select class="form-control payment-customer-select @error('customer_id') is-invalid @enderror" id="customer_id" name="customer_id" required>
                                     <option value="">Select customer</option>
                                     @foreach($customers ?? [] as $c)
-                                        <option value="{{ $c->id }}" {{ old('customer_id', request('customer_id')) == $c->id ? 'selected' : '' }}>{{ $c->shopname ? ($c->name ? $c->shopname . ' (' . $c->name . ')' : $c->shopname) : ($c->name ?? '—') }}</option>
+                                        <option value="{{ $c->id }}"
+                                            data-credit-amount="{{ $c->credit_amount ?? 0 }}"
+                                            {{ old('customer_id', request('customer_id')) == $c->id ? 'selected' : '' }}>
+                                            {{ $c->shopname ? ($c->name ? $c->shopname . ' (' . $c->name . ')' : $c->shopname) : ($c->name ?? '—') }}
+                                        </option>
                                     @endforeach
                                 </select>
                                 @error('customer_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                <div id="customer_due_amount_wrap" class="mt-2" style="display: none;">
+                                    <small class="text-muted">Due / Payable:</small>
+                                    <strong id="customer_due_amount" class="ml-1 text-danger">0.00</strong>
+                                </div>
                             </div>
                             <div class="col-md-6">
                                 <label for="payment_date">Payment Date <span class="text-danger">*</span></label>
@@ -297,6 +305,39 @@
         if (!isBank) document.getElementById('shop_bank_id').value = '';
     });
 
+    function formatPaymentAmount(n) {
+        var num = parseFloat(n) || 0;
+        return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function updateCustomerDueAmount() {
+        var select = document.getElementById('customer_id');
+        var wrap = document.getElementById('customer_due_amount_wrap');
+        var amountEl = document.getElementById('customer_due_amount');
+        if (!select || !wrap || !amountEl) return;
+
+        var selected = select.options[select.selectedIndex];
+        if (!selected || !selected.value) {
+            wrap.style.display = 'none';
+            amountEl.textContent = '0.00';
+            amountEl.classList.remove('text-success');
+            amountEl.classList.add('text-danger');
+            return;
+        }
+
+        var credit = parseFloat(selected.getAttribute('data-credit-amount')) || 0;
+        wrap.style.display = 'block';
+        amountEl.textContent = formatPaymentAmount(credit);
+        // Positive = customer owes us (due); negative = advance
+        if (credit < 0) {
+            amountEl.classList.remove('text-danger');
+            amountEl.classList.add('text-success');
+        } else {
+            amountEl.classList.remove('text-success');
+            amountEl.classList.add('text-danger');
+        }
+    }
+
     if (typeof $ !== 'undefined' && $.fn.select2) {
         $('.payment-customer-select').select2({
             theme: 'bootstrap-5',
@@ -314,7 +355,7 @@
             requestAnimationFrame(function() { focusSearch(); });
             setTimeout(focusSearch, 50);
             setTimeout(focusSearch, 200);
-        });
+        }).on('change', updateCustomerDueAmount);
 
         $('.filter-customer-select').select2({
             theme: 'bootstrap-5',
@@ -323,7 +364,11 @@
             width: '100%',
             minimumResultsForSearch: 0
         });
+    } else {
+        document.getElementById('customer_id')?.addEventListener('change', updateCustomerDueAmount);
     }
+
+    updateCustomerDueAmount();
 
     (function() {
         var amountInput = document.getElementById('amount');

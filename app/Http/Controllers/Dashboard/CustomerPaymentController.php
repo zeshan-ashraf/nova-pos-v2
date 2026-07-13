@@ -36,7 +36,7 @@ class CustomerPaymentController extends Controller
                 $q->where('is_walkin', false)->orWhere('is_walkin', 0)->orWhereNull('is_walkin');
             })
             ->orderBy('shopname')
-            ->get(['id', 'name', 'shopname', 'shop_id']);
+            ->get(['id', 'name', 'shopname', 'shop_id', 'credit_amount']);
 
         $shopId = $authUser->shop_id ?? ActiveShop::current()?->id;
         $shopBanks = collect();
