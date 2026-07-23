@@ -42,6 +42,7 @@ class CustomerController extends Controller
         $orderAgg = collect();
         $saleReturnAgg = collect();
         $paymentAgg = collect();
+        $ledgerDueAgg = collect();
         if ($customerIds->isNotEmpty()) {
             $orderAgg = Order::query()
                 ->whereIn('customer_id', $customerIds->all())
@@ -66,15 +67,40 @@ class CustomerController extends Controller
                 ->groupBy('account_ref_id')
                 ->get()
                 ->keyBy('customer_id');
+
+            // Due Amount = ledger closing balance (same as customer ledger): SUM(debit) - SUM(credit)
+            // Shop-scoped per customer, matching buildCustomerLedgerData / LedgerBalanceService.
+            $ledgerDueAgg = $customers->getCollection()
+                ->groupBy(fn ($c) => $c->shop_id ?? 'null')
+                ->flatMap(function ($shopCustomers, $shopKey) {
+                    $ids = $shopCustomers->pluck('id')->all();
+                    $query = AccountTransaction::query()
+                        ->where('account_type', AccountTransaction::ACCOUNT_TYPE_CUSTOMER)
+                        ->whereIn('account_ref_id', $ids)
+                        ->selectRaw(
+                            'account_ref_id as customer_id, COALESCE(SUM(CASE WHEN direction = ? THEN amount WHEN direction = ? THEN -amount ELSE 0 END), 0) as balance',
+                            [AccountTransaction::DIRECTION_DEBIT, AccountTransaction::DIRECTION_CREDIT]
+                        )
+                        ->groupBy('account_ref_id');
+
+                    if ($shopKey !== 'null') {
+                        $query->where('shop_id', (int) $shopKey);
+                    }
+
+                    return $query->get();
+                })
+                ->keyBy('customer_id');
         }
 
-        $customers->getCollection()->transform(function ($customer) use ($orderAgg, $saleReturnAgg, $paymentAgg) {
+        $customers->getCollection()->transform(function ($customer) use ($orderAgg, $saleReturnAgg, $paymentAgg, $ledgerDueAgg) {
             $orderRow = $orderAgg->get($customer->id);
             $returnRow = $saleReturnAgg->get($customer->id);
             $payRow = $paymentAgg->get($customer->id);
+            $ledgerRow = $ledgerDueAgg->get($customer->id);
             $customer->total_sales_amount = (float) ($orderRow->total_sales ?? 0);
             $customer->total_sale_return_amount = (float) ($returnRow->total_sale_returns ?? 0);
             $customer->total_paid_amount = (float) ($payRow->total_paid ?? 0);
+            $customer->due_amount = (float) ($ledgerRow->balance ?? 0);
             return $customer;
         });
 

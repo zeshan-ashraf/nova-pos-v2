@@ -91,7 +91,7 @@
                             <td>{{ number_format($customer->total_sales_amount ?? 0, 2) }}</td>
                             <td>{{ number_format($customer->total_sale_return_amount ?? 0, 2) }}</td>
                             <td>{{ number_format($customer->total_paid_amount ?? 0, 2) }}</td>
-                            <td>{{ number_format($customer->credit_amount ?? 0, 2) }}</td>
+                            <td>{{ number_format($customer->due_amount ?? 0, 2) }}</td>
                             <td>{{ $customer->credit_days ?? 0 }}</td>
                             <td>
                                 <div class="d-flex align-items-center list-action">
