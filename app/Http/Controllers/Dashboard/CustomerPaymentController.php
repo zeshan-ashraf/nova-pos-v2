@@ -6,7 +6,6 @@ use App\Models\AccountTransaction;
 use App\Models\Customer;
 use App\Models\Shop;
 use App\Http\Controllers\Controller;
-use App\Services\CustomerCreditService;
 use App\Services\Ledger\LedgerBalanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,7 +25,7 @@ class CustomerPaymentController extends Controller
     /**
      * Show the form for recording a customer payment (reduces customer balance).
      */
-    public function create(Request $request, LedgerBalanceService $balanceService)
+    public function create(Request $request)
     {
         $authUser = auth()->user();
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
@@ -38,7 +37,38 @@ class CustomerPaymentController extends Controller
             ->orderBy('shopname')
             ->get(['id', 'name', 'shopname', 'shop_id', 'credit_amount']);
 
-        $shopId = $authUser->shop_id ?? ActiveShop::current()?->id;
+        // Due/Payable on this form = ledger balance (source of truth), not the possibly-stale credit_amount column
+        if ($customers->isNotEmpty()) {
+            $ledgerDueByCustomer = $customers
+                ->groupBy(fn ($c) => $c->shop_id ?? 'null')
+                ->flatMap(function ($shopCustomers, $shopKey) {
+                    $ids = $shopCustomers->pluck('id')->all();
+                    $query = AccountTransaction::query()
+                        ->where('account_type', AccountTransaction::ACCOUNT_TYPE_CUSTOMER)
+                        ->whereIn('account_ref_id', $ids)
+                        ->selectRaw(
+                            'account_ref_id as customer_id, COALESCE(SUM(CASE WHEN direction = ? THEN amount WHEN direction = ? THEN -amount ELSE 0 END), 0) as balance',
+                            [AccountTransaction::DIRECTION_DEBIT, AccountTransaction::DIRECTION_CREDIT]
+                        )
+                        ->groupBy('account_ref_id');
+
+                    if ($shopKey !== 'null') {
+                        $query->where('shop_id', (int) $shopKey);
+                    }
+
+                    return $query->get();
+                })
+                ->keyBy('customer_id');
+
+            foreach ($customers as $customer) {
+                $customer->setAttribute(
+                    'credit_amount',
+                    (float) ($ledgerDueByCustomer->get($customer->id)->balance ?? 0)
+                );
+            }
+        }
+
+        $shopId = ActiveShop::id() ?? $authUser->shop_id;
         $shopBanks = collect();
         if ($shopId) {
             $shopBanks = DB::table('bank_shop')
@@ -198,9 +228,9 @@ class CustomerPaymentController extends Controller
     /**
      * Store customer payment (double-entry): (1) cash/bank debit (money in), (2) customer credit (AR decrease).
      * Rule: Receiving payment → increase asset (debit cash/bank), decrease receivable (credit customer).
-     * Also syncs customers.credit_amount via CustomerCreditService.
+     * Syncs customers.credit_amount from ledger after the payment (source of truth).
      */
-    public function store(Request $request, CustomerCreditService $creditService)
+    public function store(Request $request, LedgerBalanceService $balanceService)
     {
         $validated = $request->validate([
             'customer_id' => 'required|numeric|exists:customers,id',
@@ -212,15 +242,19 @@ class CustomerPaymentController extends Controller
         ]);
 
         $authUser = auth()->user();
-        $shopId = $authUser->shop_id ?? ActiveShop::current()?->id;
+        $shopId = ActiveShop::id() ?? $authUser->shop_id;
         if (!$shopId) {
             return Redirect::back()->withErrors(['customer_id' => 'Please select a shop context.'])->withInput();
         }
 
         $customer = Customer::findOrFail($validated['customer_id']);
-        if ($authUser->shop_id && $customer->shop_id && $customer->shop_id != $authUser->shop_id) {
+        $visibleShopIds = ActiveShop::visibleShopIds($authUser);
+        if ($visibleShopIds->isNotEmpty() && $customer->shop_id && !$visibleShopIds->contains((int) $customer->shop_id)) {
             return Redirect::back()->withErrors(['customer_id' => 'Customer does not belong to your shop.'])->withInput();
         }
+
+        // Post under the customer's shop so ledger balance and credit_amount stay aligned
+        $ledgerShopId = (int) ($customer->shop_id ?: $shopId);
 
         if ($validated['payment_method'] === 'bank' && empty($validated['shop_bank_id'])) {
             return Redirect::back()->withErrors(['shop_bank_id' => 'Please select a bank when payment method is Bank.'])->withInput();
@@ -240,17 +274,16 @@ class CustomerPaymentController extends Controller
         }
 
         $amountMoneyString = (string) $amountMoney;
-        $amount = (float) $amountMoneyString;
         $transactionDate = Carbon::parse($validated['payment_date'])->toDateString();
         $isBank = $validated['payment_method'] === 'bank';
         $accountRefId = $isBank ? (int) $validated['shop_bank_id'] : null;
 
-        $createdCustomerRowId = DB::transaction(function () use ($validated, $shopId, $amount, $amountMoneyString, $transactionDate, $isBank, $accountRefId, $customer, $creditService) {
+        $createdCustomerRowId = DB::transaction(function () use ($validated, $ledgerShopId, $amountMoneyString, $transactionDate, $isBank, $accountRefId, $customer, $balanceService) {
             $receiptNo = $this->nextCustomerPaymentReceiptNo(Carbon::parse($transactionDate));
 
             // Row 1: Customer CREDIT — receivable decrease (customer owes less)
             $customerRow = AccountTransaction::create([
-                'shop_id' => $shopId,
+                'shop_id' => $ledgerShopId,
                 'account_type' => AccountTransaction::ACCOUNT_TYPE_CUSTOMER,
                 'account_ref_id' => $validated['customer_id'],
                 'direction' => AccountTransaction::DIRECTION_CREDIT,
@@ -267,7 +300,7 @@ class CustomerPaymentController extends Controller
 
             // Row 2: Cash/Bank DEBIT — money received (asset increase)
             AccountTransaction::create([
-                'shop_id' => $shopId,
+                'shop_id' => $ledgerShopId,
                 'account_type' => $isBank ? AccountTransaction::ACCOUNT_TYPE_BANK : AccountTransaction::ACCOUNT_TYPE_CASH,
                 'account_ref_id' => $accountRefId,
                 'direction' => AccountTransaction::DIRECTION_DEBIT,
@@ -279,8 +312,11 @@ class CustomerPaymentController extends Controller
                 'transaction_date' => $transactionDate,
             ]);
 
-            // Sync customers.credit_amount (decrease by payment amount)
-            $creditService->applyPayment($customer, $amount);
+            // Sync customers.credit_amount from ledger (payment credit reduces balance by paid amount)
+            $balance = $balanceService->getCustomerBalance((int) $customer->id, $ledgerShopId);
+            Customer::withoutGlobalScope('shop')
+                ->where('id', $customer->id)
+                ->update(['credit_amount' => $balance]);
 
             return $groupId;
         });
@@ -404,7 +440,9 @@ class CustomerPaymentController extends Controller
 
                 $customerId = (int) $customerRow->account_ref_id;
                 $balance = $balanceService->getCustomerBalance($customerId, $customerRow->shop_id);
-                Customer::where('id', $customerId)->update(['credit_amount' => $balance]);
+                Customer::withoutGlobalScope('shop')
+                    ->where('id', $customerId)
+                    ->update(['credit_amount' => $balance]);
             });
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json(['success' => false, 'message' => 'Payment not found.'], 404);
