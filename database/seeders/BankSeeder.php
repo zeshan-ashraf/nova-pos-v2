@@ -45,10 +45,11 @@ class BankSeeder extends Seeder
             ['name' => 'Zarai Taraqiati Bank (ZTBL)'],
         ];
 
-        DB::table('banks')->insert(
-            collect($banks)
-                ->map(fn (array $bank) => $bank + ['created_at' => $now, 'updated_at' => $now])
-                ->all()
-        );
+        foreach ($banks as $bank) {
+            DB::table('banks')->updateOrInsert(
+                ['name' => $bank['name']],
+                ['created_at' => $now, 'updated_at' => $now]
+            );
+        }
     }
 }

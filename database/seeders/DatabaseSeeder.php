@@ -9,7 +9,7 @@ use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Employee;
 use App\Models\Supplier;
-use App\Models\AdvanceSalary;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
@@ -22,58 +22,98 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // \App\Models\User::factory(10)->create();
+        $this->call(ShopSeeder::class);
 
-        $admin = \App\Models\User::factory()->create([
-            'name' => 'Admin',
-            'username' => 'admin',
-            'email' => 'admin@gmail.com',
-        ]);
+        $shop = \App\Models\Shop::where('is_parent', true)->orderBy('id')->first()
+            ?? \App\Models\Shop::orderBy('id')->first();
 
-        $user = \App\Models\User::factory()->create([
-            'name' => 'User',
-            'username' => 'user',
-            'email' => 'user@gmail.com',
-        ]);
+        $password = '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'; // password
 
-        Employee::factory(5)->create();
-        // AdvanceSalary::factory(25)->create();
+        $admin = User::firstOrCreate(
+            ['email' => 'admin@gmail.com'],
+            [
+                'name' => 'Admin',
+                'username' => 'admin',
+                'password' => $password,
+                'shop_id' => $shop?->id,
+            ]
+        );
 
-        Customer::factory(25)->create();
-        Supplier::factory(10)->create();
+        $user = User::firstOrCreate(
+            ['email' => 'user@gmail.com'],
+            [
+                'name' => 'User',
+                'username' => 'user',
+                'password' => $password,
+                'shop_id' => $shop?->id,
+            ]
+        );
 
-        for ($i=0; $i < 10; $i++) {
-            Product::factory()->create([
-                'product_code' => IdGenerator::generate([
-                    'table' => 'products',
-                    'field' => 'product_code',
-                    'length' => 4,
-                    'prefix' => 'PC'
-                ])
-            ]);
+        // Ensure existing seeded users are linked to a shop
+        if ($shop) {
+            if (!$admin->shop_id) {
+                $admin->update(['shop_id' => $shop->id]);
+            }
+            if (!$user->shop_id) {
+                $user->update(['shop_id' => $shop->id]);
+            }
         }
-        Category::factory(5)->create();
 
-        Permission::create(['name' => 'pos.menu', 'group_name' => 'pos']);
-        Permission::create(['name' => 'advance.pos.menu', 'group_name' => 'advance_pos']);
-        Permission::create(['name' => 'employee.menu', 'group_name' => 'employee']);
-        Permission::create(['name' => 'customer.menu', 'group_name' => 'customer']);
-        Permission::create(['name' => 'supplier.menu', 'group_name' => 'supplier']);
-        Permission::create(['name' => 'salary.menu', 'group_name' => 'salary']);
-        Permission::create(['name' => 'attendence.menu', 'group_name' => 'attendence']);
-        Permission::create(['name' => 'category.menu', 'group_name' => 'category']);
-        Permission::create(['name' => 'product.menu', 'group_name' => 'product']);
-        Permission::create(['name' => 'orders.menu', 'group_name' => 'orders']);
-        Permission::create(['name' => 'expense.menu', 'group_name' => 'expenses']);
-        Permission::create(['name' => 'stock.menu', 'group_name' => 'stock']);
-        Permission::create(['name' => 'roles.menu', 'group_name' => 'roles']);
-        Permission::create(['name' => 'user.menu', 'group_name' => 'user']);
-        Permission::create(['name' => 'database.menu', 'group_name' => 'database']);
+        // Demo data only on first seed (admin was just created)
+        if ($admin->wasRecentlyCreated) {
+            Employee::factory(5)->create();
+            Customer::factory(25)->create();
+            Supplier::factory(10)->create();
 
-        Role::create(['name' => 'SuperAdmin'])->givePermissionTo(Permission::all());
-        Role::create(['name' => 'Admin'])->givePermissionTo(['customer.menu', 'user.menu', 'supplier.menu']);
-        Role::create(['name' => 'Account'])->givePermissionTo(['customer.menu', 'user.menu', 'supplier.menu','expense.menu']);
-        Role::create(['name' => 'Manager'])->givePermissionTo(['stock.menu', 'orders.menu', 'product.menu', 'salary.menu', 'employee.menu']);
+            for ($i = 0; $i < 10; $i++) {
+                Product::factory()->create([
+                    'product_code' => IdGenerator::generate([
+                        'table' => 'products',
+                        'field' => 'product_code',
+                        'length' => 4,
+                        'prefix' => 'PC'
+                    ])
+                ]);
+            }
+            Category::factory(5)->create();
+        }
+
+        $permissions = [
+            ['name' => 'pos.menu', 'group_name' => 'pos'],
+            ['name' => 'advance.pos.menu', 'group_name' => 'advance_pos'],
+            ['name' => 'employee.menu', 'group_name' => 'employee'],
+            ['name' => 'customer.menu', 'group_name' => 'customer'],
+            ['name' => 'supplier.menu', 'group_name' => 'supplier'],
+            ['name' => 'salary.menu', 'group_name' => 'salary'],
+            ['name' => 'attendence.menu', 'group_name' => 'attendence'],
+            ['name' => 'category.menu', 'group_name' => 'category'],
+            ['name' => 'product.menu', 'group_name' => 'product'],
+            ['name' => 'orders.menu', 'group_name' => 'orders'],
+            ['name' => 'expense.menu', 'group_name' => 'expenses'],
+            ['name' => 'stock.menu', 'group_name' => 'stock'],
+            ['name' => 'roles.menu', 'group_name' => 'roles'],
+            ['name' => 'user.menu', 'group_name' => 'user'],
+            ['name' => 'database.menu', 'group_name' => 'database'],
+        ];
+
+        foreach ($permissions as $permission) {
+            Permission::firstOrCreate(
+                ['name' => $permission['name'], 'guard_name' => 'web'],
+                ['group_name' => $permission['group_name']]
+            );
+        }
+
+        $superAdmin = Role::firstOrCreate(['name' => 'SuperAdmin', 'guard_name' => 'web']);
+        $superAdmin->syncPermissions(Permission::all());
+
+        $adminRole = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']);
+        $adminRole->givePermissionTo(['customer.menu', 'user.menu', 'supplier.menu']);
+
+        $accountRole = Role::firstOrCreate(['name' => 'Account', 'guard_name' => 'web']);
+        $accountRole->givePermissionTo(['customer.menu', 'user.menu', 'supplier.menu', 'expense.menu']);
+
+        $managerRole = Role::firstOrCreate(['name' => 'Manager', 'guard_name' => 'web']);
+        $managerRole->givePermissionTo(['stock.menu', 'orders.menu', 'product.menu', 'salary.menu', 'employee.menu']);
 
         $admin->assignRole('SuperAdmin');
         $user->assignRole('Account');

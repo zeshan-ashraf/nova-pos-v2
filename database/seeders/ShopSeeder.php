@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\Shop;
 use Illuminate\Database\Seeder;
 
 class ShopSeeder extends Seeder
@@ -12,6 +12,16 @@ class ShopSeeder extends Seeder
      */
     public function run(): void
     {
-        //
+        Shop::firstOrCreate(
+            ['name' => 'Main Shop'],
+            [
+                'address' => 'Main Street',
+                'phone' => '03000000000',
+                'owner_name' => 'Admin',
+                'is_parent' => true,
+                'parent_shop_id' => null,
+                'status' => true,
+            ]
+        );
     }
 }

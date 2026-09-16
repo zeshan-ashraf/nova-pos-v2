@@ -37,7 +37,12 @@ class ExpenseSeeder extends Seeder
      */
     public function run(): void
     {
-        $shopId = 1;
+        $shopId = \App\Models\Shop::where('is_parent', true)->orderBy('id')->value('id')
+            ?? \App\Models\Shop::orderBy('id')->value('id');
+
+        if (!$shopId) {
+            return;
+        }
 
         foreach ($this->defaultCategories as $title) {
             Expense::firstOrCreate(
