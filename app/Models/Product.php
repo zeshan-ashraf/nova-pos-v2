@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\ProductUnitValidator;
 use App\Traits\BelongsToShop;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,6 +12,10 @@ use Kyslik\ColumnSortable\Sortable;
 class Product extends Model
 {
     use BelongsToShop, HasFactory, Sortable;
+
+    public const UNIT_PIECE = 'piece';
+
+    public const UNIT_KG = 'kg';
 
     protected $fillable = [
         'product_name',
@@ -29,6 +34,7 @@ class Product extends Model
         'buying_price',
         'selling_price',
         'status',
+        'unit',
     ];
 
     public $sortable = [
@@ -41,17 +47,89 @@ class Product extends Model
         'id',
     ];
 
+    protected $attributes = [
+        'unit' => self::UNIT_PIECE,
+    ];
+
     /**
      * buying_price: moving weighted average cost (updated on purchase only).
+     * Quantities use decimal:3 (DECIMAL(12,3)). Money uses decimal:2 / decimal:4.
      */
     protected $casts = [
-        'buying_price' => 'float',
-        'reserved_stock' => 'float',
+        'buying_price' => 'decimal:4',
+        'selling_price' => 'decimal:2',
+        'product_store' => 'decimal:3',
+        'reserved_stock' => 'decimal:3',
+        'low_stock_warning' => 'decimal:3',
     ];
 
     protected $with = [
         'shop'
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (Product $product) {
+            if ($product->unit === null || $product->unit === '') {
+                $product->unit = self::UNIT_PIECE;
+            }
+
+            if (! in_array($product->unit, self::allowedUnits(), true)) {
+                throw new \InvalidArgumentException(
+                    'Invalid product unit ['.$product->unit.']. Allowed: '.implode(', ', self::allowedUnits()).'.'
+                );
+            }
+        });
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function allowedUnits(): array
+    {
+        return [self::UNIT_PIECE, self::UNIT_KG];
+    }
+
+    public function isPiece(): bool
+    {
+        return $this->unit === self::UNIT_PIECE;
+    }
+
+    public function isKg(): bool
+    {
+        return $this->unit === self::UNIT_KG;
+    }
+
+    /**
+     * Display quantity for the product's unit: piece as a whole number, kg at 3 decimal places.
+     */
+    public function formattedQuantity(mixed $quantity = null): string
+    {
+        $qty = $quantity ?? $this->product_store ?? 0;
+        if ($qty === null || $qty === '') {
+            $qty = 0;
+        }
+
+        $formatted = app(ProductUnitValidator::class)->formatQuantity($qty);
+
+        if ($this->isPiece()) {
+            $trimmed = preg_replace('/\.0+$/', '', $formatted);
+
+            return ($trimmed === null || $trimmed === '') ? '0' : $trimmed;
+        }
+
+        return $formatted;
+    }
+
+    public function unitLabel(): string
+    {
+        return $this->isKg() ? 'kg' : 'piece';
+    }
+
+    public function stockUnitLabel(): string
+    {
+        return $this->isKg() ? 'kg' : 'pieces';
+    }
 
     /**
      * Category relation (unscoped). Use sameShopCategory for display when category must belong to product's shop.

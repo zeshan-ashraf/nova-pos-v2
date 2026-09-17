@@ -28,6 +28,14 @@ class ProductFactory extends Factory
             'selling_price' => fake()->randomNumber(2),
             'buying_date' => Carbon::now(),
             'expire_date' => Carbon::now()->addYears(2),
+            'unit' => \App\Models\Product::UNIT_PIECE,
         ];
+    }
+
+    public function kg(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'unit' => \App\Models\Product::UNIT_KG,
+        ]);
     }
 }

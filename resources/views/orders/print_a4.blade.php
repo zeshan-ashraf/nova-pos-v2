@@ -140,8 +140,8 @@
             <tr>
                 <td>{{ $item->product->product_name ?? 'N/A' }}</td>
                 <td>{{ $item->product->product_code ?? '-' }}</td>
-                <td class="text-right">{{ number_format((float) $item->quantity, 2) }}</td>
-                <td class="text-right">{{ number_format((float) $item->unitcost, 2) }}</td>
+                <td class="text-right">{{ $item->quantityWithUnit() }}</td>
+                <td class="text-right">{{ $item->unitPriceWithUnit() }}</td>
                 <td class="text-right">{{ number_format((float) $item->total, 2) }}</td>
             </tr>
             @endforeach

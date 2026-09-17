@@ -461,7 +461,8 @@
                                             <span class="product-code-display" data-row="0">-</span>
                                         </td>
                                         <td>
-                                            <input type="number" class="form-control quantity" name="products[0][quantity]" value="1" data-row="0" min="1">
+                                            <input type="number" class="form-control quantity" name="products[0][quantity]" value="1" data-row="0" min="1" step="1">
+                                            <input type="hidden" class="product-unit" value="piece">
                                             <span class="stock-warning stock-warning-msg" data-row="0" style="display: none;"></span>
                                         </td>
                                         <td>
@@ -826,6 +827,7 @@
                     return [
                         'product_id' => $d->product_id,
                         'quantity' => $d->quantity,
+                        'unit' => $d->unit ?: ($p?->unit ?: \App\Models\Product::UNIT_PIECE),
                         'unit_price' => $d->unitcost,
                         'total' => $d->total,
                         'item_discount' => $d->item_discount ?? 0,
@@ -1100,7 +1102,8 @@
                                 price: item.price,
                                 buying_price: item.buying_price,
                                 stock: item.stock,
-                                code: item.code
+                                code: item.code,
+                                unit: item.unit || 'piece'
                             };
                         }),
                         pagination: data.pagination || { more: false }
@@ -1147,8 +1150,11 @@
             $row.find('.original-price').val(data.price || 0);
             $row.find('.unit-price').val(data.price || 0);
             syncRowBuyingPriceHidden($row, data.buying_price);
+            var unit = data.unit || 'piece';
+            $row.find('.product-unit').val(unit);
+            applyQuantityInputForUnit($row, unit);
             var stockVal = data.stock != null && data.stock !== '' ? data.stock : 0;
-            $row.find('.stock-display').text(stockVal);
+            $row.find('.stock-display').text(formatStockDisplay(stockVal, unit));
             $row.find('.stock-value').val(stockVal);
             // When changing product in any mode, reset original quantity used for edit stock validation
             $row.find('.original-quantity').val(0);
@@ -1168,8 +1174,10 @@
             $row.find('.original-price').val(0);
             $row.find('.unit-price').val(0);
             syncRowBuyingPriceHidden($row, null);
-            $row.find('.stock-display').text(0);
+            $row.find('.stock-display').text(formatStockDisplay(0, 'piece'));
             $row.find('.stock-value').val(0);
+            $row.find('.product-unit').val('piece');
+            applyQuantityInputForUnit($row, 'piece');
             $row.find('.product-code-display').text('-');
             
             calculateRowTotal(rowIdx);
@@ -1179,11 +1187,36 @@
     }
 
     // Format product display in dropdown
+    function formatStockDisplay(stock, unit) {
+        var n = parseFloat(stock);
+        if (isNaN(n) || n < 0) {
+            n = 0;
+        }
+        if (unit === 'kg') {
+            return n.toFixed(3) + ' kg';
+        }
+        return String(Math.round(n)) + ' pieces';
+    }
+
+    function applyQuantityInputForUnit($row, unit) {
+        var $qty = $row.find('.quantity');
+        if (unit === 'kg') {
+            $qty.attr({ step: '0.001', min: '0.001' });
+        } else {
+            $qty.attr({ step: '1', min: '1' });
+        }
+        $row.find('.product-unit').val(unit || 'piece');
+    }
+
     function formatProduct(product) {
         if (product.loading) {
             return product.text;
         }
-        return $('<span>' + product.text + '</span>');
+        var extra = '';
+        if (product.stock != null && product.stock !== '') {
+            extra = ' (' + formatStockDisplay(product.stock, product.unit || 'piece') + ')';
+        }
+        return $('<span>' + product.text + extra + '</span>');
     }
 
     // Format selected product display
@@ -1299,6 +1332,8 @@
                     $select.val(pid).trigger('change');
                     $row.find('.original-price').val(p.original_price || p.unit_price || 0);
                     $row.find('.unit-price').val(p.unit_price || 0);
+                    var unit = p.unit || 'piece';
+                    applyQuantityInputForUnit($row, unit);
                     $row.find('.quantity').val(p.quantity || 1);
                     // For repopulated forms (validation errors), preserve any original_quantity from old input when present
                     $row.find('.original-quantity').val(p.original_quantity || 0);
@@ -1307,7 +1342,7 @@
                     $row.find('.product-code-display').text(code);
                     $row.find('.total-display').text(parseFloat(p.total || 0).toFixed(2));
                     var stock = p.stock != null && p.stock !== '' ? parseFloat(p.stock) : 0;
-                    $row.find('.stock-display').text(stock);
+                    $row.find('.stock-display').text(formatStockDisplay(stock, unit));
                     $row.find('.stock-value').val(stock);
                     var bp = (typeof productIdToBuyingPrice !== 'undefined' && productIdToBuyingPrice && Object.prototype.hasOwnProperty.call(productIdToBuyingPrice, pid))
                         ? productIdToBuyingPrice[pid] : null;
@@ -1381,6 +1416,8 @@
                         $select.val(pid).trigger('change');
                         $row.find('.original-price').val(p.unit_price || 0);
                         $row.find('.unit-price').val(p.unit_price || 0);
+                        var unit = p.unit || 'piece';
+                        applyQuantityInputForUnit($row, unit);
                         $row.find('.quantity').val(p.quantity || 1);
                         // In edit mode, remember original line quantity so front-end stock validation can add it back
                         $row.find('.original-quantity').val(p.quantity || 0);
@@ -1388,7 +1425,7 @@
                         $row.find('.total-value').val(p.total || 0);
                         $row.find('.product-code-display').text(p.product_code || '-');
                         $row.find('.total-display').text(parseFloat(p.total || 0).toFixed(2));
-                        $row.find('.stock-display').text(p.product_store != null ? p.product_store : 0);
+                        $row.find('.stock-display').text(formatStockDisplay(p.product_store != null ? p.product_store : 0, unit));
                         $row.find('.stock-value').val(p.product_store != null ? p.product_store : 0);
                         syncRowBuyingPriceHidden($row, p.buying_price);
                         validateInvoiceRowUnitPriceVsBuying($row);
@@ -1597,24 +1634,31 @@
     $(document).on('input', '.quantity', function() {
         const rowIndex = $(this).data('row');
         const $row = $(this).closest('tr');
-        let quantity = parseFloat($(this).val()) || 0;
-        const stock = parseFloat($row.find('.stock-display').text()) || 0;
+        const unit = $row.find('.product-unit').val() || 'piece';
+        let quantity = parseFloat($(this).val());
+        if (isNaN(quantity)) {
+            quantity = 0;
+        }
+        const stock = parseFloat($row.find('.stock-value').val()) || 0;
         const originalQty = parseFloat($row.find('.original-quantity').val()) || 0;
-        
-        // For edit mode, front-end validation should treat "available" stock as current stock
-        // plus the quantity already sold on this invoice line so user can reuse it safely.
         const effectiveStock = stock + originalQty;
-        
-        // Check stock validation
         const $warning = $row.find('.stock-warning-msg');
+
+        if (unit === 'piece' && $(this).val() !== '' && Math.abs(quantity - Math.round(quantity)) > 0.0000001) {
+            $warning.text('Piece quantity must be a whole number.').show();
+            calculateRowTotal(rowIndex);
+            return;
+        }
+
         if (quantity > effectiveStock) {
             $warning.text('Quantity exceeds available stock!').show();
-            $(this).val(effectiveStock);
-            quantity = effectiveStock;
+            var clamped = unit === 'kg' ? Number(effectiveStock).toFixed(3) : String(Math.round(effectiveStock));
+            $(this).val(clamped);
+            quantity = parseFloat(clamped) || 0;
         } else {
             $warning.hide();
         }
-        
+
         calculateRowTotal(rowIndex);
     });
 
@@ -2144,7 +2188,8 @@
                     <span class="product-code-display" data-row="${rowCount}">-</span>
                 </td>
                 <td>
-                    <input type="number" class="form-control quantity" name="products[${rowCount}][quantity]" value="1" data-row="${rowCount}" min="1">
+                    <input type="number" class="form-control quantity" name="products[${rowCount}][quantity]" value="1" data-row="${rowCount}" min="1" step="1">
+                    <input type="hidden" class="product-unit" value="piece">
                     <span class="stock-warning stock-warning-msg" data-row="${rowCount}" style="display: none;"></span>
                 </td>
                 <td>

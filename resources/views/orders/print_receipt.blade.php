@@ -126,16 +126,16 @@
         <tbody>
             @foreach($orderDetails as $item)
             @php
-                $qty = (float) ($item->quantity ?? 0);
+                $qtyLabel = $item->quantityWithUnit();
                 $unitPrice = (float) ($item->unitcost ?? 0);
                 $storedTotal = (float) ($item->total ?? 0);
-                $lineTotal = $storedTotal > 0 ? $storedTotal : ($qty * $unitPrice);
+                $lineTotal = $storedTotal > 0 ? $storedTotal : ((float) $item->quantity * $unitPrice);
             @endphp
             <tr>
                 <td class="item">{{ $item->product->product_name ?? 'N/A' }}</td>
-                <td class="qty">{{ number_format($qty, 0, '.', '') }}</td>
-                <td class="price">{{ number_format($unitPrice, 0, '.', '') }}</td>
-                <td class="total">{{ number_format($lineTotal, 0, '.', '') }}</td>
+                <td class="qty">{{ $qtyLabel }}</td>
+                <td class="price">{{ number_format($unitPrice, 2, '.', '') }}</td>
+                <td class="total">{{ number_format($lineTotal, 2, '.', '') }}</td>
             </tr>
             @endforeach
         </tbody>

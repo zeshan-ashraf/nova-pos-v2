@@ -5,10 +5,15 @@ namespace App\Services\Purchase;
 use App\Models\Activity;
 use App\Models\Purchase;
 use App\Models\PurchaseDetail;
+use App\Support\ProductUnitValidator;
 use Illuminate\Support\Facades\DB;
 
 class PurchaseLandedCostService
 {
+    public function __construct(
+        private ProductUnitValidator $units,
+    ) {}
+
     /**
      * Calculate landed cost allocation using expense ratio on product value.
      *
@@ -28,9 +33,10 @@ class PurchaseLandedCostService
             }
 
             $totalPurchaseValue = (float) $details->sum(function (PurchaseDetail $d) {
-                $qty = (int) ($d->quantity ?? 0);
+                $qty = $this->units->formatQuantity($d->quantity ?? 0);
                 $unitCost = (float) ($d->unitcost ?? 0);
-                return $qty * $unitCost;
+
+                return ((float) $qty) * $unitCost;
             });
 
             $totalExpense = (float) Activity::query()
@@ -41,14 +47,14 @@ class PurchaseLandedCostService
             $ratioBase = $totalPurchaseValue > 0 ? $totalPurchaseValue : 0.0;
 
             foreach ($details as $detail) {
-                $qty = (int) ($detail->quantity ?? 0);
+                $qty = $this->units->formatQuantity($detail->quantity ?? 0);
                 $unitCost = (float) ($detail->unitcost ?? 0);
 
-                $productValue = $qty * $unitCost;
+                $productValue = ((float) $qty) * $unitCost;
                 $ratio = $ratioBase > 0 ? ($productValue / $ratioBase) : 0.0;
                 $allocatedExpense = $totalExpense * $ratio;
                 $landedTotal = $productValue + $allocatedExpense;
-                $landedUnitCost = $qty > 0 ? ($landedTotal / $qty) : 0.0;
+                $landedUnitCost = $this->units->compare($qty, '0') > 0 ? ($landedTotal / (float) $qty) : 0.0;
 
                 $detail->update([
                     'allocated_expense' => round($allocatedExpense, 4),
@@ -78,12 +84,12 @@ class PurchaseLandedCostService
                     continue; // Only update rows present in request payload
                 }
 
-                $qty = (int) ($detail->quantity ?? 0);
+                $qty = $this->units->formatQuantity($detail->quantity ?? 0);
                 $unitCost = (float) ($detail->unitcost ?? 0);
                 $landedUnitCost = (float) $landedUnitCosts[$detail->id] ?? (float) $landedUnitCosts[(string) $detail->id];
 
-                $landedTotal = $landedUnitCost * $qty;
-                $allocatedExpense = $landedTotal - ($qty * $unitCost);
+                $landedTotal = $landedUnitCost * (float) $qty;
+                $allocatedExpense = $landedTotal - (((float) $qty) * $unitCost);
 
                 $detail->update([
                     'allocated_expense' => round($allocatedExpense, 4),
@@ -94,4 +100,3 @@ class PurchaseLandedCostService
         });
     }
 }
-

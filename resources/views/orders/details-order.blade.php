@@ -115,8 +115,8 @@
                             <td>{{ $loop->iteration  }}</td>
                             <td>{{ $item->product->product_name }}</td>
                             <td>{{ $item->product->product_code }}</td>
-                            <td>{{ $item->quantity }}</td>
-                            <td>{{ $item->unitcost }}</td>
+                            <td>{{ $item->quantityWithUnit() }}</td>
+                            <td>{{ $item->unitPriceWithUnit() }}</td>
                             <td>{{ $item->total }}</td>
                         </tr>
                         @endforeach

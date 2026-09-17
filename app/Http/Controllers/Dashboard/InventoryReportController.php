@@ -248,6 +248,7 @@ class InventoryReportController extends Controller
                     'text' => $displayText,
                     'name' => $product->product_name,
                     'code' => $product->product_code,
+                    'unit' => $product->unit ?: Product::UNIT_PIECE,
                 ];
             });
 

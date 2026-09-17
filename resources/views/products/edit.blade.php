@@ -118,9 +118,35 @@
                                 </div>
                                 @enderror
                             </div>
+                            @php
+                                $currentUnit = old('unit', $product->unit ?: 'piece');
+                                $unitLocked = $unitLocked ?? false;
+                            @endphp
+                            <div class="form-group col-md-6">
+                                <label for="unit">Unit <span class="text-danger">*</span></label>
+                                @if ($unitLocked)
+                                    <input type="hidden" name="unit" value="{{ $product->unit ?: 'piece' }}">
+                                    <select class="form-control @error('unit') is-invalid @enderror" id="unit" disabled>
+                                        <option value="piece" {{ $currentUnit === 'piece' ? 'selected' : '' }}>Piece</option>
+                                        <option value="kg" {{ $currentUnit === 'kg' ? 'selected' : '' }}>Kg</option>
+                                    </select>
+                                    <small class="form-text text-muted">This product's unit cannot be changed because it already has transaction history.</small>
+                                @else
+                                    <select class="form-control @error('unit') is-invalid @enderror" id="unit" name="unit" required>
+                                        <option value="piece" {{ $currentUnit === 'piece' ? 'selected' : '' }}>Piece</option>
+                                        <option value="kg" {{ $currentUnit === 'kg' ? 'selected' : '' }}>Kg</option>
+                                    </select>
+                                    <small class="form-text text-muted">Changing the unit does not convert stock. Review the stock quantity to match the new unit.</small>
+                                @endif
+                                @error('unit')
+                                <div class="invalid-feedback d-block">
+                                    {{ $message }}
+                                </div>
+                                @enderror
+                            </div>
                             <div class="form-group col-md-6">
                                 <label for="product_store">Stock</label>
-                                <input type="text" class="form-control @error('product_store') is-invalid @enderror" id="product_store" name="product_store" value="{{ old('product_store', $product->product_store) }}">
+                                <input type="number" min="0" step="{{ $currentUnit === 'kg' ? '0.001' : '1' }}" class="form-control @error('product_store') is-invalid @enderror" id="product_store" name="product_store" value="{{ old('product_store', $product->formattedQuantity()) }}">
                                 @error('product_store')
                                 <div class="invalid-feedback">
                                     {{ $message }}
@@ -190,6 +216,8 @@
     <!-- Page end  -->
 </div>
 
+@include('products.partials.unit-stock-script')
+
 <script>
     $('#buying_date').datepicker({
         uiLibrary: 'bootstrap4',
@@ -202,6 +230,9 @@
         format: 'yyyy-mm-dd'
         // https://gijgo.com/datetimepicker/configuration/format
     }); --}}
+    if (typeof window.bindProductUnitInputs === 'function') {
+        window.bindProductUnitInputs('unit', 'product_store', 'low_stock_warning');
+    }
 </script>
 
 @include('components.preview-img-form')

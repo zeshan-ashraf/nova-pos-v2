@@ -69,8 +69,8 @@
                     <tr class="{{ $isHighlight ? 'drawer-product-highlight-row' : '' }}">
                         <td class="{{ $isHighlight ? 'drawer-product-highlight-cell' : '' }}">{{ $item->product->product_name ?? 'N/A' }}</td>
                         <td class="{{ $isHighlight ? 'drawer-product-highlight-cell' : '' }}">{{ $item->product->product_code ?? '—' }}</td>
-                        <td class="{{ $isHighlight ? 'drawer-product-highlight-cell' : '' }}">{{ $item->quantity }}</td>
-                        <td class="text-right {{ $isHighlight ? 'drawer-product-highlight-cell' : '' }}">{{ number_format((float) ($item->unitcost ?? 0), 2) }}</td>
+                        <td class="{{ $isHighlight ? 'drawer-product-highlight-cell' : '' }}">{{ $item->quantityWithUnit() }}</td>
+                        <td class="text-right {{ $isHighlight ? 'drawer-product-highlight-cell' : '' }}">{{ $item->unitPriceWithUnit() }}</td>
                         <td class="text-right {{ $isHighlight ? 'drawer-product-highlight-cell' : '' }}">{{ number_format((float) ($item->total ?? 0), 2) }}</td>
                     </tr>
                 @empty

@@ -29,6 +29,8 @@ use App\Services\Purchase\PurchaseReceiveService;
 use App\Services\Purchase\PurchaseUpdateService;
 use App\Services\InterShopTransferService;
 use App\Support\InterShopTransferStatus;
+use App\Support\ProductUnitValidator;
+use Illuminate\Validation\ValidationException;
 
 class PurchaseController extends Controller
 {
@@ -272,6 +274,7 @@ class PurchaseController extends Controller
                     'price' => $product->buying_price ?? 0,
                     'stock' => $product->product_store ?? 0,
                     'code' => $productCode,
+                    'unit' => $product->unit ?: Product::UNIT_PIECE,
                 ];
             });
 
@@ -298,13 +301,14 @@ class PurchaseController extends Controller
             'invoice_discount' => 'numeric|nullable|min:0',
             'products' => 'required|array|min:1',
             'products.*.product_id' => 'required|numeric',
-            'products.*.quantity' => 'required|numeric|min:1',
+            'products.*.quantity' => 'required|numeric|min:0.001',
             'products.*.unit_price' => 'required|numeric|min:0',
             'products.*.total' => 'required|numeric|min:0',
             'products.*.item_discount' => 'nullable|numeric|min:0',
         ];
 
         $validatedData = $request->validate($rules);
+        $this->assertPurchaseQuantities($validatedData['products']);
         $payAmount = (float) ($validatedData['pay'] ?? 0);
         $paymentStatus = $validatedData['payment_status'] ?? '';
 
@@ -378,7 +382,8 @@ class PurchaseController extends Controller
         $shopBankId = ($validatedData['shop_bank_id'] ?? null) ? (string) $validatedData['shop_bank_id'] : null;
 
         try {
-            DB::transaction(function () use (&$purchase_id, $purchaseData, $validatedData, $supplier, $creditService, $purchaseLedgerService, $authUser, $due, $payAmount, $purchaseDate, $shopBankId) {
+            $units = app(ProductUnitValidator::class);
+            DB::transaction(function () use (&$purchase_id, $purchaseData, $validatedData, $supplier, $creditService, $purchaseLedgerService, $authUser, $due, $payAmount, $purchaseDate, $shopBankId, $units) {
                 // 1. Create purchase
                 $purchase = Purchase::create($purchaseData);
                 $purchase_id = $purchase->id;
@@ -400,11 +405,14 @@ class PurchaseController extends Controller
                         throw new \Exception("Product {$productModel->product_name} does not belong to your shop.");
                     }
 
-                    // Create purchase detail
+                    $qty = $units->formatQuantity($product['quantity']);
+                    $unit = $productModel->unit ?: Product::UNIT_PIECE;
+
                     $purchaseDetailData = [
                         'purchase_id' => $purchase_id,
                         'product_id' => $product['product_id'],
-                        'quantity' => $product['quantity'],
+                        'quantity' => $qty,
+                        'unit' => $unit,
                         'unitcost' => $product['unit_price'],
                         'item_discount' => $product['item_discount'] ?? 0,
                         'total' => $product['total'],
@@ -534,7 +542,7 @@ class PurchaseController extends Controller
             'invoice_discount' => 'numeric|nullable|min:0',
             'products' => 'required|array|min:1',
             'products.*.product_id' => 'required|numeric',
-            'products.*.quantity' => 'required|numeric|min:1',
+            'products.*.quantity' => 'required|numeric|min:0.001',
             'products.*.unit_price' => 'required|numeric|min:0',
             'products.*.total' => 'required|numeric|min:0',
             'products.*.item_discount' => 'nullable|numeric|min:0',
@@ -542,6 +550,7 @@ class PurchaseController extends Controller
         ];
 
         $validatedData = $request->validate($rules);
+        $this->assertPurchaseQuantities($validatedData['products']);
         $authUser = auth()->user();
 
         $supplier = Supplier::findOrFail($validatedData['supplier_id']);
@@ -1103,6 +1112,40 @@ class PurchaseController extends Controller
         $id = $purchase->source_sale_id;
 
         return $id !== null && $id !== '' && (int) $id !== 0;
+    }
+
+    /**
+     * Unit-aware purchase quantity validation. Server is authoritative.
+     *
+     * @param  array<int, array<string, mixed>>  $products
+     */
+    private function assertPurchaseQuantities(array $products): void
+    {
+        $units = app(ProductUnitValidator::class);
+        $errors = [];
+
+        foreach ($products as $index => $line) {
+            $productId = $line['product_id'] ?? null;
+            if ($productId === null || $productId === '' || (int) $productId <= 0) {
+                continue;
+            }
+
+            $product = Product::find((int) $productId);
+            if (! $product) {
+                $errors['products.'.$index.'.product_id'][] = 'Selected product could not be found.';
+                continue;
+            }
+
+            $unit = $product->unit ?: Product::UNIT_PIECE;
+            $qty = $line['quantity'] ?? null;
+            if (! $units->isValidQuantity($qty, $unit, false)) {
+                $errors['products.'.$index.'.quantity'][] = $units->invalidQuantityMessage($qty, $unit, false);
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Services\Stock\StockService;
 use App\Support\ActiveShop;
+use App\Support\ProductUnitValidator;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +19,8 @@ use InvalidArgumentException;
 class StockAdjustController extends Controller
 {
     public function __construct(
-        private StockService $stockService
+        private StockService $stockService,
+        private ProductUnitValidator $units
     ) {}
 
     /**
@@ -30,7 +32,7 @@ class StockAdjustController extends Controller
         $validated = $request->validate([
             'product_id'       => 'required|integer|exists:products,id',
             'adjustment_type' => 'required|string|in:damaged,expired,lost_theft,stock_found,manual_add,manual_remove',
-            'qty'             => 'required|integer|min:1',
+            'qty'             => 'required|numeric|gt:0',
             'date'            => 'required|date',
             'time'            => 'required|date_format:H:i',
             'reason'          => 'required|string|min:1|max:2000',
@@ -53,8 +55,8 @@ class StockAdjustController extends Controller
         // Out-types: qty must not exceed current stock (validated again in StockService)
         $outTypes = ['damaged', 'expired', 'lost_theft', 'manual_remove'];
         if (in_array($validated['adjustment_type'], $outTypes, true)) {
-            $current = (int) ($product->product_store ?? 0);
-            if ($validated['qty'] > $current) {
+            $current = $this->units->formatQuantity($product->product_store ?? '0');
+            if ($this->units->compare($validated['qty'], $current) > 0) {
                 return response()->json([
                     'message' => "Quantity cannot exceed current stock ({$current}).",
                     'errors'  => ['qty' => ["Quantity cannot exceed current stock ({$current})."]],
@@ -76,7 +78,7 @@ class StockAdjustController extends Controller
         try {
             $this->stockService->adjustStock(
                 $product,
-                (int) $validated['qty'],
+                $validated['qty'],
                 $direction,
                 $validated['reason'],
                 $adjustmentDatetime,
@@ -89,7 +91,7 @@ class StockAdjustController extends Controller
             ], 422);
         }
 
-        $newStock = (int) ($product->fresh()->product_store ?? 0);
+        $newStock = $product->fresh()->product_store ?? 0;
         return response()->json([
             'message'   => 'Stock adjusted successfully.',
             'new_stock' => $newStock,

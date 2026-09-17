@@ -110,12 +110,12 @@ class SaleReturnService
     ): void {
         $orderDetailId = (int) ($line['order_detail_id'] ?? 0);
         $productId = (int) ($line['product_id'] ?? 0);
-        $qty = (int) ($line['quantity'] ?? 0);
+        $qty = $line['quantity'] ?? 0;
         $unitPrice = (float) ($line['unit_price'] ?? 0);
         $itemDiscount = (float) ($line['item_discount'] ?? 0);
         $total = (float) ($line['total'] ?? 0);
 
-        if ($orderDetailId <= 0 || $productId <= 0 || $qty <= 0) {
+        if ($orderDetailId <= 0 || $productId <= 0 || (float) $qty <= 0) {
             throw new InvalidArgumentException('Invalid return line data.');
         }
 
@@ -166,7 +166,7 @@ class SaleReturnService
         // - stock_qty = new stock value after the return (inventory snapshot)
         $product->refresh();
         $log->reason = 'Customer sale return';
-        $log->stock_qty = (int) ($product->product_store ?? 0);
+        $log->stock_qty = $product->product_store ?? 0;
         $log->save();
     }
 

@@ -18,6 +18,10 @@ use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Str;
 use App\Support\ActiveShop;
 use App\Services\ProductCodeService;
+use App\Services\Product\ProductUnitLockService;
+use App\Support\ProductUnitValidator;
+use App\Rules\AllowedProductUnit;
+use Illuminate\Support\Facades\Validator;
 
 use PhpOffice\PhpSpreadsheet\Writer\Xls;
 use Picqer\Barcode\BarcodeGeneratorHTML;
@@ -102,6 +106,10 @@ class ProductController extends Controller
             }
         }
 
+        if (! $request->filled('unit')) {
+            $request->merge(['unit' => Product::UNIT_PIECE]);
+        }
+
         $rules = [
             'product_image' => 'image|file|max:1024',
             'product_name' => 'required|string',
@@ -119,14 +127,16 @@ class ProductController extends Controller
             'category_id' => 'required|integer',
             'supplier_id' => 'nullable|integer',
             'product_garage' => 'string|nullable',
-            'product_store' => 'nullable|integer|min:0',
-            'low_stock_warning' => 'nullable|integer|min:0',
+            'unit' => ['required', 'string', new AllowedProductUnit()],
+            'product_store' => ['nullable', $this->unitQuantityRule($request)],
+            'low_stock_warning' => ['nullable', $this->unitQuantityRule($request)],
             'buying_date' => 'date_format:Y-m-d|max:10|nullable',
             'buying_price' => 'nullable|numeric|min:0',
             'selling_price' => 'nullable|numeric|min:0',
         ];
         $messages = ['product_code.regex' => 'Product code must start with MHB- followed by digits (e.g. MHB-1001).'];
         $validatedData = $request->validate($rules, $messages);
+        $validatedData = $this->normalizeUnitQuantities($validatedData);
 
         // Auto-generate product code if empty (with lock so no conflict with import/other users)
         $codeService = app(ProductCodeService::class);
@@ -188,6 +198,7 @@ class ProductController extends Controller
                     'buying_price' => $product->buying_price,
                     'selling_price' => $product->selling_price,
                     'product_store' => $product->product_store ?? 0,
+                    'unit' => $product->unit ?: Product::UNIT_PIECE,
                 ]
             ]);
         }
@@ -223,6 +234,7 @@ class ProductController extends Controller
         return view('products.edit', [
             'categories' => $categories,
             'product'   => $product,
+            'unitLocked' => ! app(ProductUnitLockService::class)->canChangeUnit($product),
         ]);
     }
 
@@ -235,6 +247,10 @@ class ProductController extends Controller
         
         // Get shop_id for validation
         $shopId = $product->shop_id;
+
+        if (! $request->filled('unit')) {
+            $request->merge(['unit' => $product->unit ?: Product::UNIT_PIECE]);
+        }
 
         $rules = [
             'product_image' => 'image|file|max:1024',
@@ -251,14 +267,29 @@ class ProductController extends Controller
             'category_id' => 'required|integer',
             'supplier_id' => 'nullable|integer',
             'product_garage' => 'string|nullable',
-            'product_store' => 'nullable|integer|min:0',
-            'low_stock_warning' => 'nullable|integer|min:0',
+            'unit' => ['required', 'string', new AllowedProductUnit()],
+            'product_store' => ['nullable', $this->unitQuantityRule($request, $product)],
+            'low_stock_warning' => ['nullable', $this->unitQuantityRule($request, $product)],
             'buying_date' => 'date_format:Y-m-d|max:10|nullable',
             'buying_price' => 'nullable|numeric|min:0',
             'selling_price' => 'nullable|numeric|min:0',
         ];
         $messages = ['product_code.regex' => 'Product code must start with MHB- followed by digits (e.g. MHB-1001).'];
-        $validatedData = $request->validate($rules, $messages);
+
+        $validator = Validator::make($request->all(), $rules, $messages);
+        $validator->after(function ($validator) use ($request, $product) {
+            $requestedUnit = $this->requestedUnit($request, $product);
+            $currentUnit = $product->unit ?: Product::UNIT_PIECE;
+            if ($requestedUnit !== $currentUnit && ! app(ProductUnitLockService::class)->canChangeUnit($product)) {
+                $validator->errors()->add(
+                    'unit',
+                    "This product's unit cannot be changed because it already has transaction history."
+                );
+            }
+        });
+
+        $validatedData = $validator->validate();
+        $validatedData = $this->normalizeUnitQuantities($validatedData, $product);
 
         /**
          * Handle upload image with Storage.
@@ -356,6 +387,7 @@ class ProductController extends Controller
             
             $row_range    = range( 2, $row_limit );
             $data = array();
+            $importErrors = array();
             $authUser = auth()->user();
             
             // Get shop_id for assignment
@@ -372,6 +404,36 @@ class ProductController extends Controller
             
             $now = now();
             $codeService = app(ProductCodeService::class);
+            $units = app(ProductUnitValidator::class);
+
+            foreach ( $row_range as $row ) {
+                $productName = $sheet->getCell( 'A' . $row )->getValue();
+                $categoryValue = trim((string) $sheet->getCell( 'B' . $row )->getValue());
+                if (empty($productName) || $categoryValue === '') {
+                    continue;
+                }
+
+                $rawStock = $sheet->getCell('G'.$row)->getValue();
+                $stock = $this->excelScalar($rawStock);
+                if ($stock === '') {
+                    $stock = '0';
+                }
+
+                $rawUnit = $this->excelScalar($sheet->getCell('L'.$row)->getValue());
+                $unit = $rawUnit === '' ? Product::UNIT_PIECE : strtolower($rawUnit);
+
+                if (! $units->isValidUnit($unit)) {
+                    $importErrors[] = 'Row '.$row.': Unit must be one of: '.implode(', ', Product::allowedUnits()).'.';
+                    continue;
+                }
+                if (! $units->isValidQuantity($stock, $unit, true)) {
+                    $importErrors[] = 'Row '.$row.': '.$units->invalidQuantityMessage($stock, $unit, true);
+                }
+            }
+
+            if (! empty($importErrors)) {
+                return Redirect::route('products.importView')->with('error', implode(' ', $importErrors));
+            }
 
             foreach ( $row_range as $row ) {
                 $productName = $sheet->getCell( 'A' . $row )->getValue();
@@ -413,13 +475,23 @@ class ProductController extends Controller
                 // Generate code when missing or invalid/duplicate (same MHB-1001 rule; lock so no conflict with manual add)
                 $code = $codeService->ensureCode($code === '' ? null : $code, null, $shopId);
 
+                $rawStock = $sheet->getCell('G'.$row)->getValue();
+                $stock = $this->excelScalar($rawStock);
+                if ($stock === '') {
+                    $stock = '0';
+                }
+
+                $rawUnit = $this->excelScalar($sheet->getCell('L'.$row)->getValue());
+                $unit = $rawUnit === '' ? Product::UNIT_PIECE : strtolower($rawUnit);
+
                 $rowData = [
                     'product_name' => $productName,
                     'category_id' => $categoryId,
                     'product_code' => $code,
                     'product_garage' => $sheet->getCell( 'E' . $row )->getValue(),
                     'product_image' => $sheet->getCell( 'F' . $row )->getValue(),
-                    'product_store' => $sheet->getCell( 'G' . $row )->getValue(),
+                    'product_store' => $units->formatQuantity($stock),
+                    'unit' => $unit,
                     'buying_date' => $sheet->getCell( 'H' . $row )->getValue(),
                     'buying_price' => $sheet->getCell( 'J' . $row )->getValue(),
                     'selling_price' => $sheet->getCell( 'K' . $row )->getValue(),
@@ -557,6 +629,7 @@ class ProductController extends Controller
             'Expire Date',
             'Buying Price',
             'Selling Price',
+            'Unit',
         );
 
         foreach($products as $product)
@@ -573,6 +646,7 @@ class ProductController extends Controller
                 'Expire Date' =>$product->expire_date,
                 'Buying Price' =>$product->buying_price,
                 'Selling Price' =>$product->selling_price,
+                'Unit' => $product->unit ?: Product::UNIT_PIECE,
             );
         }
 
@@ -594,5 +668,65 @@ class ProductController extends Controller
             }
         }
         // Super admin can access all products
+    }
+
+    private function requestedUnit(Request $request, ?Product $product = null): string
+    {
+        $unit = $request->input('unit', $product?->unit ?? Product::UNIT_PIECE);
+
+        return is_string($unit) && $unit !== '' ? $unit : ($product?->unit ?? Product::UNIT_PIECE);
+    }
+
+    private function unitQuantityRule(Request $request, ?Product $existing = null): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail) use ($request, $existing) {
+            if ($value === null || $value === '') {
+                return;
+            }
+
+            $unit = $this->requestedUnit($request, $existing);
+            $units = app(ProductUnitValidator::class);
+            if (! $units->isValidUnit($unit)) {
+                return;
+            }
+
+            if (! $units->isValidQuantity($value, $unit, true)) {
+                $fail($units->invalidQuantityMessage($value, $unit, true));
+            }
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $validatedData
+     * @return array<string, mixed>
+     */
+    private function normalizeUnitQuantities(array $validatedData, ?Product $existing = null): array
+    {
+        $units = app(ProductUnitValidator::class);
+        $unit = $validatedData['unit'] ?? $existing?->unit ?? Product::UNIT_PIECE;
+
+        if (! isset($validatedData['product_store']) || $validatedData['product_store'] === null || $validatedData['product_store'] === '') {
+            $validatedData['product_store'] = $existing !== null
+                ? ($existing->product_store ?? '0')
+                : '0';
+        }
+        $validatedData['product_store'] = $units->formatQuantity($validatedData['product_store']);
+
+        if (isset($validatedData['low_stock_warning']) && $validatedData['low_stock_warning'] !== null && $validatedData['low_stock_warning'] !== '') {
+            $validatedData['low_stock_warning'] = $units->formatQuantity($validatedData['low_stock_warning']);
+        }
+
+        $validatedData['unit'] = $unit;
+
+        return $validatedData;
+    }
+
+    private function excelScalar(mixed $value): string
+    {
+        if (! is_scalar($value) || is_bool($value)) {
+            return '';
+        }
+
+        return trim((string) $value);
     }
 }

@@ -35,6 +35,7 @@ use App\Services\WalkInPaymentValidator;
 use App\Services\HoldInvoiceService;
 use App\Services\InterShopTransferService;
 use App\Support\InterShopTransferStatus;
+use App\Support\ProductUnitValidator;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Illuminate\Support\Facades\Validator;
@@ -489,38 +490,65 @@ class OrderController extends Controller
             default => 'credit',
         };
 
-        $order_id = null;
-        // Wrap creation + credit update in a transaction to keep balances consistent
-        DB::transaction(function () use (&$order_id, $validatedData, $creditService, $customer, $payAmount, $paymentMethod) {
-            $order = Order::create($validatedData);
-            $order_id = $order->id;
-
-            app(SalePostingService::class)->postSale($order, (float) $payAmount, $paymentMethod, $shopBankId);
-
-            // Increase customer credit by pending amount (if any)
-            $creditService->addPending($customer, $validatedData['due']);
-        });
-
-        // Create Order Details
         $contents = Cart::content();
-        $oDetails = array();
+        if ($contents->isEmpty()) {
+            return back()->withErrors(['products' => 'Please add at least one product to the cart.'])->withInput();
+        }
 
+        $posLines = [];
         foreach ($contents as $content) {
-            $product = Product::find($content->id);
-            $oDetails['order_id'] = $order_id;
-            $oDetails['product_id'] = $content->id;
-            $oDetails['quantity'] = $content->qty;
-            $oDetails['unitcost'] = $content->price;
-            $oDetails['cost_per_unit'] = $product ? (float) ($product->buying_price ?? 0) : 0;
-            $oDetails['total'] = $content->total;
-            $oDetails['created_at'] = Carbon::now();
+            $posLines[] = [
+                'product_id' => $content->id,
+                'quantity' => $content->qty,
+            ];
+        }
 
-            // Reduce the stock
+        try {
+            $this->assertCustomerSaleQuantities($posLines);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
+        }
 
-            Product::where('id', $content->id)
-                ->update(['product_store' => DB::raw('product_store-'.$content->qty)]);
+        $order_id = null;
+        $units = app(ProductUnitValidator::class);
+        // Wrap creation + credit + stock in a transaction to keep balances consistent
+        try {
+            DB::transaction(function () use (&$order_id, $validatedData, $creditService, $customer, $payAmount, $paymentMethod, $shopBankId, $contents, $units) {
+                $order = Order::create($validatedData);
+                $order_id = $order->id;
 
-            OrderDetails::insert($oDetails);
+                app(SalePostingService::class)->postSale($order, (float) $payAmount, $paymentMethod, $shopBankId);
+
+                // Increase customer credit by pending amount (if any)
+                $creditService->addPending($customer, $validatedData['due']);
+
+                foreach ($contents as $content) {
+                    $product = Product::findOrFail($content->id);
+                    $qty = $units->formatQuantity($content->qty);
+                    $unit = $product->unit ?: Product::UNIT_PIECE;
+
+                    OrderDetails::create([
+                        'order_id' => $order_id,
+                        'product_id' => $content->id,
+                        'quantity' => $qty,
+                        'unit' => $unit,
+                        'unitcost' => $content->price,
+                        'cost_per_unit' => (float) ($product->buying_price ?? 0),
+                        'total' => $content->total,
+                    ]);
+
+                    $this->stockService->sellStock(
+                        $product,
+                        $qty,
+                        (float) $content->price,
+                        $order_id,
+                        (float) ($product->buying_price ?? 0),
+                        $order->order_date
+                    );
+                }
+            });
+        } catch (InvalidArgumentException $e) {
+            return back()->withErrors(['products' => $e->getMessage()])->withInput();
         }
 
         // Delete Cart Sopping History
@@ -1658,6 +1686,7 @@ class OrderController extends Controller
                     'buying_price' => $buyingPrice,
                     'stock' => max(0, $physical),
                     'code' => $productCode,
+                    'unit' => $product->unit ?: Product::UNIT_PIECE,
                 ];
             });
 
@@ -1738,6 +1767,65 @@ class OrderController extends Controller
         }
 
         return $errors;
+    }
+
+    /**
+     * Unit-aware sale quantity + available stock for customer invoices/POS (not shop transfers).
+     *
+     * @param  array<int, array<string, mixed>>  $products
+     */
+    private function assertCustomerSaleQuantities(array $products, ?Order $excludeHoldOrder = null): void
+    {
+        $units = app(ProductUnitValidator::class);
+        $errors = [];
+        $qtyByProduct = [];
+        $models = [];
+        $addBackByProduct = $this->holdInvoiceService->reservedQtyByProductForOrder($excludeHoldOrder);
+
+        foreach ($products as $index => $line) {
+            $productId = $line['product_id'] ?? null;
+            if ($productId === null || $productId === '' || (int) $productId <= 0) {
+                continue;
+            }
+
+            $product = Product::find((int) $productId);
+            if (! $product) {
+                $errors['products.'.$index.'.product_id'][] = 'Selected product could not be found.';
+                continue;
+            }
+
+            $unit = $product->unit ?: Product::UNIT_PIECE;
+            $qty = $line['quantity'] ?? null;
+            if (! $units->isValidQuantity($qty, $unit, false)) {
+                $errors['products.'.$index.'.quantity'][] = $units->invalidQuantityMessage($qty, $unit, false);
+                continue;
+            }
+
+            $formatted = $units->formatQuantity($qty);
+            $key = (int) $product->id;
+            $models[$key] = $product;
+            $qtyByProduct[$key] = isset($qtyByProduct[$key])
+                ? $units->add($qtyByProduct[$key], $formatted)
+                : $formatted;
+        }
+
+        if ($errors !== []) {
+            throw \Illuminate\Validation\ValidationException::withMessages($errors);
+        }
+
+        foreach ($qtyByProduct as $productId => $qty) {
+            $product = $models[$productId];
+            $physical = $units->formatQuantity($product->product_store ?? '0');
+            $addBack = $units->formatQuantity($addBackByProduct[$productId] ?? '0');
+            $available = $units->add($physical, $addBack);
+            if ($units->compare($available, $qty) < 0) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'products' => [
+                        'Insufficient stock for '.($product->product_code ?: $product->product_name).". Available: {$available}, requested: {$qty}.",
+                    ],
+                ]);
+            }
+        }
     }
 
     /**
@@ -1859,6 +1947,12 @@ class OrderController extends Controller
             if ((string) $existingHold->order_status !== HoldInvoiceService::STATUS_HOLD) {
                 return back()->withErrors(['hold_order_id' => 'This order is not on hold.'])->withInput();
             }
+        }
+
+        try {
+            $this->assertCustomerSaleQuantities($lines, $existingHold);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
         }
 
         try {
@@ -2244,6 +2338,7 @@ class OrderController extends Controller
 
         $authUser = auth()->user();
         $isEdit = $request->filled('edited_from_order_id');
+        $isShopTransfer = $request->filled('shop_id') && ! $request->filled('customer_id');
 
         $rules = [
             'customer_id' => 'required_without:shop_id|nullable|numeric',
@@ -2261,7 +2356,9 @@ class OrderController extends Controller
             'invoice_discount' => 'numeric|nullable|min:0',
             'products' => 'required|array|min:1',
             'products.*.product_id' => 'required|numeric',
-            'products.*.quantity' => 'required|numeric|min:1',
+            'products.*.quantity' => $isShopTransfer
+                ? 'required|numeric|min:1'
+                : 'required|numeric|min:0.001',
             'products.*.unit_price' => 'required|numeric|min:0',
             'products.*.total' => 'required|numeric|min:0',
             'products.*.item_discount' => 'nullable|numeric|min:0',
@@ -2431,9 +2528,20 @@ class OrderController extends Controller
                 $orderData['edited_from_order_id'] = $request->input('edited_from_order_id');
             }
 
-            $order_id = null;
             try {
-                DB::transaction(function () use (&$order_id, $orderData, $validatedData, $creditService, $customer, $due, $pay1, $pay2, $paymentMethod1, $paymentMethod2, $shopBankId1, $shopBankId2, $authUser) {
+                $this->assertCustomerSaleQuantities($validatedData['products']);
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                if ($isEdit) {
+                    throw $e;
+                }
+
+                return back()->withErrors($e->errors())->withInput();
+            }
+
+            $order_id = null;
+            $units = app(ProductUnitValidator::class);
+            try {
+                DB::transaction(function () use (&$order_id, $orderData, $validatedData, $creditService, $customer, $due, $pay1, $pay2, $paymentMethod1, $paymentMethod2, $shopBankId1, $shopBankId2, $authUser, $units) {
                     $order = Order::create($orderData);
                     $order_id = $order->id;
 
@@ -2475,10 +2583,14 @@ class OrderController extends Controller
                             throw new \Exception("Product {$productModel->product_name} does not belong to your shop.");
                         }
 
+                        $qty = $units->formatQuantity($product['quantity']);
+                        $unit = $productModel->unit ?: Product::UNIT_PIECE;
+
                         $orderDetailData = [
                             'order_id' => $order_id,
                             'product_id' => $product['product_id'],
-                            'quantity' => $product['quantity'],
+                            'quantity' => $qty,
+                            'unit' => $unit,
                             'unitcost' => $product['unit_price'],
                             'cost_per_unit' => (float) ($productModel->buying_price ?? 0),
                             'item_discount' => $product['item_discount'] ?? 0,
@@ -2490,7 +2602,7 @@ class OrderController extends Controller
 
                         $this->stockService->sellStock(
                             $productModel,
-                            (int) $product['quantity'],
+                            $qty,
                             (float) ($product['unit_price'] ?? $productModel->selling_price ?? 0),
                             $order_id,
                             (float) ($productModel->buying_price ?? 0),

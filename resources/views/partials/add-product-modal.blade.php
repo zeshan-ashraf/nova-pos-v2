@@ -52,6 +52,15 @@
                     </div>
                     
                     <div class="form-group">
+                        <label for="modal_unit">Unit <span class="text-danger">*</span></label>
+                        <select class="form-control" id="modal_unit" name="unit">
+                            <option value="piece" selected>Piece</option>
+                            <option value="kg">Kg</option>
+                        </select>
+                        <div class="invalid-feedback" id="error_unit"></div>
+                    </div>
+
+                    <div class="form-group">
                         <label for="modal_product_store">Stock <span class="text-danger">*</span></label>
                         <input type="number" step="1" min="0" class="form-control" id="modal_product_store" name="product_store" value="0" required>
                         <div class="invalid-feedback" id="error_product_store"></div>
@@ -70,6 +79,7 @@
 </div>
 
 {{-- JavaScript for Add Product Modal --}}
+@include('products.partials.unit-stock-script')
 <script>
 (function($) {
     'use strict';
@@ -162,6 +172,10 @@
 
     // Wait for document ready
     $(document).ready(function() {
+        if (typeof window.bindProductUnitInputs === 'function') {
+            window.bindProductUnitInputs('modal_unit', 'modal_product_store');
+        }
+
         // Load categories when modal is shown - using shown.bs.modal to ensure modal is fully visible
         $(document).on('shown.bs.modal', '#addProductModal', function() {
             console.log('Modal shown, loading categories...');
@@ -192,6 +206,7 @@
                 product_name: $('#modal_product_name').val(),
                 product_code: $('#modal_product_code').val(),
                 category_id: $('#modal_category_id').val(),
+                unit: $('#modal_unit').val() || 'piece',
                 buying_price: $('#modal_buying_price').val() || 0,
                 selling_price: $('#modal_selling_price').val() || 0,
                 product_store: $('#modal_product_store').val() || 0,
@@ -246,7 +261,8 @@
                         buying_price: response.product.buying_price,
                         selling_price: response.product.selling_price,
                         stock: response.product.product_store,
-                        code: productCode
+                        code: productCode,
+                        unit: response.product.unit || 'piece'
                     };
                     
                     // Add to all product selects (both Select2 and regular selects)
@@ -270,6 +286,7 @@
                     $('#modal_product_name').val('');
                     $('#modal_product_code').val('');
                     $('#modal_category_id').val('');
+                    $('#modal_unit').val('piece');
                     $('#modal_buying_price').val(0);
                     $('#modal_selling_price').val(0);
                     $('#modal_product_store').val(0);
@@ -295,6 +312,7 @@
                                 $('#modal_product_name').val('');
                                 $('#modal_product_code').val('');
                                 $('#modal_category_id').val('');
+                                $('#modal_unit').val('piece');
                                 $('#modal_buying_price').val(0);
                                 $('#modal_selling_price').val(0);
                                 $('#modal_product_store').val(0);
@@ -354,6 +372,7 @@
             $('#modal_product_name').val('');
             $('#modal_product_code').val('');
             $('#modal_category_id').val('');
+            $('#modal_unit').val('piece');
             $('#modal_buying_price').val(0);
             $('#modal_selling_price').val(0);
             $('#modal_product_store').val(0);

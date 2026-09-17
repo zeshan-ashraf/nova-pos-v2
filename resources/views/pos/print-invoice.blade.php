@@ -83,7 +83,13 @@
                                                     <td>
                                                         <h6 class="mb-0">{{ $item->name }}</h6>
                                                     </td>
-                                                    <td class="text-center">{{ $item->qty }}</td>
+                                                    <td class="text-center">
+                                                        @php
+                                                            $cartUnit = $item->options->unit ?? 'piece';
+                                                            $cartQty = $item->qty;
+                                                        @endphp
+                                                        {{ $cartUnit === 'kg' ? number_format((float) $cartQty, 3, '.', '').' kg' : rtrim(rtrim(number_format((float) $cartQty, 3, '.', ''), '0'), '.').' pieces' }}
+                                                    </td>
                                                     <td class="text-center">{{ $item->price }}</td>
                                                     <td class="text-center"><b>{{ $item->subtotal }}</b></td>
                                                 </tr>

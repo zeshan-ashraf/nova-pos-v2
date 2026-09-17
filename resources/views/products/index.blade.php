@@ -101,24 +101,14 @@
                             <th>@sortablelink('supplier.name', 'supplier')</th>
                             <th>Cost</th>
                             <th>Stock</th>
+                            <th>Unit</th>
+                            <th>Selling Price</th>
                             <th>Reserved</th>
                             <th>Status</th>
                             <th>Action</th>
                         </tr>
                     </thead>
                     <tbody class="ligth-body">
-                        @php
-                            $formatProductQty = static function (float $n): string {
-                                if (abs($n) < 0.0000001) {
-                                    return '0';
-                                }
-                                if (abs($n - round($n)) < 0.0000001) {
-                                    return (string) (int) round($n);
-                                }
-
-                                return rtrim(rtrim(sprintf('%.3f', $n), '0'), '.');
-                            };
-                        @endphp
                         @forelse ($products as $product)
                         <tr>
                             <td>{{ (($products->currentPage() * $products->perPage()) - $products->perPage()) + $loop->iteration  }}</td>
@@ -143,17 +133,19 @@
                                         $badgeText = 'In Stock';
                                     }
                                 @endphp
-                                <span class="badge rounded-pill {{ $badgeClass }}">{{ $stock }}</span>
+                                <span class="badge rounded-pill {{ $badgeClass }}">{{ $product->formattedQuantity() }}</span>
                                 @if ($stock < $lowStockThreshold)
                                     <small class="text-muted d-block">{{ $badgeText }}</small>
                                 @endif
                             </td>
+                            <td>{{ $product->unitLabel() }}</td>
+                            <td>{{ $product->selling_price }}</td>
                             <td>
                                 @php
-                                    $reserved = (float) ($product->reserved_stock ?? 0);
+                                    $reserved = $product->reserved_stock ?? 0;
                                 @endphp
                                 @if($reserved > 0)
-                                    <span class="badge rounded-pill bg-info text-white" title="Held on draft invoices (product_store already reduced)">{{ $formatProductQty($reserved) }}</span>
+                                    <span class="badge rounded-pill bg-info text-white" title="Held on draft invoices (product_store already reduced)">{{ $product->formattedQuantity($reserved) }}</span>
                                 @else
                                     <span class="text-muted">0</span>
                                 @endif
@@ -185,7 +177,7 @@
                                         <button type="button" class="btn btn-primary mr-2 stock-adjust-btn" data-toggle="tooltip" data-placement="top" title="Stock Adjustment" data-original-title="Stock Adjustment"
                                             data-product-id="{{ $product->id }}"
                                             data-product-name="{{ e($product->product_name) }}"
-                                            data-current-stock="{{ (int)($product->product_store ?? 0) }}">
+                                            data-current-stock="{{ $product->formattedQuantity() }}">
                                             <i class="ri-stack-line mr-0"></i>
                                         </button>
                                             <button type="submit" class="btn btn-warning mr-2 border-none" onclick="return confirm('Are you sure you want to delete this record?')" data-toggle="tooltip" data-placement="top" title="" data-original-title="Delete"><i class="ri-delete-bin-line mr-0"></i></button>

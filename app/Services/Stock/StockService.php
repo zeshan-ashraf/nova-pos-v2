@@ -4,6 +4,7 @@ namespace App\Services\Stock;
 
 use App\Models\Product;
 use App\Models\StockLog;
+use App\Support\ProductUnitValidator;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -11,12 +12,14 @@ use InvalidArgumentException;
  * Ledger-safe stock management: append-only stock_logs, product_store updated in transaction.
  * Controllers must ONLY call this service; no stock math in controllers.
  * Stock must NEVER go negative; all "out" operations validated before execution.
+ * Quantities are DECIMAL(12,3) strings; piece vs kg rules come from StockValidator.
  */
 class StockService
 {
     public function __construct(
         private StockValidator $validator,
-        private StockLossExpenseService $stockLossExpenseService
+        private StockLossExpenseService $stockLossExpenseService,
+        private ProductUnitValidator $units
     ) {}
 
     /**
@@ -24,13 +27,15 @@ class StockService
      */
     private const STOCK_COLUMN = 'product_store';
 
+    private const COST_SCALE = 4;
+
     /**
      * Add opening stock for a product (e.g. initial inventory).
      * source_type = opening; source_id not required.
      */
-    public function addOpeningStock(Product $product, int $qty, float $price): StockLog
+    public function addOpeningStock(Product $product, mixed $qty, float $price): StockLog
     {
-        $this->validator->validateQty($qty);
+        $this->validator->validateQty($qty, $product);
         $this->validator->validateSourceType('opening');
         $this->validator->validateDirection('in');
 
@@ -44,13 +49,13 @@ class StockService
      */
     public function purchaseStock(
         Product $product,
-        int $qty,
+        mixed $qty,
         float $price,
         int $supplierId,
         int $purchaseId,
         $purchaseDate = null
     ): StockLog {
-        $this->validator->validateInOperation($qty, 'purchase', (string) $purchaseId, $supplierId);
+        $this->validator->validateInOperation($product, $qty, 'purchase', (string) $purchaseId, $supplierId);
 
         $adjustmentDate = $purchaseDate
             ? (\is_string($purchaseDate) ? $purchaseDate : \Illuminate\Support\Carbon::parse($purchaseDate)->toDateString())
@@ -66,7 +71,7 @@ class StockService
      */
     public function sellStock(
         Product $product,
-        int $qty,
+        mixed $qty,
         float $price,
         int $orderId,
         ?float $costPerUnit = null,
@@ -106,12 +111,12 @@ class StockService
         DB::transaction(function () use ($logs, $sourceType, $sourceId) {
             foreach ($logs as $log) {
                 $product = Product::lockForUpdate()->find($log->product_id);
-                if (!$product) {
+                if (! $product) {
                     continue;
                 }
                 $direction = $log->direction === 'in' ? 'out' : 'in';
-                $newQty = (int) $log->qty;
-                if ($newQty < 1) {
+                $newQty = $this->units->formatQuantity($log->qty ?? '0');
+                if ($this->units->compare($newQty, '0') <= 0) {
                     continue;
                 }
                 // Reversal: opposite direction; no nested transaction (we're already in one)
@@ -127,13 +132,13 @@ class StockService
      */
     public function adjustStock(
         Product $product,
-        int $qty,
+        mixed $qty,
         string $direction,
         string $reason,
         ?string $adjustmentDate = null,
         ?string $lossSourceType = null
     ): StockLog {
-        $this->validator->validateQty($qty);
+        $this->validator->validateQty($qty, $product);
         $this->validator->validateDirection($direction);
 
         $isLossOut = $direction === 'out' && $lossSourceType && in_array($lossSourceType, ['loss', 'expired', 'theft'], true);
@@ -153,7 +158,7 @@ class StockService
      */
     public function holdStock(
         Product $product,
-        int $qty,
+        mixed $qty,
         int $orderId,
         float $unitPrice = 0,
         ?float $costPerUnit = null,
@@ -185,13 +190,13 @@ class StockService
      */
     public function holdReleaseStock(
         Product $product,
-        int $qty,
+        mixed $qty,
         int $orderId,
         float $unitPrice = 0,
         ?float $costPerUnit = null,
         $holdDate = null
     ): StockLog {
-        $this->validator->validateInOperation($qty, 'hold_release', (string) $orderId, null);
+        $this->validator->validateInOperation($product, $qty, 'hold_release', (string) $orderId, null);
 
         $cost = $costPerUnit !== null ? $costPerUnit : (float) ($product->buying_price ?? 0);
         $adjustmentDate = $holdDate
@@ -218,11 +223,11 @@ class StockService
      */
     public function saleReturnStock(
         Product $product,
-        int $qty,
+        mixed $qty,
         int $returnId,
         $returnDate = null
     ): StockLog {
-        $this->validator->validateInOperation($qty, 'sale_return', (string) $returnId, null);
+        $this->validator->validateInOperation($product, $qty, 'sale_return', (string) $returnId, null);
 
         $adjustmentDate = $returnDate
             ? (\is_string($returnDate) ? $returnDate : \Illuminate\Support\Carbon::parse($returnDate)->toDateString())
@@ -247,7 +252,7 @@ class StockService
      */
     private function insertAndUpdate(
         Product $product,
-        int $qty,
+        mixed $qty,
         string $direction,
         string $sourceType,
         ?string $sourceId,
@@ -257,7 +262,8 @@ class StockService
         ?string $adjustmentDate = null,
         ?float $costPerUnit = null
     ): StockLog {
-        if ($qty < 1) {
+        $qty = $this->units->formatQuantity($qty);
+        if ($this->units->compare($qty, '0') <= 0) {
             throw new InvalidArgumentException('Quantity must be positive.');
         }
 
@@ -278,7 +284,7 @@ class StockService
      */
     private function insertLogAndUpdateProduct(
         Product $product,
-        int $qty,
+        mixed $qty,
         string $direction,
         string $sourceType,
         ?string $sourceId,
@@ -288,45 +294,53 @@ class StockService
         ?string $adjustmentDate = null,
         ?float $costPerUnit = null
     ): StockLog {
+        $qty = $this->units->formatQuantity($qty);
         $shopId = $product->shop_id;
-        $currentQty = (int) ($product->{self::STOCK_COLUMN} ?? 0);
-        $currentQty = max($currentQty, 0); // treat negative stock as 0 for avg calculation
-        $delta = $direction === 'in' ? $qty : -$qty;
-        $newStock = $currentQty + $delta;
+        $currentQty = $this->units->formatQuantity($product->{self::STOCK_COLUMN} ?? '0');
+        if ($this->units->compare($currentQty, '0') < 0) {
+            $currentQty = '0.000'; // treat negative stock as 0 for avg calculation
+        }
+        $newStock = $direction === 'in'
+            ? $this->units->add($currentQty, $qty)
+            : $this->units->subtract($currentQty, $qty);
 
-        if ($newStock < 0) {
+        if ($this->units->compare($newStock, '0') < 0) {
             throw new InvalidArgumentException(
                 "Stock would go negative. Current: {$currentQty}, requested out: {$qty}."
             );
         }
 
+        $unit = $this->validator->productUnit($product);
+        $signedQty = $direction === 'out' ? $this->units->subtract('0', $qty) : $qty;
+
         $logData = [
-            'shop_id'          => $shopId,
-            'product_id'       => $product->id,
-            'supplier_id'      => $supplierId,
-            'qty'              => $qty,
-            'direction'        => $direction,
-            'source_type'      => $sourceType,
-            'source_id'        => $sourceId,
-            'price'            => $price,
-            'reason'           => $reason,
-            'adjustment_date'  => $adjustmentDate,
-            'stock_qty'        => $direction === 'out' ? -$qty : $qty, // legacy column
+            'shop_id' => $shopId,
+            'product_id' => $product->id,
+            'supplier_id' => $supplierId,
+            'qty' => $qty,
+            'unit' => $unit,
+            'direction' => $direction,
+            'source_type' => $sourceType,
+            'source_id' => $sourceId,
+            'price' => $price,
+            'reason' => $reason,
+            'adjustment_date' => $adjustmentDate,
+            'stock_qty' => $signedQty,
         ];
         if ($costPerUnit !== null) {
-            $logData['cost_per_unit'] = $costPerUnit;
+            $logData['cost_per_unit'] = $this->formatCost($costPerUnit);
         }
         $log = StockLog::create($logData);
 
         $updateData = [self::STOCK_COLUMN => $newStock];
 
         if ($direction === 'in' && $sourceType === 'purchase') {
-            $updateData['buying_price'] = round($this->computeWeightedAverageCost(
+            $updateData['buying_price'] = $this->computeWeightedAverageCost(
                 $currentQty,
-                (float) ($product->buying_price ?? 0),
+                $product->buying_price ?? '0',
                 $qty,
                 $price
-            ), 4);
+            );
         }
 
         $product->update($updateData);
@@ -340,27 +354,29 @@ class StockService
     }
 
     /**
-     * Single place for moving weighted average cost formula.
-     * Used when recording purchase stock (in insertLogAndUpdateProduct) and when
-     * stock was already increased elsewhere (e.g. child purchase from mother sale).
-     *
-     * @param int   $currentQty       Stock qty before this receipt
-     * @param float $currentAvgCost  Current product buying_price (running average)
-     * @param int   $incomingQty     Qty received in this receipt
-     * @param float $incomingUnitPrice Unit price of this receipt
-     * @return float New weighted average cost (4-decimal precision applied by caller)
+     * Moving weighted average cost using decimal quantities and 4-decimal cost.
+     * Formula: ((currentQty × currentAvg) + (incomingQty × incomingPrice)) / (currentQty + incomingQty)
      */
     private function computeWeightedAverageCost(
-        int $currentQty,
-        float $currentAvgCost,
-        int $incomingQty,
-        float $incomingUnitPrice
-    ): float {
-        $totalQty = $currentQty + $incomingQty;
-        if ($totalQty <= 0) {
-            return 0.0;
+        mixed $currentQty,
+        mixed $currentAvgCost,
+        mixed $incomingQty,
+        mixed $incomingUnitPrice
+    ): string {
+        $currentQty = $this->units->formatQuantity($currentQty);
+        $incomingQty = $this->units->formatQuantity($incomingQty);
+        $totalQty = $this->units->add($currentQty, $incomingQty);
+        if ($this->units->compare($totalQty, '0') <= 0) {
+            return '0.0000';
         }
-        return (($currentQty * $currentAvgCost) + ($incomingQty * $incomingUnitPrice)) / $totalQty;
+
+        $workScale = 8;
+        $existingValue = bcmul($currentQty, $this->formatCost($currentAvgCost), $workScale);
+        $incomingValue = bcmul($incomingQty, $this->formatCost($incomingUnitPrice), $workScale);
+        $totalValue = bcadd($existingValue, $incomingValue, $workScale);
+        $average = bcdiv($totalValue, $totalQty, $workScale);
+
+        return $this->bcRound($average, self::COST_SCALE);
     }
 
     /**
@@ -369,18 +385,20 @@ class StockService
      * purchase created from mother sale). Uses the same weighted average formula
      * as purchase stock. Call after increasing product_store for the product.
      *
-     * @param Product $product    Product after product_store has been increased (refresh first if needed)
-     * @param int     $qtyAdded   Quantity that was just added
-     * @param float   $unitPrice Unit price of this receipt
+     * @param  mixed  $qtyAdded  Quantity that was just added (DECIMAL(12,3))
+     * @param  float  $unitPrice Unit price of this receipt
      */
-    public function updateBuyingPriceAfterPurchaseIn(Product $product, int $qtyAdded, float $unitPrice): void
+    public function updateBuyingPriceAfterPurchaseIn(Product $product, mixed $qtyAdded, float $unitPrice): void
     {
-        if ($qtyAdded <= 0) {
+        $qtyAdded = $this->units->formatQuantity($qtyAdded);
+        if ($this->units->compare($qtyAdded, '0') <= 0) {
             return;
         }
-        $currentStock = (int) ($product->product_store ?? 0);
-        $currentQtyBefore = max(0, $currentStock - $qtyAdded);
-        $currentAvgCost = (float) ($product->buying_price ?? 0);
+        $currentStock = $this->units->formatQuantity($product->product_store ?? '0');
+        $currentQtyBefore = $this->units->compare($currentStock, $qtyAdded) <= 0
+            ? '0.000'
+            : $this->units->subtract($currentStock, $qtyAdded);
+        $currentAvgCost = $product->buying_price ?? '0';
 
         $newAvgCost = $this->computeWeightedAverageCost(
             $currentQtyBefore,
@@ -391,6 +409,36 @@ class StockService
 
         Product::withoutGlobalScope('shop')
             ->where('id', $product->id)
-            ->update(['buying_price' => round($newAvgCost, 4)]);
+            ->update(['buying_price' => $newAvgCost]);
+    }
+
+    private function formatCost(mixed $cost): string
+    {
+        if (is_int($cost)) {
+            return $cost.'.0000';
+        }
+        if (is_float($cost)) {
+            return $this->bcRound(number_format($cost, self::COST_SCALE + 2, '.', ''), self::COST_SCALE);
+        }
+
+        $value = trim((string) $cost);
+        if ($value === '' || ! preg_match('/^-?\d+(\.\d+)?$/', $value)) {
+            return '0.0000';
+        }
+
+        return $this->bcRound($value, self::COST_SCALE);
+    }
+
+    /**
+     * Round-half-up using bcmath, then truncate to $scale (avoids PHP float).
+     */
+    private function bcRound(string $number, int $scale): string
+    {
+        $half = '0.'.str_repeat('0', $scale).'5';
+        if (bccomp($number, '0', $scale + 2) >= 0) {
+            return bcadd($number, $half, $scale);
+        }
+
+        return bcsub($number, $half, $scale);
     }
 }

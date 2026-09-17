@@ -42,6 +42,15 @@ class Order extends Model
         'id',
     ];
 
+    protected $casts = [
+        'sub_total' => 'decimal:2',
+        'invoice_discount' => 'decimal:2',
+        'vat' => 'decimal:2',
+        'total' => 'decimal:2',
+        'pay' => 'decimal:2',
+        'due' => 'decimal:2',
+    ];
+
     public function customer()
     {
         return $this->belongsTo(Customer::class, 'customer_id', 'id');

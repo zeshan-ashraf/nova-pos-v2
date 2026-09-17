@@ -45,8 +45,8 @@
                     <tr>
                         <td>{{ $item->product->product_name ?? 'N/A' }}</td>
                         <td>{{ $item->product->product_code ?? '—' }}</td>
-                        <td>{{ $item->quantity }}</td>
-                        <td class="text-right">{{ number_format((float) ($item->unitcost ?? 0), 2) }}</td>
+                        <td>{{ $item->quantityWithUnit() }}</td>
+                        <td class="text-right">{{ $item->unitPriceWithUnit() }}</td>
                         <td class="text-right">{{ number_format((float) ($item->total ?? 0), 2) }}</td>
                     </tr>
                 @empty

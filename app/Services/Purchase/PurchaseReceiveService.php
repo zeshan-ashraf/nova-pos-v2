@@ -6,12 +6,14 @@ use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\PurchaseDetail;
 use App\Services\Stock\StockService;
+use App\Support\ProductUnitValidator;
 use Illuminate\Support\Facades\DB;
 
 class PurchaseReceiveService
 {
     public function __construct(
-        private StockService $stockService
+        private StockService $stockService,
+        private ProductUnitValidator $units,
     ) {}
 
     /**
@@ -49,8 +51,8 @@ class PurchaseReceiveService
             $purchaseDate = $purchase->purchase_date;
 
             foreach ($details as $detail) {
-                $qty = (int) ($detail->quantity ?? 0);
-                if ($qty <= 0) {
+                $qty = $this->units->formatQuantity($detail->quantity ?? 0);
+                if ($this->units->compare($qty, '0') <= 0) {
                     continue;
                 }
 

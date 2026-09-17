@@ -16,6 +16,7 @@ class SaleReturnDetail extends Model
         'order_detail_id',
         'product_id',
         'quantity',
+        'unit',
         'unitcost',
         'item_discount',
         'total',
@@ -23,6 +24,17 @@ class SaleReturnDetail extends Model
 
     protected $guarded = [
         'id',
+    ];
+
+    protected $attributes = [
+        'unit' => Product::UNIT_PIECE,
+    ];
+
+    protected $casts = [
+        'quantity' => 'decimal:3',
+        'unitcost' => 'decimal:2',
+        'item_discount' => 'decimal:2',
+        'total' => 'decimal:2',
     ];
 
     protected $with = ['product', 'orderDetail'];

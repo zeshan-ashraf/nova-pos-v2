@@ -11,6 +11,7 @@ use App\Models\Supplier;
 use App\Support\InterShopTransferStatus;
 use App\Services\Ledger\LedgerBalanceService;
 use App\Services\Ledger\PurchaseLedgerService;
+use App\Support\ProductUnitValidator;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -19,6 +20,7 @@ class PurchaseDeletionService
     public function __construct(
         private PurchaseLedgerService $purchaseLedgerService,
         private LedgerBalanceService $ledgerBalanceService,
+        private ProductUnitValidator $units,
     ) {
     }
 
@@ -72,8 +74,8 @@ class PurchaseDeletionService
         // STEP 3 — Reverse stock for each purchase detail by updating products.product_store only.
         if (!$skipChildStockReversal) {
             foreach ($purchase->purchaseDetails as $detail) {
-                $qty = (int) ($detail->quantity ?? 0);
-                if ($qty <= 0) {
+                $qty = $this->units->formatQuantity($detail->quantity ?? 0);
+                if ($this->units->compare($qty, '0') <= 0) {
                     continue;
                 }
 

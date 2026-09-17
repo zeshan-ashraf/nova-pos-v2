@@ -51,8 +51,8 @@ class StockLossExpenseService
         $product = Product::find($stockLog->product_id);
         $productName = $product ? $product->product_name : 'Product #' . $stockLog->product_id;
         $costPerUnit = (float) ($stockLog->price ?? $product->buying_price ?? 0);
-        $qty = (int) $stockLog->qty;
-        $lossAmount = $qty * $costPerUnit;
+        $qty = (string) ($stockLog->qty ?? '0');
+        $lossAmount = round((float) bcmul($qty, number_format($costPerUnit, 4, '.', ''), 4), 2);
 
         $reason = $stockLog->reason ?? $stockLog->source_type;
         $notes = sprintf('Stock loss: %s | Product: %s', $reason, $productName);

@@ -91,8 +91,8 @@
                 <tr>
                     <td>{{ $item->product ? $item->product->product_name : 'N/A' }}</td>
                     <td>{{ $item->product ? ($item->product->product_code ?? '-') : '-' }}</td>
-                    <td>{{ $item->quantity }}</td>
-                    <td>{{ number_format($item->unitcost, 2) }}</td>
+                    <td>{{ $item->quantityWithUnit() }}</td>
+                    <td>{{ $item->unitPriceWithUnit() }}</td>
                     <td>{{ number_format($item->total, 2) }}</td>
                 </tr>
                 @endforeach

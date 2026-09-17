@@ -65,6 +65,12 @@ class Purchase extends Model
     protected $casts = [
         'is_system_generated' => 'boolean',
         'approved_at' => 'datetime',
+        'sub_total' => 'decimal:2',
+        'invoice_discount' => 'decimal:2',
+        'vat' => 'decimal:2',
+        'total' => 'decimal:2',
+        'pay' => 'decimal:2',
+        'due' => 'decimal:2',
     ];
 
     public function supplier()

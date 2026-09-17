@@ -10,6 +10,9 @@ use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\DB;
 use Gloudemans\Shoppingcart\Facades\Cart;
 use App\Support\ActiveShop;
+use App\Support\ProductUnitValidator;
+use Illuminate\Support\Facades\Redirect;
+use InvalidArgumentException;
 
 class PosController extends Controller
 {
@@ -93,7 +96,10 @@ class PosController extends Controller
             'name' => $validatedData['name'],
             'qty' => 1,
             'price' => $validatedData['price'],
-            'options' => ['size' => 'large']
+            'options' => [
+                'size' => 'large',
+                'unit' => $product->unit ?: Product::UNIT_PIECE,
+            ],
         ]);
 
         return Redirect::back()->with('success', 'Product has been added!');
@@ -106,6 +112,26 @@ class PosController extends Controller
         ];
 
         $validatedData = $request->validate($rules);
+
+        $item = Cart::get($rowId);
+        if (! $item) {
+            return Redirect::back()->withErrors(['qty' => 'Cart item not found.']);
+        }
+
+        $product = Product::find($item->id);
+        if (! $product) {
+            return Redirect::back()->withErrors(['qty' => 'Product not found.']);
+        }
+
+        try {
+            app(ProductUnitValidator::class)->validateQuantity(
+                $validatedData['qty'],
+                $product->unit ?: Product::UNIT_PIECE,
+                false
+            );
+        } catch (InvalidArgumentException $e) {
+            return Redirect::back()->withErrors(['qty' => $e->getMessage()])->withInput();
+        }
 
         Cart::update($rowId, $validatedData['qty']);
 

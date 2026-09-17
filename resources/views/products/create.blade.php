@@ -112,8 +112,20 @@
                                 @enderror
                             </div>
                             <div class="form-group col-md-6">
+                                <label for="unit">Unit <span class="text-danger">*</span></label>
+                                <select class="form-control @error('unit') is-invalid @enderror" id="unit" name="unit" required>
+                                    <option value="piece" {{ old('unit', 'piece') === 'piece' ? 'selected' : '' }}>Piece</option>
+                                    <option value="kg" {{ old('unit', 'piece') === 'kg' ? 'selected' : '' }}>Kg</option>
+                                </select>
+                                @error('unit')
+                                <div class="invalid-feedback">
+                                    {{ $message }}
+                                </div>
+                                @enderror
+                            </div>
+                            <div class="form-group col-md-6">
                                 <label for="product_store">Stock</label>
-                                <input type="text" class="form-control @error('product_store') is-invalid @enderror" id="product_store" name="product_store" value="{{ old('product_store') }}">
+                                <input type="number" min="0" step="1" class="form-control @error('product_store') is-invalid @enderror" id="product_store" name="product_store" value="{{ old('product_store') }}">
                                 @error('product_store')
                                 <div class="invalid-feedback">
                                     {{ $message }}
@@ -183,6 +195,8 @@
     <!-- Page end  -->
 </div>
 
+@include('products.partials.unit-stock-script')
+
 <script>
     $('#buying_date').datepicker({
         uiLibrary: 'bootstrap4',
@@ -211,6 +225,10 @@
         .catch(function() {})
         .finally(function() { btn.disabled = false; });
     });
+
+    if (typeof window.bindProductUnitInputs === 'function') {
+        window.bindProductUnitInputs('unit', 'product_store', 'low_stock_warning');
+    }
 </script>
 
 @include('components.preview-img-form')

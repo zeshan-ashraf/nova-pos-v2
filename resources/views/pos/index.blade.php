@@ -34,11 +34,17 @@
                     <tr>
                         <td>{{ $item->name }}</td>
                         <td style="min-width: 140px;">
+                            @php
+                                $cartUnit = $item->options->unit ?? 'piece';
+                                $qtyStep = $cartUnit === 'kg' ? '0.001' : '1';
+                                $qtyMin = $cartUnit === 'kg' ? '0.001' : '1';
+                            @endphp
                             <form action="{{ route('pos.updateCart', $item->rowId) }}" method="POST">
                                 @csrf
                                 <div class="input-group">
-                                    <input type="number" class="form-control" name="qty" required value="{{ old('qty', $item->qty) }}">
+                                    <input type="number" class="form-control" name="qty" required value="{{ old('qty', $item->qty) }}" min="{{ $qtyMin }}" step="{{ $qtyStep }}">
                                     <div class="input-group-append">
+                                        <span class="input-group-text">{{ $cartUnit === 'kg' ? 'kg' : 'pcs' }}</span>
                                         <button type="submit" class="btn btn-success border-none" data-toggle="tooltip" data-placement="top" title="" data-original-title="Sumbit"><i class="las la-check"></i></button>
                                     </div>
                                 </div>
@@ -134,6 +140,7 @@
                                 <tr class="ligth ligth-data">
                                     <th>No.</th>
                                     <th>@sortablelink('product_name', 'name')</th>
+                                    <th>Stock</th>
                                     <th>Cost</th>
                                     <th>Action</th>
                                 </tr>
@@ -143,6 +150,7 @@
                                 <tr>
                                     <td>{{ (($products->currentPage() * $products->perPage()) - $products->perPage()) + $loop->iteration  }}</td>
                                     <td>{{ $product->product_name }}</td>
+                                    <td>{{ $product->formattedQuantity() }} {{ $product->stockUnitLabel() }}</td>
                                     <td>{{ $product->buying_price }}</td>
                                     <td>
                                         <form action="{{ route('pos.addCart') }}" method="POST"  style="margin-bottom: 5px">

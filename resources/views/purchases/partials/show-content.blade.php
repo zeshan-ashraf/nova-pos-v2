@@ -220,8 +220,8 @@
                             <td>{{ $loop->iteration }}</td>
                             <td>{{ $item->product->product_name ?? 'N/A' }}</td>
                             <td>{{ $item->product->product_code ?? 'N/A' }}</td>
-                            <td>{{ $item->quantity }}</td>
-                            <td>{{ number_format($item->unitcost, 2) }}</td>
+                            <td>{{ $item->quantityWithUnit() }}</td>
+                            <td>{{ $item->unitPriceWithUnit() }}</td>
                             <td>{{ number_format($item->total, 2) }}</td>
                         </tr>
                         @endforeach
@@ -474,7 +474,7 @@
                                     <tbody class="ligth-body">
                                         @foreach ($purchaseDetailsForTable as $detail)
                                             @php
-                                                $qty = (int) ($detail->quantity ?? 0);
+                                                $qty = $detail->formattedPurchaseQuantity();
                                                 $unitCost = (float) ($detail->unitcost ?? 0);
                                                 $storedLandedUnitCost = $detail->landed_unit_cost;
                                                 $landedUnitCost = ($storedLandedUnitCost !== null && (float) $storedLandedUnitCost > 0)
@@ -496,7 +496,7 @@
                                                     </div>
                                                     <input type="hidden" name="purchase_detail_ids[]" value="{{ $detail->id }}">
                                                 </td>
-                                                <td>{{ $qty }}</td>
+                                                <td>{{ $qty }} {{ $detail->purchaseQtyUnitLabel() }}</td>
                                                 <td>{{ number_format($unitCost, 4) }}</td>
                                                 <td>
                                                     <span

@@ -10,8 +10,10 @@ use App\Models\Supplier;
 use App\Services\Ledger\LedgerBalanceService;
 use App\Services\Ledger\PurchaseLedgerService;
 use App\Support\InterShopTransferStatus;
+use App\Support\ProductUnitValidator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 class PurchaseUpdateService
 {
@@ -19,6 +21,7 @@ class PurchaseUpdateService
         private PurchaseLedgerService $purchaseLedgerService,
         private LedgerBalanceService $ledgerBalanceService,
         private PurchaseLandedCostService $landedCostService,
+        private ProductUnitValidator $units,
     ) {
     }
 
@@ -115,10 +118,18 @@ class PurchaseUpdateService
                     throw new \RuntimeException("Product {$productModel->product_name} does not belong to your shop.");
                 }
 
+                $unit = $productModel->unit ?: Product::UNIT_PIECE;
+                try {
+                    $this->units->validateQuantity($product['quantity'], $unit, false);
+                } catch (InvalidArgumentException $e) {
+                    throw new \RuntimeException($e->getMessage(), 0, $e);
+                }
+
                 PurchaseDetail::create([
                     'purchase_id' => $locked->id,
                     'product_id' => $product['product_id'],
-                    'quantity' => $product['quantity'],
+                    'quantity' => $this->units->formatQuantity($product['quantity']),
+                    'unit' => $unit,
                     'unitcost' => $product['unit_price'],
                     'item_discount' => $product['item_discount'] ?? 0,
                     'total' => $product['total'],

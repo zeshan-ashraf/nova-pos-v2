@@ -242,7 +242,9 @@
                                             <span class="stock-label stock-display" data-row="0">0</span>
                                         </td>
                                         <td>
-                                            <input type="number" class="form-control quantity" name="products[0][quantity]" value="1" data-row="0" min="1">
+                                            <input type="number" class="form-control quantity" name="products[0][quantity]" value="1" data-row="0" min="1" step="1">
+                                            <input type="hidden" class="product-unit" value="piece">
+                                            <span class="stock-warning stock-warning-msg text-danger small" data-row="0" style="display: none;"></span>
                                         </td>
                                         <td>
                                             <span class="total-display" data-row="0">0.00</span>
@@ -491,7 +493,8 @@
                                 name: item.name,
                                 price: item.price,
                                 stock: item.stock,
-                                code: item.code
+                                code: item.code,
+                                unit: item.unit || 'piece'
                             };
                         }),
                         pagination: data.pagination || { more: false }
@@ -534,7 +537,10 @@
             
             $row.find('.original-price').val(productPrice);
             $row.find('.unit-price').val(productPrice);
-            $row.find('.stock-display').text(data.stock || 0);
+            var unit = data.unit || 'piece';
+            $row.find('.product-unit').val(unit);
+            applyQuantityInputForUnit($row, unit);
+            $row.find('.stock-display').text(formatStockDisplay(data.stock, unit));
             
             calculateRowTotal(rowIdx);
         });
@@ -546,17 +552,44 @@
             
             $row.find('.original-price').val(0);
             $row.find('.unit-price').val(0);
-            $row.find('.stock-display').text(0);
+            $row.find('.product-unit').val('piece');
+            applyQuantityInputForUnit($row, 'piece');
+            $row.find('.stock-display').text(formatStockDisplay(0, 'piece'));
             
             calculateRowTotal(rowIdx);
         });
+    }
+
+    function formatStockDisplay(stock, unit) {
+        var n = parseFloat(stock);
+        if (isNaN(n) || n < 0) {
+            n = 0;
+        }
+        if (unit === 'kg') {
+            return n.toFixed(3) + ' kg';
+        }
+        return String(Math.round(n)) + ' pieces';
+    }
+
+    function applyQuantityInputForUnit($row, unit) {
+        var $qty = $row.find('.quantity');
+        if (unit === 'kg') {
+            $qty.attr({ step: '0.001', min: '0.001' });
+        } else {
+            $qty.attr({ step: '1', min: '1' });
+        }
+        $row.find('.product-unit').val(unit || 'piece');
     }
 
     function formatProduct(product) {
         if (product.loading) {
             return product.text;
         }
-        return $('<span>' + product.text + '</span>');
+        var extra = '';
+        if (product.stock != null && product.stock !== '') {
+            extra = ' (' + formatStockDisplay(product.stock, product.unit || 'piece') + ')';
+        }
+        return $('<span>' + product.text + extra + '</span>');
     }
 
     // Format selected product display
@@ -576,7 +609,19 @@
     // Handle quantity change
     $(document).on('input', '.quantity', function() {
         const rowIndex = $(this).data('row');
+        const $row = $(this).closest('tr');
+        const unit = $row.find('.product-unit').val() || 'piece';
+        const quantity = parseFloat($(this).val());
+        const $warning = $row.find('.stock-warning-msg');
+
+        if (unit === 'piece' && $(this).val() !== '' && !isNaN(quantity) && Math.abs(quantity - Math.round(quantity)) > 0.0000001) {
+            $warning.text('Piece quantity must be a whole number.').show();
+        } else {
+            $warning.hide();
+        }
+
         calculateRowTotal(rowIndex);
+    });
     });
 
     // Calculate row total and discount
@@ -730,7 +775,9 @@
                     <span class="stock-label stock-display" data-row="${rowCount}">0</span>
                 </td>
                 <td>
-                    <input type="number" class="form-control quantity" name="products[${rowCount}][quantity]" value="1" data-row="${rowCount}" min="1">
+                    <input type="number" class="form-control quantity" name="products[${rowCount}][quantity]" value="1" data-row="${rowCount}" min="1" step="1">
+                    <input type="hidden" class="product-unit" value="piece">
+                    <span class="stock-warning stock-warning-msg text-danger small" data-row="${rowCount}" style="display: none;"></span>
                 </td>
                 <td>
                     <span class="total-display" data-row="${rowCount}">0.00</span>

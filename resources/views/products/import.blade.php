@@ -44,6 +44,7 @@
                     @endif
                     <form action="{{ route('products.importStore') }}" method="POST" enctype="multipart/form-data">
                     @csrf
+                        <p class="text-muted">Optional column L is <strong>Unit</strong> (<code>piece</code> or <code>kg</code>). Existing files without that column default to piece.</p>
                         <div class="row">
                             <div class="input-group mb-4 col-lg-6">
                                 <div class="custom-file">

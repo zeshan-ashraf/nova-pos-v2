@@ -72,8 +72,12 @@
                             <input type="text" class="form-control bg-white" value="{{  $product->product_garage }}" readonly>
                         </div>
                         <div class="form-group col-md-6">
+                            <label>Unit</label>
+                            <input type="text" class="form-control bg-white" value="{{ $product->isKg() ? 'Kg' : 'Piece' }}" readonly>
+                        </div>
+                        <div class="form-group col-md-6">
                             <label>Stock</label>
-                            <input type="text" class="form-control bg-white" value="{{  $product->product_store }}" readonly>
+                            <input type="text" class="form-control bg-white" value="{{ $product->formattedQuantity() }} {{ $product->stockUnitLabel() }}" readonly>
                         </div>
                         <div class="form-group col-md-6">
                             <label>Buying Date</label>
@@ -85,11 +89,11 @@
                         </div>
                         <div class="form-group col-md-6">
                             <label>Buying Price</label>
-                            <input type="text" class="form-control bg-white" value="{{  $product->buying_price }}" readonly>
+                            <input type="text" class="form-control bg-white" value="{{ $product->buying_price }} / {{ $product->unitLabel() }}" readonly>
                         </div>
                         <div class="form-group col-md-6">
                             <label>Selling Price</label>
-                            <input type="text" class="form-control bg-white" value="{{  $product->selling_price }}" readonly>
+                            <input type="text" class="form-control bg-white" value="{{ $product->selling_price }} / {{ $product->unitLabel() }}" readonly>
                         </div>
                     </div>
                     <!-- end: Show Data -->

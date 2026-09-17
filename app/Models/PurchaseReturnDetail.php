@@ -14,8 +14,19 @@ class PurchaseReturnDetail extends Model
         'purchase_return_id',
         'product_id',
         'quantity',
+        'unit',
         'price',
         'total',
+    ];
+
+    protected $attributes = [
+        'unit' => Product::UNIT_PIECE,
+    ];
+
+    protected $casts = [
+        'quantity' => 'decimal:3',
+        'price' => 'decimal:2',
+        'total' => 'decimal:2',
     ];
 
     public function purchaseReturn()

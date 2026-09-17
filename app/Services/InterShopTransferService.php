@@ -210,6 +210,7 @@ class InterShopTransferService
                         'buying_price' => $product['unit_price'],
                         'selling_price' => $product['unit_price'],
                         'status' => $motherProduct->status,
+                        'unit' => $motherProduct->unit ?: Product::UNIT_PIECE,
                     ]);
                 }
             }
@@ -670,7 +671,7 @@ class InterShopTransferService
                 $childProduct->refresh();
                 $this->stockService->updateBuyingPriceAfterPurchaseIn(
                     $childProduct,
-                    (int) $qty,
+                    $qty,
                     $unit
                 );
             }

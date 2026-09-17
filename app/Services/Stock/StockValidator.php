@@ -3,11 +3,12 @@
 namespace App\Services\Stock;
 
 use App\Models\Product;
+use App\Support\ProductUnitValidator;
 use InvalidArgumentException;
 
 /**
  * Validates stock operations before execution.
- * Ensures: positive qty, sufficient stock for "out", required source_id/supplier_id per source_type.
+ * Quantity rules are unit-aware (piece = whole numbers, kg = DECIMAL(12,3) >= 0.001).
  * Controllers must NOT do stock math; they call StockService which uses this validator.
  */
 class StockValidator
@@ -30,26 +31,37 @@ class StockValidator
 
     public const DIRECTIONS = ['in', 'out'];
 
-    /**
-     * Validate that quantity is a positive integer (required for all operations).
-     */
-    public function validateQty(int $qty): void
+    public function __construct(
+        private ProductUnitValidator $units
+    ) {}
+
+    public function productUnit(Product $product): string
     {
-        if ($qty < 1) {
-            throw new InvalidArgumentException('Quantity must be a positive integer.');
-        }
+        $unit = $product->unit ?: Product::UNIT_PIECE;
+        $this->units->validateUnit($unit);
+
+        return $unit;
+    }
+
+    /**
+     * Validate quantity against the product's unit (piece vs kg).
+     */
+    public function validateQty(mixed $qty, Product $product): void
+    {
+        $this->units->validateQuantity($qty, $this->productUnit($product), false);
     }
 
     /**
      * Validate that product has enough stock for an "out" operation (sale, loss, etc.).
      * WHY: Prevents negative stock; must be called inside transaction after locking product.
      */
-    public function validateAvailableStock(Product $product, int $qtyOut): void
+    public function validateAvailableStock(Product $product, mixed $qtyOut): void
     {
-        $available = (int) ($product->product_store ?? 0);
-        if ($available < $qtyOut) {
+        $available = $this->units->formatQuantity($product->product_store ?? '0');
+        $requested = $this->units->formatQuantity($qtyOut);
+        if ($this->units->compare($available, $requested) < 0) {
             throw new InvalidArgumentException(
-                "Insufficient stock for product: " . ($product->product_code ?? $product->product_name) . ". Available: {$available}, requested: {$qtyOut}."
+                'Insufficient stock for product: '.($product->product_code ?? $product->product_name).". Available: {$available}, requested: {$requested}."
             );
         }
     }
@@ -59,9 +71,9 @@ class StockValidator
      */
     public function validateSourceType(string $sourceType): void
     {
-        if (!in_array($sourceType, self::SOURCE_TYPES, true)) {
+        if (! in_array($sourceType, self::SOURCE_TYPES, true)) {
             throw new InvalidArgumentException(
-                "Invalid source_type: {$sourceType}. Allowed: " . implode(', ', self::SOURCE_TYPES)
+                "Invalid source_type: {$sourceType}. Allowed: ".implode(', ', self::SOURCE_TYPES)
             );
         }
     }
@@ -71,7 +83,7 @@ class StockValidator
      */
     public function validateDirection(string $direction): void
     {
-        if (!in_array($direction, self::DIRECTIONS, true)) {
+        if (! in_array($direction, self::DIRECTIONS, true)) {
             throw new InvalidArgumentException("Invalid direction: {$direction}. Must be 'in' or 'out'.");
         }
     }
@@ -103,9 +115,9 @@ class StockValidator
     /**
      * Run all validations for an "out" operation (e.g. sale, loss) in one place.
      */
-    public function validateOutOperation(Product $product, int $qty, string $sourceType, $sourceId): void
+    public function validateOutOperation(Product $product, mixed $qty, string $sourceType, $sourceId): void
     {
-        $this->validateQty($qty);
+        $this->validateQty($qty, $product);
         $this->validateSourceType($sourceType);
         $this->validateDirection('out');
         $this->validateSourceId($sourceType, $sourceId);
@@ -115,9 +127,9 @@ class StockValidator
     /**
      * Run all validations for an "in" operation (e.g. purchase, opening, sale_return).
      */
-    public function validateInOperation(int $qty, string $sourceType, $sourceId, ?int $supplierId = null): void
+    public function validateInOperation(Product $product, mixed $qty, string $sourceType, $sourceId, ?int $supplierId = null): void
     {
-        $this->validateQty($qty);
+        $this->validateQty($qty, $product);
         $this->validateSourceType($sourceType);
         $this->validateDirection('in');
         $this->validateSourceId($sourceType, $sourceId);

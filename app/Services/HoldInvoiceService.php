@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\OrderDetails;
 use App\Models\Product;
 use App\Services\Stock\StockService;
+use App\Support\ProductUnitValidator;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -24,6 +25,7 @@ class HoldInvoiceService
 
     public function __construct(
         private StockService $stockService,
+        private ProductUnitValidator $units,
     ) {}
 
     public function availableStock(Product $product, float $addBackQty = 0): float
@@ -39,6 +41,8 @@ class HoldInvoiceService
     public function assertSufficientStock(array $lines, int $shopId, ?Order $excludeHoldOrder = null): void
     {
         $addBackByProduct = $this->reservedQtyByProductForOrder($excludeHoldOrder);
+        $qtyByProduct = [];
+        $models = [];
 
         foreach ($lines as $line) {
             $productId = (int) ($line['product_id'] ?? 0);
@@ -54,16 +58,24 @@ class HoldInvoiceService
                 throw new InvalidArgumentException("Product {$product->product_name} does not belong to your shop.");
             }
 
-            $qty = (float) ($line['quantity'] ?? 0);
-            if ($qty <= 0) {
-                throw new InvalidArgumentException('Quantity must be greater than zero.');
-            }
+            $qty = $this->normalizeQty($line['quantity'] ?? 0);
+            $unit = $product->unit ?: Product::UNIT_PIECE;
+            $this->units->validateQuantity($qty, $unit, false);
 
-            $addBack = (float) ($addBackByProduct[$productId] ?? 0);
-            $available = $this->availableStock($product, $addBack);
-            if ($available + 0.0001 < $qty) {
+            $qtyByProduct[$productId] = isset($qtyByProduct[$productId])
+                ? $this->units->add($qtyByProduct[$productId], $qty)
+                : $qty;
+            $models[$productId] = $product;
+        }
+
+        foreach ($qtyByProduct as $productId => $qty) {
+            $product = $models[$productId];
+            $physical = $this->units->formatQuantity($product->{self::STOCK_COLUMN} ?? '0');
+            $addBack = $this->units->formatQuantity($addBackByProduct[$productId] ?? '0');
+            $available = $this->units->add($physical, $addBack);
+            if ($this->units->compare($available, $qty) < 0) {
                 $label = $product->product_code ?: $product->product_name;
-                throw new InvalidArgumentException("Insufficient stock for {$label}. Available: " . number_format($available, 3));
+                throw new InvalidArgumentException("Insufficient stock for {$label}. Available: {$available}, requested: {$qty}.");
             }
         }
     }
@@ -174,7 +186,10 @@ class HoldInvoiceService
             if ($pid <= 0) {
                 continue;
             }
-            $newByProduct[$pid] = ($newByProduct[$pid] ?? 0) + (float) ($line['quantity'] ?? 0);
+            $qty = $this->normalizeQty($line['quantity'] ?? 0);
+            $newByProduct[$pid] = isset($newByProduct[$pid])
+                ? $this->units->add($newByProduct[$pid], $qty)
+                : $qty;
         }
 
         $allProductIds = array_unique(array_merge(array_keys($oldByProduct), array_keys($newByProduct)));
@@ -182,9 +197,9 @@ class HoldInvoiceService
         $holdDate = $order->order_date;
 
         foreach ($allProductIds as $productId) {
-            $oldQty = (float) ($oldByProduct[$productId] ?? 0);
-            $newQty = (float) ($newByProduct[$productId] ?? 0);
-            if (abs($oldQty - $newQty) < 0.0001) {
+            $oldQty = $oldByProduct[$productId] ?? '0.000';
+            $newQty = $newByProduct[$productId] ?? '0.000';
+            if ($this->units->compare($oldQty, $newQty) === 0) {
                 continue;
             }
 
@@ -193,8 +208,8 @@ class HoldInvoiceService
                 throw new InvalidArgumentException("Product {$product->product_name} does not belong to your shop.");
             }
 
-            if ($newQty > $oldQty) {
-                $delta = $this->normalizeQty($newQty - $oldQty);
+            if ($this->units->compare($newQty, $oldQty) > 0) {
+                $delta = $this->units->subtract($newQty, $oldQty);
                 $unitPrice = 0;
                 foreach ($newLines as $line) {
                     if ((int) ($line['product_id'] ?? 0) === $productId) {
@@ -214,7 +229,7 @@ class HoldInvoiceService
                     'reserved_stock' => DB::raw('reserved_stock + ' . $delta),
                 ]);
             } else {
-                $delta = $this->normalizeQty($oldQty - $newQty);
+                $delta = $this->units->subtract($oldQty, $newQty);
                 $detail = $order->orderDetails->firstWhere('product_id', $productId);
                 $unitPrice = (float) ($detail->unitcost ?? 0);
                 $cost = (float) ($detail->cost_per_unit ?? $product->buying_price ?? 0);
@@ -262,7 +277,8 @@ class HoldInvoiceService
             OrderDetails::create([
                 'order_id' => $order->id,
                 'product_id' => $productId,
-                'quantity' => $product['quantity'],
+                'quantity' => $this->normalizeQty($product['quantity'] ?? 0),
+                'unit' => $productModel->unit ?: Product::UNIT_PIECE,
                 'unitcost' => $product['unit_price'],
                 'cost_per_unit' => (float) ($productModel->buying_price ?? 0),
                 'item_discount' => $product['item_discount'] ?? 0,
@@ -272,7 +288,7 @@ class HoldInvoiceService
     }
 
     /**
-     * @return array<int, float>
+     * @return array<int, string>
      */
     public function reservedQtyByProductForOrder(?Order $order): array
     {
@@ -283,7 +299,10 @@ class HoldInvoiceService
         $map = [];
         foreach ($order->orderDetails as $detail) {
             $pid = (int) $detail->product_id;
-            $map[$pid] = ($map[$pid] ?? 0) + (float) $detail->quantity;
+            $qty = $this->normalizeQty($detail->quantity);
+            $map[$pid] = isset($map[$pid])
+                ? $this->units->add($map[$pid], $qty)
+                : $qty;
         }
 
         return $map;
@@ -353,6 +372,7 @@ class HoldInvoiceService
                 return [
                     'product_id' => $d->product_id,
                     'quantity' => $d->quantity,
+                    'unit' => $d->unit ?: ($p?->unit ?: Product::UNIT_PIECE),
                     'unit_price' => $d->unitcost,
                     'total' => $d->total,
                     'item_discount' => $d->item_discount ?? 0,
@@ -365,13 +385,13 @@ class HoldInvoiceService
         ];
     }
 
-    private function normalizeQty(mixed $qty): int
+    private function normalizeQty(mixed $qty): string
     {
-        $q = (int) round((float) $qty);
-        if ($q < 1) {
-            throw new InvalidArgumentException('Quantity must be at least 1 for stock movement.');
+        $normalized = $this->units->normalizeQuantity($qty);
+        if ($normalized === null) {
+            throw new InvalidArgumentException('Invalid quantity for stock movement.');
         }
 
-        return $q;
+        return $this->units->formatQuantity($normalized);
     }
 }

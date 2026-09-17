@@ -11,13 +11,22 @@ class StockLog extends Model
     use SoftDeletes;
     protected $casts = [
         'adjustment_date' => 'datetime',
+        'qty' => 'decimal:3',
+        'stock_qty' => 'decimal:3',
+        'price' => 'decimal:2',
+        'cost_per_unit' => 'decimal:4',
+    ];
+
+    protected $attributes = [
+        'unit' => Product::UNIT_PIECE,
     ];
 
     protected $fillable = [
         'shop_id',
         'product_id',
         'supplier_id',
-        'qty',            // positive integer only; direction controls in/out
+        'qty',            // positive quantity; direction controls in/out (schema is DECIMAL(12,3))
+        'unit',           // snapshot of product unit at movement time
         'stock_qty',      // legacy signed column (optional)
         'direction',      // 'in' | 'out'
         'source_type',    // opening, purchase, sale, purchase_return, sale_return, adjustment, loss
