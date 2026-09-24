@@ -12,6 +12,7 @@ use App\Models\SaleReturn;
 use App\Models\SaleReturnDetail;
 use App\Models\StockLog;
 use App\Services\Stock\StockService;
+use App\Support\ProductUnitValidator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -29,6 +30,7 @@ class SaleReturnService
     public function __construct(
         private StockService $stockService,
         private CustomerCreditService $customerCreditService,
+        private ProductUnitValidator $units,
     ) {
     }
 
@@ -45,6 +47,10 @@ class SaleReturnService
     */
     public function validateReturnQuantities(Order $order, array $products): void
     {
+        foreach ($products as $line) {
+            $this->rejectIfOverspecifiedQuantity($line['quantity'] ?? null);
+        }
+
         $selected = $this->filterSelectedProducts($products);
         if (empty($selected)) {
             throw ValidationException::withMessages([
@@ -54,9 +60,10 @@ class SaleReturnService
 
         foreach ($selected as $line) {
             $orderDetailId = (int) ($line['order_detail_id'] ?? 0);
-            $requestedQty = (float) ($line['quantity'] ?? 0);
+            $requestedRaw = $line['quantity'] ?? 0;
 
-            if ($orderDetailId <= 0 || $requestedQty <= 0) {
+            if ($orderDetailId <= 0 || ! $this->isPositiveBusinessQuantity($requestedRaw)) {
+                $this->rejectIfOverspecifiedQuantity($requestedRaw);
                 continue;
             }
 
@@ -71,11 +78,17 @@ class SaleReturnService
                 ]);
             }
 
-            $alreadyReturned = SaleReturnDetail::where('order_detail_id', $orderDetail->id)
-                ->sum('quantity');
-            $returnableQty = (float) $orderDetail->quantity - (float) $alreadyReturned;
+            $unit = $this->returnUnitForOrderDetail($orderDetail);
+            if (! $this->units->isValidQuantity($requestedRaw, $unit, false)) {
+                throw ValidationException::withMessages([
+                    'products' => [$this->units->invalidQuantityMessage($requestedRaw, $unit, false)],
+                ]);
+            }
 
-            if ($requestedQty > $returnableQty) {
+            $requestedQty = $this->units->formatQuantity($requestedRaw);
+            $returnableQty = $this->returnableQuantity($orderDetail);
+
+            if ($this->units->compare($requestedQty, $returnableQty) > 0) {
                 throw ValidationException::withMessages([
                     'products' => [sprintf(
                         'Cannot return more than sold for product line %d. Requested: %s, available to return: %s.',
@@ -110,12 +123,12 @@ class SaleReturnService
     ): void {
         $orderDetailId = (int) ($line['order_detail_id'] ?? 0);
         $productId = (int) ($line['product_id'] ?? 0);
-        $qty = $line['quantity'] ?? 0;
+        $qtyRaw = $line['quantity'] ?? 0;
         $unitPrice = (float) ($line['unit_price'] ?? 0);
         $itemDiscount = (float) ($line['item_discount'] ?? 0);
         $total = (float) ($line['total'] ?? 0);
 
-        if ($orderDetailId <= 0 || $productId <= 0 || (float) $qty <= 0) {
+        if ($orderDetailId <= 0 || $productId <= 0) {
             throw new InvalidArgumentException('Invalid return line data.');
         }
 
@@ -124,16 +137,16 @@ class SaleReturnService
 
         /** @var Product $product */
         $product = Product::findOrFail($productId);
+        $unit = $this->returnUnitForOrderDetail($orderDetail);
+        $this->units->validateQuantity($qtyRaw, $unit, false);
+        $qty = $this->units->formatQuantity($qtyRaw);
 
         if ($shopIdForAccess && $product->shop_id && $product->shop_id !== $shopIdForAccess) {
             throw new InvalidArgumentException('Product does not belong to your shop.');
         }
 
-        // Defensive quantity validation (should have been done earlier already).
-        $alreadyReturned = SaleReturnDetail::where('order_detail_id', $orderDetail->id)
-            ->sum('quantity');
-        $returnableQty = (float) $orderDetail->quantity - (float) $alreadyReturned;
-        if ($qty > $returnableQty) {
+        $returnableQty = $this->returnableQuantity($orderDetail);
+        if ($this->units->compare($qty, $returnableQty) > 0) {
             throw new InvalidArgumentException(sprintf(
                 'Cannot return more than sold for product line %d. Requested: %s, available to return: %s.',
                 $orderDetail->id,
@@ -142,12 +155,13 @@ class SaleReturnService
             ));
         }
 
-        $returnDetail = SaleReturnDetail::create([
+        SaleReturnDetail::create([
             'return_id' => $saleReturn->id,
             'order_id' => $order->id,
             'order_detail_id' => $orderDetail->id,
             'product_id' => $product->id,
             'quantity' => $qty,
+            'unit' => $unit,
             'unitcost' => $unitPrice,
             'item_discount' => $itemDiscount,
             'total' => $total,
@@ -161,12 +175,7 @@ class SaleReturnService
             $saleReturn->return_date
         );
 
-        // Ensure stock_log follows ERP rule:
-        // - reason = "Customer sale return"
-        // - stock_qty = new stock value after the return (inventory snapshot)
-        $product->refresh();
         $log->reason = 'Customer sale return';
-        $log->stock_qty = $product->product_store ?? 0;
         $log->save();
     }
 
@@ -273,7 +282,11 @@ class SaleReturnService
                 continue;
             }
 
-            $newQty = max(0, (int) ($product->product_store ?? 0) - (int) $detail->quantity);
+            $current = $this->units->formatQuantity($product->product_store ?? '0');
+            $returned = $this->units->formatQuantity($detail->quantity ?? '0');
+            $newQty = $this->units->compare($current, $returned) <= 0
+                ? '0.000'
+                : $this->units->subtract($current, $returned);
             $product->update(['product_store' => $newQty]);
         }
 
@@ -314,12 +327,69 @@ class SaleReturnService
     private function filterSelectedProducts(array $products): array
     {
         $filtered = array_filter($products, function ($product) {
-            return !empty($product['product_id'])
-                && !empty($product['quantity'])
-                && (float) $product['quantity'] > 0;
+            if (empty($product['product_id']) || ! isset($product['quantity']) || $product['quantity'] === '') {
+                return false;
+            }
+
+            return $this->isPositiveBusinessQuantity($product['quantity']);
         });
 
         return array_values($filtered);
+    }
+
+    /**
+     * Historical sale-line unit. Falls back to the product unit only when the snapshot is missing.
+     */
+    public function returnUnitForOrderDetail(OrderDetails $orderDetail): string
+    {
+        $snapshot = $orderDetail->snapshotUnit();
+        $productUnit = $orderDetail->product?->unit ?: Product::UNIT_PIECE;
+        if ($snapshot !== $productUnit && in_array($orderDetail->unit, Product::allowedUnits(), true)) {
+            return $snapshot;
+        }
+
+        return in_array($snapshot, Product::allowedUnits(), true) ? $snapshot : $productUnit;
+    }
+
+    private function isPositiveBusinessQuantity(mixed $quantity): bool
+    {
+        $normalized = $this->units->normalizeQuantity($quantity);
+        if ($normalized === null || $this->hasMoreThanThreeDecimalPlaces($normalized)) {
+            return false;
+        }
+
+        return $this->units->compare($normalized, '0') > 0;
+    }
+
+    private function rejectIfOverspecifiedQuantity(mixed $quantity): void
+    {
+        $normalized = $this->units->normalizeQuantity($quantity);
+        if ($normalized !== null && $this->hasMoreThanThreeDecimalPlaces($normalized)) {
+            throw ValidationException::withMessages([
+                'products' => ['Kg quantity must be at least 0.001 with at most 3 decimal places.'],
+            ]);
+        }
+    }
+
+    private function hasMoreThanThreeDecimalPlaces(string $quantity): bool
+    {
+        $dot = strpos(ltrim($quantity, '+-'), '.');
+
+        return $dot !== false && strlen(substr(ltrim($quantity, '+-'), $dot + 1)) > ProductUnitValidator::DECIMAL_PLACES;
+    }
+
+    public function returnableQuantity(OrderDetails $orderDetail): string
+    {
+        $sold = $this->units->formatQuantity($orderDetail->quantity ?? '0');
+        $alreadyReturned = $this->units->formatQuantity(
+            SaleReturnDetail::where('order_detail_id', $orderDetail->id)->sum('quantity')
+        );
+
+        if ($this->units->compare($sold, $alreadyReturned) <= 0) {
+            return '0.000';
+        }
+
+        return $this->units->subtract($sold, $alreadyReturned);
     }
 }
 

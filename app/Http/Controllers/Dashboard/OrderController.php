@@ -1829,6 +1829,66 @@ class OrderController extends Controller
     }
 
     /**
+     * Unit-aware transfer quantity. Available stock is physical stock minus already reserved quantity.
+     *
+     * @param  array<int, array<string, mixed>>  $products
+     */
+    private function assertTransferQuantities(array $products): void
+    {
+        $units = app(ProductUnitValidator::class);
+        $errors = [];
+        $qtyByProduct = [];
+        $models = [];
+
+        foreach ($products as $index => $line) {
+            $productId = $line['product_id'] ?? null;
+            if ($productId === null || $productId === '' || (int) $productId <= 0) {
+                continue;
+            }
+
+            $product = Product::find((int) $productId);
+            if (! $product) {
+                $errors['products.'.$index.'.product_id'][] = 'Selected product could not be found.';
+                continue;
+            }
+
+            $unit = $product->unit ?: Product::UNIT_PIECE;
+            $qty = $line['quantity'] ?? null;
+            if (! $units->isValidQuantity($qty, $unit, false)) {
+                $errors['products.'.$index.'.quantity'][] = $units->invalidQuantityMessage($qty, $unit, false);
+                continue;
+            }
+
+            $formatted = $units->formatQuantity($qty);
+            $key = (int) $product->id;
+            $models[$key] = $product;
+            $qtyByProduct[$key] = isset($qtyByProduct[$key])
+                ? $units->add($qtyByProduct[$key], $formatted)
+                : $formatted;
+        }
+
+        if ($errors !== []) {
+            throw \Illuminate\Validation\ValidationException::withMessages($errors);
+        }
+
+        foreach ($qtyByProduct as $productId => $qty) {
+            $product = $models[$productId];
+            $physical = $units->formatQuantity($product->product_store ?? '0');
+            $reserved = $units->formatQuantity($product->reserved_stock ?? '0');
+            $available = $units->compare($physical, $reserved) <= 0
+                ? '0.000'
+                : $units->subtract($physical, $reserved);
+            if ($units->compare($available, $qty) < 0) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'products' => [
+                        'Insufficient available stock for '.($product->product_code ?: $product->product_name).". Available: {$available}, requested: {$qty}.",
+                    ],
+                ]);
+            }
+        }
+    }
+
+    /**
      * Create payment_log row for history tracking only. Ledger entries use SalePostingService with source_id = order.id.
      * Must be called inside a DB transaction.
      *
@@ -2356,9 +2416,7 @@ class OrderController extends Controller
             'invoice_discount' => 'numeric|nullable|min:0',
             'products' => 'required|array|min:1',
             'products.*.product_id' => 'required|numeric',
-            'products.*.quantity' => $isShopTransfer
-                ? 'required|numeric|min:1'
-                : 'required|numeric|min:0.001',
+            'products.*.quantity' => 'required|numeric|min:0.001',
             'products.*.unit_price' => 'required|numeric|min:0',
             'products.*.total' => 'required|numeric|min:0',
             'products.*.item_discount' => 'nullable|numeric|min:0',
@@ -2748,6 +2806,16 @@ class OrderController extends Controller
             }
 
             $paymentStatus = $due > 0 ? ($pay > 0 ? 'partial' : 'credit') : $paymentMethod1;
+
+            try {
+                $this->assertTransferQuantities($validatedData['products']);
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                if ($isEdit) {
+                    throw $e;
+                }
+
+                return back()->withErrors($e->errors())->withInput();
+            }
 
             try {
                 $this->interShopTransferService->createPendingTransfer(

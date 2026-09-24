@@ -12,8 +12,8 @@ use App\Models\SaleReturn;
 use App\Models\SaleReturnDetail;
 use App\Models\OrderDetails;
 use App\Models\Supplier;
-use App\Models\StockLog;
 use App\Services\Stock\StockService;
+use App\Support\ProductUnitValidator;
 use Carbon\Carbon;
 use Haruncpi\LaravelIdGenerator\IdGenerator;
 use Illuminate\Support\Facades\Auth;
@@ -31,6 +31,7 @@ class TransferReturnService
         private StockService $stockService,
         private CustomerCreditService $customerCreditService,
         private SupplierCreditService $supplierCreditService,
+        private ProductUnitValidator $units,
     ) {
     }
 
@@ -64,16 +65,10 @@ class TransferReturnService
         // 4. Adjust inventory on mother shop (stock in)
         $this->increaseMotherInventory($purchaseReturn, $saleReturn, $motherSale);
 
-        // 5. Create stock logs on child shop for purchase_return
-        $this->createChildStockLogs($purchaseReturn);
-
-        // 6. Create stock logs on mother shop for sale_return
-        $this->createMotherStockLogs($purchaseReturn, $saleReturn, $motherSale);
-
-        // 7. Reverse accounting for child shop (purchase + supplier balance)
+        // 5. Reverse accounting for child shop (purchase + supplier balance)
         $this->reverseChildAccounting($purchaseReturn, $purchase);
 
-        // 8. Reverse accounting for mother shop (sale + customer balance)
+        // 6. Reverse accounting for mother shop (sale + customer balance)
         $this->reverseMotherAccounting($purchaseReturn, $motherSale);
 
         // 9. Link purchase_return to mother sale_return
@@ -127,7 +122,8 @@ class TransferReturnService
             ->get();
 
         foreach ($details as $detail) {
-            if ($detail->quantity <= 0) {
+            $normalized = $this->units->normalizeQuantity($detail->quantity ?? '0');
+            if ($normalized === null || $this->units->compare($normalized, '0') <= 0) {
                 continue;
             }
 
@@ -149,12 +145,17 @@ class TransferReturnService
                 );
             }
 
+            $unit = $orderDetail->snapshotUnit();
+            $qty = $this->units->formatQuantity($detail->quantity);
+            $this->units->validateQuantity($qty, $unit, false);
+
             SaleReturnDetail::create([
                 'return_id' => $saleReturn->id,
                 'order_id' => $motherSale->id,
                 'order_detail_id' => $orderDetail->id,
                 'product_id' => $productId,
-                'quantity' => (int) $detail->quantity,
+                'quantity' => $qty,
+                'unit' => $unit,
                 'unitcost' => (float) $detail->price,
                 'item_discount' => 0,
                 'total' => (float) $detail->total,
@@ -173,13 +174,28 @@ class TransferReturnService
             ->get();
 
         foreach ($details as $detail) {
-            $product = $detail->product;
-            if (!$product || $detail->quantity <= 0) {
+            $product = Product::withoutGlobalScope('shop')->lockForUpdate()->find($detail->product_id);
+            if (!$product) {
                 continue;
             }
 
-            $newQty = max(0, (int) $product->product_store - (int) $detail->quantity);
-            $product->update(['product_store' => $newQty]);
+            $normalized = $this->units->normalizeQuantity($detail->quantity ?? '0');
+            if ($normalized === null || $this->units->compare($normalized, '0') <= 0) {
+                continue;
+            }
+
+            $qty = $this->units->formatQuantity($detail->quantity);
+            $unit = $detail->snapshotUnit();
+            $this->units->validateQuantity($qty, $unit, false);
+
+            $this->stockService->purchaseReturnStock(
+                $product,
+                $qty,
+                (int) $purchaseReturn->id,
+                $purchaseReturn->return_date,
+                'Transfer purchase return to mother shop',
+                (float) $detail->price
+            );
         }
     }
 
@@ -196,91 +212,37 @@ class TransferReturnService
             ->get();
 
         foreach ($details as $detail) {
-            $masterProduct = $detail->product ? $detail->product->getMasterProduct() : null;
-            $product = $masterProduct && $masterProduct->shop_id == $motherSale->shop_id
-                ? $masterProduct
+            $normalized = $this->units->normalizeQuantity($detail->quantity ?? '0');
+            if ($normalized === null || $this->units->compare($normalized, '0') <= 0) {
+                continue;
+            }
+
+            $childProduct = Product::withoutGlobalScope('shop')->find($detail->product_id);
+            if (!$childProduct) {
+                continue;
+            }
+
+            $parentId = $childProduct->parent_product_id;
+            $product = $parentId
+                ? Product::withoutGlobalScope('shop')->lockForUpdate()->find($parentId)
                 : null;
 
-            if (!$product || $detail->quantity <= 0) {
+            if (!$product || (int) $product->shop_id !== (int) $motherSale->shop_id) {
                 continue;
             }
 
-            $newQty = (int) $product->product_store + (int) $detail->quantity;
-            $product->update(['product_store' => $newQty]);
-        }
-    }
+            $qty = $this->units->formatQuantity($detail->quantity);
+            $unit = $detail->snapshotUnit();
+            $this->units->validateQuantity($qty, $unit, false);
 
-    /**
-     * Create child shop stock logs for purchase_return (stock out).
-     */
-    public function createChildStockLogs(PurchaseReturn $purchaseReturn): void
-    {
-        $details = PurchaseReturnDetail::with('product')
-            ->where('purchase_return_id', $purchaseReturn->id)
-            ->get();
-
-        foreach ($details as $detail) {
-            $product = $detail->product;
-            if (!$product || $detail->quantity <= 0) {
-                continue;
-            }
-
-            StockLog::create([
-                'shop_id' => $purchaseReturn->shop_id,
-                'product_id' => $product->id,
-                'supplier_id' => $product->supplier_id,
-                'qty' => (int) $detail->quantity,
-                'stock_qty' => -(int) $detail->quantity,
-                'direction' => 'out',
-                'source_type' => 'purchase_return',
-                'source_id' => (string) $purchaseReturn->id,
-                'price' => (float) $detail->price,
-                'reason' => 'Transfer purchase return to mother shop',
-                'adjustment_date' => Carbon::parse($purchaseReturn->return_date)->toDateString(),
-            ]);
-        }
-    }
-
-    /**
-     * Create mother shop stock logs for sale_return (stock in).
-     */
-    public function createMotherStockLogs(
-        PurchaseReturn $purchaseReturn,
-        SaleReturn $saleReturn,
-        Order $motherSale
-    ): void {
-        $details = PurchaseReturnDetail::with('product')
-            ->where('purchase_return_id', $purchaseReturn->id)
-            ->get();
-
-        foreach ($details as $detail) {
-            $childProduct = $detail->product;
-            if (!$childProduct || $detail->quantity <= 0) {
-                continue;
-            }
-
-            $motherProduct = $childProduct->getMasterProduct();
-            if ($motherProduct->shop_id != $motherSale->shop_id) {
-                continue;
-            }
-
-            if (!$motherProduct) {
-                continue;
-            }
-
-            StockLog::create([
-                'shop_id' => $motherSale->shop_id,
-                'product_id' => $motherProduct->id,
-                'supplier_id' => null,
-                'qty' => (int) $detail->quantity,
-                'stock_qty' => (int) $detail->quantity,
-                'direction' => 'in',
-                'source_type' => 'sale_return',
-                'source_id' => (string) $saleReturn->id,
-                'price' => (float) $detail->price,
-                'reason' => 'Transfer return received from child shop',
-                'adjustment_date' => Carbon::parse($purchaseReturn->return_date)->toDateString(),
-            ]);
+            $this->stockService->saleReturnStock(
+                $product,
+                $qty,
+                (int) $saleReturn->id,
+                $purchaseReturn->return_date,
+                'Transfer return received from child shop',
+                (float) $detail->price
+            );
         }
     }
 

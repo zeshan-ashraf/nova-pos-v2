@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderDetails;
+use App\Models\Product;
 use App\Models\SaleReturn;
 use App\Models\SaleReturnDetail;
 use App\Support\ActiveShop;
+use App\Support\ProductUnitValidator;
 use App\Services\SaleReturnService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -207,18 +209,29 @@ class SaleReturnController extends Controller
         }
 
         // Calculate already returned quantities for each order detail
-        $orderDetails = $order->orderDetails->map(function ($orderDetail) {
-            $returnedQty = SaleReturnDetail::where('order_detail_id', $orderDetail->id)
-                ->sum('quantity');
-            
+        $units = app(ProductUnitValidator::class);
+        $orderDetails = $order->orderDetails->map(function ($orderDetail) use ($units) {
+            $unit = $orderDetail->snapshotUnit();
+            $sold = $units->formatQuantity($orderDetail->quantity ?? '0');
+            $returnedQty = $units->formatQuantity(
+                SaleReturnDetail::where('order_detail_id', $orderDetail->id)->sum('quantity') ?: '0'
+            );
+            $available = $units->compare($sold, $returnedQty) <= 0
+                ? '0.000'
+                : $units->subtract($sold, $returnedQty);
+
             return [
                 'id' => $orderDetail->id,
                 'product_id' => $orderDetail->product_id,
                 'product_name' => $orderDetail->product->resolved_name ?? 'N/A',
                 'product_code' => $orderDetail->product->resolved_code ?? 'N/A',
-                'quantity' => $orderDetail->quantity,
+                'quantity' => $sold,
                 'returned_quantity' => $returnedQty,
-                'available_to_return' => $orderDetail->quantity - $returnedQty,
+                'available_to_return' => $available,
+                'unit' => $unit,
+                'quantity_step' => $unit === Product::UNIT_KG ? '0.001' : '1',
+                'quantity_min' => $unit === Product::UNIT_KG ? '0.001' : '1',
+                'quantity_with_unit' => $orderDetail->quantityWithUnit(),
                 'unitcost' => $orderDetail->unitcost,
                 'item_discount' => $orderDetail->item_discount ?? 0,
                 'total' => $orderDetail->total,

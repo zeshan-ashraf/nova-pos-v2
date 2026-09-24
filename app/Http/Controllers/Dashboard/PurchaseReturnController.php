@@ -3,20 +3,25 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\PurchaseReturn;
 use App\Models\PurchaseReturnDetail;
 use App\Models\PurchaseDetail;
 use App\Support\ActiveShop;
+use App\Support\ProductUnitValidator;
 use Haruncpi\LaravelIdGenerator\IdGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 
 class PurchaseReturnController extends Controller
 {
-    public function __construct()
-    {
+    public function __construct(
+        private ProductUnitValidator $units
+    ) {
         $this->middleware('permission:purchase_returns.view')->only(['index', 'show']);
         $this->middleware('permission:purchase_returns.create')->only(['create', 'store']);
     }
@@ -81,7 +86,15 @@ class PurchaseReturnController extends Controller
         // Keep only selected rows (positive quantity + product id).
         $selectedItems = collect($validated['items'] ?? [])
             ->filter(function ($item) {
-                return !empty($item['product_id']) && (float) ($item['quantity'] ?? 0) > 0;
+                if (empty($item['product_id']) || !isset($item['quantity']) || $item['quantity'] === '' || $item['quantity'] === null) {
+                    return false;
+                }
+                $normalized = $this->units->normalizeQuantity($item['quantity']);
+                if ($normalized === null) {
+                    return true;
+                }
+
+                return $this->units->compare($normalized, '0') > 0;
             })
             ->values()
             ->all();
@@ -92,7 +105,7 @@ class PurchaseReturnController extends Controller
                 ->withInput();
         }
 
-        $purchase = Purchase::with('shop')
+        $purchase = Purchase::with(['shop', 'purchaseDetails'])
             ->where('id', $validated['purchase_id'])
             ->firstOrFail();
 
@@ -100,6 +113,12 @@ class PurchaseReturnController extends Controller
         $visibleShopIds = ActiveShop::visibleShopIds($authUser);
         if ($authUser->shop_id && !$visibleShopIds->contains($purchase->shop_id)) {
             abort(403, 'You do not have access to this purchase.');
+        }
+
+        try {
+            $this->validateReturnQuantities($purchase, $selectedItems);
+        } catch (ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
         }
 
         $returnNo = IdGenerator::generate([
@@ -112,10 +131,8 @@ class PurchaseReturnController extends Controller
         $subTotal = 0;
         $totalProducts = 0;
         foreach ($selectedItems as $item) {
-            if ($item['quantity'] > 0) {
-                $subTotal += $item['total'];
-                $totalProducts++;
-            }
+            $subTotal += $item['total'];
+            $totalProducts++;
         }
 
         $purchaseReturn = PurchaseReturn::create([
@@ -131,14 +148,17 @@ class PurchaseReturnController extends Controller
         ]);
 
         foreach ($selectedItems as $item) {
-            if ($item['quantity'] <= 0) {
-                continue;
-            }
+            $purchaseDetail = $this->matchingPurchaseDetail($purchase, (int) $item['product_id']);
+            $unit = $purchaseDetail
+                ? $purchaseDetail->snapshotUnit()
+                : (Product::withoutGlobalScope('shop')->find((int) $item['product_id'])?->unit ?: Product::UNIT_PIECE);
+            $qty = $this->units->formatQuantity($item['quantity']);
 
             PurchaseReturnDetail::create([
                 'purchase_return_id' => $purchaseReturn->id,
                 'product_id' => $item['product_id'],
-                'quantity' => $item['quantity'],
+                'quantity' => $qty,
+                'unit' => $unit,
                 'price' => $item['price'],
                 'total' => $item['total'],
             ]);
@@ -176,13 +196,26 @@ class PurchaseReturnController extends Controller
             abort(403, 'You do not have access to this purchase.');
         }
 
-        $details = $purchase->purchaseDetails->map(function (PurchaseDetail $detail) {
+        $details = $purchase->purchaseDetails->map(function (PurchaseDetail $detail) use ($purchase) {
+            $unit = $detail->snapshotUnit();
+            $purchased = $this->units->formatQuantity($detail->quantity ?? '0');
+            $returned = $this->alreadyReturnedQuantity($purchase, (int) $detail->product_id);
+            $available = $this->units->compare($purchased, $returned) <= 0
+                ? '0.000'
+                : $this->units->subtract($purchased, $returned);
+
             return [
                 'id' => $detail->id,
                 'product_id' => $detail->product_id,
                 'product_name' => $detail->product->resolved_name ?? 'N/A',
                 'product_code' => $detail->product->resolved_code ?? 'N/A',
-                'quantity' => (int) $detail->quantity,
+                'quantity' => $purchased,
+                'returned_quantity' => $returned,
+                'available_to_return' => $available,
+                'unit' => $unit,
+                'quantity_step' => $unit === Product::UNIT_KG ? '0.001' : '1',
+                'quantity_min' => $unit === Product::UNIT_KG ? '0.001' : '1',
+                'quantity_with_unit' => $detail->quantityWithUnit(),
                 'unit_price' => (float) $detail->unitcost,
                 'total' => (float) $detail->total,
             ];
@@ -200,5 +233,65 @@ class PurchaseReturnController extends Controller
             'details' => $details,
         ]);
     }
-}
 
+    /**
+     * @param  array<int, array<string, mixed>>  $items
+     */
+    private function validateReturnQuantities(Purchase $purchase, array $items): void
+    {
+        foreach ($items as $item) {
+            $productId = (int) ($item['product_id'] ?? 0);
+            $purchaseDetail = $this->matchingPurchaseDetail($purchase, $productId);
+            if (!$purchaseDetail) {
+                throw ValidationException::withMessages([
+                    'items' => ["Invalid purchase line selected for return (product {$productId})."],
+                ]);
+            }
+
+            $unit = $purchaseDetail->snapshotUnit();
+            try {
+                $this->units->validateQuantity($item['quantity'] ?? 0, $unit, false);
+            } catch (InvalidArgumentException $e) {
+                throw ValidationException::withMessages([
+                    'items' => [$e->getMessage()],
+                ]);
+            }
+
+            $requested = $this->units->formatQuantity($item['quantity']);
+            $purchased = $this->units->formatQuantity($purchaseDetail->quantity ?? '0');
+            $alreadyReturned = $this->alreadyReturnedQuantity($purchase, $productId);
+            $returnable = $this->units->compare($purchased, $alreadyReturned) <= 0
+                ? '0.000'
+                : $this->units->subtract($purchased, $alreadyReturned);
+
+            if ($this->units->compare($requested, $returnable) > 0) {
+                throw ValidationException::withMessages([
+                    'items' => [sprintf(
+                        'Cannot return more than purchased for product line %d. Requested: %s, available to return: %s.',
+                        $purchaseDetail->id,
+                        $requested,
+                        $returnable
+                    )],
+                ]);
+            }
+        }
+    }
+
+    private function matchingPurchaseDetail(Purchase $purchase, int $productId): ?PurchaseDetail
+    {
+        return $purchase->purchaseDetails->firstWhere('product_id', $productId);
+    }
+
+    private function alreadyReturnedQuantity(Purchase $purchase, int $productId): string
+    {
+        $sum = PurchaseReturnDetail::query()
+            ->where('product_id', $productId)
+            ->whereHas('purchaseReturn', function ($query) use ($purchase) {
+                $query->where('purchase_id', $purchase->id)
+                    ->whereIn('status', ['pending', 'approved']);
+            })
+            ->sum('quantity');
+
+        return $this->units->formatQuantity($sum ?: '0');
+    }
+}

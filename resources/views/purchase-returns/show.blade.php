@@ -65,7 +65,7 @@
                                     <td>{{ $loop->iteration }}</td>
                                     <td>{{ $detail->product->resolved_name ?? 'N/A' }}</td>
                                     <td>{{ $detail->product->resolved_code ?? 'N/A' }}</td>
-                                    <td>{{ $detail->quantity }}</td>
+                                    <td>{{ $detail->quantityWithUnit() }}</td>
                                     <td>{{ number_format($detail->price, 2) }}</td>
                                     <td>{{ number_format($detail->total, 2) }}</td>
                                 </tr>

@@ -225,7 +225,9 @@ class StockService
         Product $product,
         mixed $qty,
         int $returnId,
-        $returnDate = null
+        $returnDate = null,
+        ?string $reason = null,
+        float $price = 0.0
     ): StockLog {
         $this->validator->validateInOperation($product, $qty, 'sale_return', (string) $returnId, null);
 
@@ -239,9 +241,39 @@ class StockService
             'in',
             'sale_return',
             (string) $returnId,
-            0.0,
+            $price,
             null,
-            null,
+            $reason,
+            $adjustmentDate
+        );
+    }
+
+    /**
+     * Record stock leaving for a purchase/transfer return (stock out, source_type = purchase_return).
+     */
+    public function purchaseReturnStock(
+        Product $product,
+        mixed $qty,
+        int $returnId,
+        $returnDate = null,
+        ?string $reason = null,
+        float $price = 0.0
+    ): StockLog {
+        $this->validator->validateOutOperation($product, $qty, 'purchase_return', (string) $returnId);
+
+        $adjustmentDate = $returnDate
+            ? (\is_string($returnDate) ? $returnDate : \Illuminate\Support\Carbon::parse($returnDate)->toDateString())
+            : null;
+
+        return $this->insertAndUpdate(
+            $product,
+            $qty,
+            'out',
+            'purchase_return',
+            (string) $returnId,
+            $price,
+            $product->supplier_id ? (int) $product->supplier_id : null,
+            $reason,
             $adjustmentDate
         );
     }
@@ -268,7 +300,7 @@ class StockService
         }
 
         return DB::transaction(function () use ($product, $qty, $direction, $sourceType, $sourceId, $price, $supplierId, $reason, $adjustmentDate, $costPerUnit) {
-            $product = Product::lockForUpdate()->findOrFail($product->id);
+            $product = Product::withoutGlobalScope('shop')->lockForUpdate()->findOrFail($product->id);
             return $this->insertLogAndUpdateProduct($product, $qty, $direction, $sourceType, $sourceId, $price, $supplierId, $reason, $adjustmentDate, $costPerUnit);
         });
     }

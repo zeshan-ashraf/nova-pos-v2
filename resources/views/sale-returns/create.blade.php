@@ -402,10 +402,16 @@
                     let tbody = '';
                     if (response.order_details && response.order_details.length > 0) {
                         response.order_details.forEach(function(detail, index) {
-                            const availableQty = detail.available_to_return;
+                            const availableQty = parseFloat(detail.available_to_return) || 0;
                             const isDisabled = availableQty <= 0;
+                            const unit = detail.unit || 'piece';
+                            const step = detail.quantity_step || (unit === 'kg' ? '0.001' : '1');
+                            const minWhenChecked = detail.quantity_min || (unit === 'kg' ? '0.001' : '1');
+                            const soldDisplay = detail.quantity_with_unit || (detail.quantity + ' ' + (unit === 'kg' ? 'kg' : 'pieces'));
+                            const returnedDisplay = detail.returned_quantity + ' ' + (unit === 'kg' ? 'kg' : 'pieces');
+                            const availableDisplay = detail.available_to_return + ' ' + (unit === 'kg' ? 'kg' : 'pieces');
                             
-                            tbody += `<tr data-order-detail-id="${detail.id}" data-original-qty="${detail.quantity}" data-original-item-discount="${detail.item_discount || 0}">
+                            tbody += `<tr data-order-detail-id="${detail.id}" data-original-qty="${detail.quantity}" data-original-item-discount="${detail.item_discount || 0}" data-unit="${unit}" data-qty-min="${minWhenChecked}">
                                 <td>
                                     <input type="checkbox" class="return-checkbox" data-index="${index}" ${isDisabled ? 'disabled' : ''}>
                                     <input type="hidden" name="products[${index}][order_detail_id]" value="${detail.id}">
@@ -413,19 +419,21 @@
                                 </td>
                                 <td>${detail.product_name}</td>
                                 <td>${detail.product_code}</td>
-                                <td>${detail.quantity}</td>
-                                <td>${detail.returned_quantity}</td>
-                                <td><strong>${availableQty}</strong></td>
+                                <td>${soldDisplay}</td>
+                                <td>${returnedDisplay}</td>
+                                <td><strong>${availableDisplay}</strong></td>
                                 <td>
                                     <input type="number" class="form-control return-quantity" 
                                         name="products[${index}][quantity]" 
                                         data-index="${index}" 
-                                        data-max="${availableQty}"
+                                        data-max="${detail.available_to_return}"
+                                        data-unit="${unit}"
                                         value="0" 
-                                        min="0" 
-                                        max="${availableQty}"
+                                        min="0"
+                                        step="${step}"
+                                        max="${detail.available_to_return}"
                                         disabled
-                                        style="width: 80px;">
+                                        style="width: 90px;">
                                 </td>
                                 <td>
                                     <input type="number" step="0.01" class="form-control unit-price" 
@@ -462,10 +470,11 @@
             const $qtyInput = $row.find('.return-quantity');
 
             if ($(this).is(':checked')) {
-                // When user selects a row for return, enable qty input,
-                // enforce min=1, and default to quantity 1.
-                $qtyInput.prop('disabled', false).attr('min', 1);
-                $qtyInput.val(1);
+                const minQty = parseFloat($row.data('qty-min')) || 1;
+                const maxQty = parseFloat($qtyInput.data('max')) || minQty;
+                const defaultQty = maxQty < minQty ? maxQty : minQty;
+                $qtyInput.prop('disabled', false).attr('min', minQty);
+                $qtyInput.val(defaultQty);
                 calculateRowTotal(index);
             } else {
                 // When row is not selected, disable qty input and relax min to 0
@@ -477,16 +486,21 @@
             }
         });
 
+        function parseReturnQty(value) {
+            const n = parseFloat(value);
+            return Number.isFinite(n) ? n : 0;
+        }
+
         // Handle quantity change
         $(document).on('input', '.return-quantity', function() {
             const index = $(this).data('index');
-            const maxQty = parseInt($(this).data('max')) || 0;
-            let qty = parseInt($(this).val()) || 0;
+            const maxQty = parseReturnQty($(this).data('max'));
+            let qty = parseReturnQty($(this).val());
             
             if (qty > maxQty) {
                 $(this).val(maxQty);
                 qty = maxQty;
-                alert(`Cannot return more than ${maxQty} items`);
+                alert(`Cannot return more than ${maxQty}`);
             }
             
             if (qty > 0) {
@@ -567,8 +581,8 @@
                 
                 if (isChecked) {
                     // Validate checked items
-                    const qty = parseInt($row.find('.return-quantity').val()) || 0;
-                    const maxQty = parseInt($row.find('.return-quantity').data('max')) || 0;
+                    const qty = parseReturnQty($row.find('.return-quantity').val());
+                    const maxQty = parseReturnQty($row.find('.return-quantity').data('max'));
                     
                     if (qty <= 0 || qty > maxQty) {
                         hasError = true;

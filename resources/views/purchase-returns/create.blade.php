@@ -150,16 +150,21 @@
                     let html = '';
                     if (res.details && res.details.length) {
                         res.details.forEach((d, i) => {
-                            html += `<tr>
+                            const unit = d.unit || 'piece';
+                            const step = d.quantity_step || (unit === 'kg' ? '0.001' : '1');
+                            const minWhenChecked = d.quantity_min || (unit === 'kg' ? '0.001' : '1');
+                            const available = d.available_to_return ?? d.quantity;
+                            const purchasedDisplay = d.quantity_with_unit || (d.quantity + ' ' + (unit === 'kg' ? 'kg' : 'pieces'));
+                            html += `<tr data-qty-min="${minWhenChecked}">
                                 <td>
                                     <input type="checkbox" class="ret-check" data-index="${i}">
                                     <input type="hidden" name="items[${i}][product_id]" value="${d.product_id}">
                                 </td>
                                 <td>${d.product_name}</td>
                                 <td>${d.product_code}</td>
-                                <td>${d.quantity}</td>
+                                <td>${purchasedDisplay}</td>
                                 <td>
-                                    <input type="number" class="form-control ret-qty" data-index="${i}" data-max="${d.quantity}" min="0" max="${d.quantity}" value="0" disabled>
+                                    <input type="number" class="form-control ret-qty" data-index="${i}" data-max="${available}" data-unit="${unit}" min="0" max="${available}" step="${step}" value="0" disabled>
                                 </td>
                                 <td>
                                     <input type="number" step="0.01" class="form-control ret-price" name="items[${i}][price]" value="${parseFloat(d.unit_price).toFixed(2)}" readonly>
@@ -184,11 +189,19 @@
             });
         });
 
+        function parseReturnQty(value) {
+            const n = parseFloat(value);
+            return Number.isFinite(n) ? n : 0;
+        }
+
         $(document).on('change', '.ret-check', function(){
             const $row = $(this).closest('tr');
             const $qty = $row.find('.ret-qty');
             if ($(this).is(':checked')) {
-                $qty.prop('disabled', false).attr('min', 1).val(1).trigger('input');
+                const minQty = parseReturnQty($row.data('qty-min')) || 1;
+                const maxQty = parseReturnQty($qty.data('max'));
+                const defaultQty = maxQty < minQty ? maxQty : minQty;
+                $qty.prop('disabled', false).attr('min', minQty).val(defaultQty).trigger('input');
             } else {
                 $qty.prop('disabled', true).attr('min', 0).val(0).trigger('input');
             }
@@ -196,8 +209,8 @@
 
         $(document).on('input', '.ret-qty', function(){
             const $row = $(this).closest('tr');
-            const max = parseInt($(this).data('max') || 0, 10);
-            let qty = parseInt($(this).val() || 0, 10);
+            const max = parseReturnQty($(this).data('max'));
+            let qty = parseReturnQty($(this).val());
             if (qty > max) { qty = max; $(this).val(max); }
             if (qty < 0) { qty = 0; $(this).val(0); }
 
@@ -238,8 +251,8 @@
             $('#detailsBody tr').each(function() {
                 const $row = $(this);
                 const isChecked = $row.find('.ret-check').is(':checked');
-                const qty = parseInt($row.find('.ret-qty-hidden').val() || 0, 10);
-                const max = parseInt($row.find('.ret-qty').data('max') || 0, 10);
+                const qty = parseReturnQty($row.find('.ret-qty-hidden').val());
+                const max = parseReturnQty($row.find('.ret-qty').data('max'));
 
                 if (isChecked) {
                     if (qty <= 0 || qty > max) {

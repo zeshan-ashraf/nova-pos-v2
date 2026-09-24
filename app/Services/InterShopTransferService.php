@@ -19,6 +19,7 @@ use App\Models\Supplier;
 use App\Models\PaymentLog;
 use App\Services\Stock\StockService;
 use App\Support\InterShopTransferStatus;
+use App\Support\ProductUnitValidator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +31,7 @@ class InterShopTransferService
     public function __construct(
         private StockService $stockService,
         private SalePostingService $salePostingService,
+        private ProductUnitValidator $units,
     ) {
     }
 
@@ -117,11 +119,15 @@ class InterShopTransferService
                 if ($motherProduct->shop_id !== $motherShop->id) {
                     throw new \RuntimeException("Product {$motherProduct->product_name} does not belong to your shop.");
                 }
-                $qty = (float) $product['quantity'];
-                $store = (float) ($motherProduct->product_store ?? 0);
-                $reserved = (float) ($motherProduct->reserved_stock ?? 0);
-                $available = $store - $reserved;
-                if ($available + 0.0001 < $qty) {
+                $unit = $motherProduct->unit ?: Product::UNIT_PIECE;
+                $this->units->validateQuantity($product['quantity'], $unit, false);
+                $qty = $this->units->formatQuantity($product['quantity']);
+                $store = $this->units->formatQuantity($motherProduct->product_store ?? '0');
+                $reserved = $this->units->formatQuantity($motherProduct->reserved_stock ?? '0');
+                $available = $this->units->compare($store, $reserved) <= 0
+                    ? '0.000'
+                    : $this->units->subtract($store, $reserved);
+                if ($this->units->compare($available, $qty) < 0) {
                     $label = $motherProduct->product_code ?? $motherProduct->product_name;
 
                     throw new \RuntimeException("Insufficient available stock for {$label}. Available: {$available}");
@@ -155,12 +161,14 @@ class InterShopTransferService
                     continue;
                 }
                 $motherProduct = Product::lockForUpdate()->findOrFail((int) $product['product_id']);
-                $qty = (float) $product['quantity'];
+                $unit = $motherProduct->unit ?: Product::UNIT_PIECE;
+                $qty = $this->units->formatQuantity($product['quantity']);
 
                 OrderDetails::insert([
                 'order_id' => $order->id,
                 'product_id' => $product['product_id'],
-                'quantity' => $product['quantity'],
+                'quantity' => $qty,
+                'unit' => $unit,
                 'unitcost' => $product['unit_price'],
                 'cost_per_unit' => (float) ($motherProduct->buying_price ?? 0),
                 'item_discount' => $product['item_discount'] ?? 0,
@@ -175,6 +183,10 @@ class InterShopTransferService
 
                 $childProduct = $this->findChildShopProductForMotherSale($childShop, $motherProduct);
                 if ($childProduct) {
+                    $childUnit = $childProduct->unit ?: Product::UNIT_PIECE;
+                    if ($childUnit !== $unit) {
+                        throw new \RuntimeException('Child product unit does not match the mother product unit. No conversion is allowed.');
+                    }
                     if (empty($childProduct->parent_product_id)) {
                         $childProduct->parent_product_id = $motherProduct->id;
                         $childProduct->save();
@@ -225,7 +237,8 @@ class InterShopTransferService
                     'mother_product_id' => (int) $product['product_id'],
                     'product_name' => $motherProduct->product_name,
                     'product_code' => $motherProduct->product_code,
-                    'quantity' => $product['quantity'],
+                    'quantity' => $this->units->formatQuantity($product['quantity']),
+                    'unit' => $motherProduct->unit ?: Product::UNIT_PIECE,
                     'unit_price' => $product['unit_price'],
                     'item_discount' => $product['item_discount'] ?? 0,
                     'total' => $product['total'],
@@ -479,7 +492,8 @@ class InterShopTransferService
             PurchaseDetail::insert([
                 'purchase_id' => $purchase->id,
                 'product_id' => $childProduct->id,
-                'quantity' => $detail->quantity,
+                'quantity' => $this->units->formatQuantity($detail->quantity),
+                'unit' => $detail->snapshotUnit(),
                 'unitcost' => $detail->unitcost,
                 'item_discount' => $detail->item_discount ?? 0,
                 'total' => $detail->total,
@@ -636,8 +650,9 @@ class InterShopTransferService
                 $motherProduct = Product::withoutGlobalScope('shop')
                     ->lockForUpdate()
                     ->findOrFail((int) $detail->product_id);
-                $qty = (float) $detail->quantity;
-                $unit = (float) $detail->unitcost;
+                $qty = $this->units->formatQuantity($detail->quantity);
+                $price = (float) $detail->unitcost;
+                $lineUnit = $detail->snapshotUnit();
 
                 Product::where('id', $motherProduct->id)->update([
                     'product_store' => DB::raw('product_store - ' . $qty),
@@ -648,12 +663,13 @@ class InterShopTransferService
                     'shop_id' => $motherShop->id,
                     'product_id' => $motherProduct->id,
                     'supplier_id' => null,
-                    'qty' => (int) $qty,
+                    'qty' => $qty,
+                    'unit' => $lineUnit,
                     'direction' => 'out',
                     'source_type' => 'mother_sale',
                     'source_id' => (string) $order->id,
-                    'price' => $unit,
-                    'stock_qty' => -(int) $qty,
+                    'price' => $price,
+                    'stock_qty' => $this->units->subtract('0', $qty),
                 ]);
 
                 $childProduct = $this->findChildShopProductForMotherSale($childShop, $motherProduct);
@@ -672,7 +688,7 @@ class InterShopTransferService
                 $this->stockService->updateBuyingPriceAfterPurchaseIn(
                     $childProduct,
                     $qty,
-                    $unit
+                    $price
                 );
             }
 
@@ -744,8 +760,8 @@ class InterShopTransferService
                 if (!$childProduct) {
                     continue;
                 }
-                $qty = (int) $pd->quantity;
-                if ($qty <= 0) {
+                $qty = $this->units->formatQuantity($pd->quantity ?? '0');
+                if ($this->units->compare($qty, '0') <= 0) {
                     continue;
                 }
                 StockLog::create([
@@ -753,6 +769,7 @@ class InterShopTransferService
                     'product_id' => $childProduct->id,
                     'supplier_id' => $supplier->id,
                     'qty' => $qty,
+                    'unit' => $pd->snapshotUnit(),
                     'direction' => 'in',
                     'source_type' => 'purchase',
                     'source_id' => (string) $purchase->id,
@@ -825,7 +842,7 @@ class InterShopTransferService
             }
 
             foreach ($order->orderDetails as $detail) {
-                $qty = (float) $detail->quantity;
+                $qty = $this->units->formatQuantity($detail->quantity ?? '0');
                 Product::where('id', $detail->product_id)->update([
                     'reserved_stock' => DB::raw('GREATEST(0, reserved_stock - '.$qty.')'),
                 ]);
@@ -861,7 +878,7 @@ class InterShopTransferService
     {
         $order->loadMissing('orderDetails');
         foreach ($order->orderDetails as $detail) {
-            $qty = (float) $detail->quantity;
+            $qty = $this->units->formatQuantity($detail->quantity ?? '0');
             Product::where('id', $detail->product_id)->update([
                 'reserved_stock' => DB::raw('GREATEST(0, reserved_stock - '.$qty.')'),
             ]);
