@@ -67,6 +67,7 @@
                                 <tr>
                                     <th>Product Name</th>
                                     <th>Code</th>
+                                    <th>Unit</th>
                                     <th class="text-right">Available Stock</th>
                                     <th class="text-right">Total Purchased</th>
                                     <th class="text-right">Total Sold</th>
@@ -80,43 +81,48 @@
                             <tbody>
                                 @forelse ($rows as $row)
                                     @php
-                                        $expectedStock = (float) ($row->expected_stock ?? 0);
-                                        $ledgerStock = (float) ($row->ledger_stock ?? 0);
-                                        $difference = (float) ($row->stock_difference ?? 0);
-                                        $hasDiff = abs($expectedStock - $ledgerStock) > 0.000001 || abs($difference) > 0.000001;
+                                        $auditUnit = $row->unit ?? \App\Models\Product::UNIT_PIECE;
+                                        $auditUnits = app(\App\Support\ProductUnitValidator::class);
+                                        $hasDiff = $auditUnits->compare($row->expected_stock ?? 0, $row->ledger_stock ?? 0) !== 0
+                                            || $auditUnits->compare($row->stock_difference ?? 0, 0) !== 0;
                                         $dangerCellStyle = $hasDiff ? 'background-color: #f8d7da !important;' : '';
+                                        $fmtQty = fn ($value) => \App\Models\Product::formatQuantityForUnit($value, $auditUnit);
                                     @endphp
                                     <tr class="{{ $hasDiff ? 'stock-audit-mismatch' : '' }}">
                                         <td style="{{ $dangerCellStyle }}">{{ $row->product_name }}</td>
                                         <td style="{{ $dangerCellStyle }}">{{ $row->product_code ?? '–' }}</td>
-                                        <td class="text-right" style="{{ $dangerCellStyle }}">{{ number_format((float) $row->available_stock, 2) }}</td>
-                                        <td class="text-right" style="{{ $dangerCellStyle }}">{{ number_format((float) $row->total_purchased, 2) }}</td>
-                                        <td class="text-right" style="{{ $dangerCellStyle }}">{{ number_format((float) $row->total_sold, 2) }}</td>
-                                        <td class="text-right" style="{{ $dangerCellStyle }}">{{ number_format((float) $row->total_sale_return, 2) }}</td>
-                                        <td class="text-right" style="{{ $dangerCellStyle }}">{{ number_format((float) $row->total_purchase_return, 2) }}</td>
-                                        <td class="text-right" style="{{ $dangerCellStyle }}">{{ number_format((float) $row->expected_stock, 2) }}</td>
-                                        <td class="text-right" style="{{ $dangerCellStyle }}">{{ number_format((float) $row->ledger_stock, 2) }}</td>
-                                        <td class="text-right font-weight-bold" style="{{ $dangerCellStyle }}">{{ number_format((float) $row->stock_difference, 2) }}</td>
+                                        <td style="{{ $dangerCellStyle }}">{{ $auditUnit }}</td>
+                                        <td class="text-right" style="{{ $dangerCellStyle }}">{{ $fmtQty($row->available_stock) }}</td>
+                                        <td class="text-right" style="{{ $dangerCellStyle }}">{{ $fmtQty($row->total_purchased) }}</td>
+                                        <td class="text-right" style="{{ $dangerCellStyle }}">{{ $fmtQty($row->total_sold) }}</td>
+                                        <td class="text-right" style="{{ $dangerCellStyle }}">{{ $fmtQty($row->total_sale_return) }}</td>
+                                        <td class="text-right" style="{{ $dangerCellStyle }}">{{ $fmtQty($row->total_purchase_return) }}</td>
+                                        <td class="text-right" style="{{ $dangerCellStyle }}">{{ $fmtQty($row->expected_stock) }}</td>
+                                        <td class="text-right" style="{{ $dangerCellStyle }}">{{ $fmtQty($row->ledger_stock) }}</td>
+                                        <td class="text-right font-weight-bold" style="{{ $dangerCellStyle }}">{{ $fmtQty($row->stock_difference) }}</td>
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="10" class="text-center">No stock audit data found.</td>
+                                        <td colspan="11" class="text-center">No stock audit data found.</td>
                                     </tr>
                                 @endforelse
                             </tbody>
                             @if (($rows->count() ?? 0) > 0)
                                 <tfoot>
+                                    @foreach ($totals as $total)
                                     <tr class="font-weight-bold bg-light">
-                                        <td colspan="2">Totals</td>
-                                        <td class="text-right">{{ number_format((float) ($totals['available_stock'] ?? 0), 2) }}</td>
-                                        <td class="text-right">{{ number_format((float) ($totals['total_purchased'] ?? 0), 2) }}</td>
-                                        <td class="text-right">{{ number_format((float) ($totals['total_sold'] ?? 0), 2) }}</td>
-                                        <td class="text-right">{{ number_format((float) ($totals['total_sale_return'] ?? 0), 2) }}</td>
-                                        <td class="text-right">{{ number_format((float) ($totals['total_purchase_return'] ?? 0), 2) }}</td>
-                                        <td class="text-right">{{ number_format((float) ($totals['expected_stock'] ?? 0), 2) }}</td>
-                                        <td class="text-right">{{ number_format((float) ($totals['ledger_stock'] ?? 0), 2) }}</td>
-                                        <td class="text-right">{{ number_format((float) ($totals['stock_difference'] ?? 0), 2) }}</td>
+                                        <td colspan="2">Total ({{ $total['unit'] }})</td>
+                                        <td>{{ $total['unit'] }}</td>
+                                        <td class="text-right">{{ \App\Models\Product::formatQuantityForUnit($total['available_stock'], $total['unit']) }}</td>
+                                        <td class="text-right">{{ \App\Models\Product::formatQuantityForUnit($total['total_purchased'], $total['unit']) }}</td>
+                                        <td class="text-right">{{ \App\Models\Product::formatQuantityForUnit($total['total_sold'], $total['unit']) }}</td>
+                                        <td class="text-right">{{ \App\Models\Product::formatQuantityForUnit($total['total_sale_return'], $total['unit']) }}</td>
+                                        <td class="text-right">{{ \App\Models\Product::formatQuantityForUnit($total['total_purchase_return'], $total['unit']) }}</td>
+                                        <td class="text-right">{{ \App\Models\Product::formatQuantityForUnit($total['expected_stock'], $total['unit']) }}</td>
+                                        <td class="text-right">{{ \App\Models\Product::formatQuantityForUnit($total['ledger_stock'], $total['unit']) }}</td>
+                                        <td class="text-right">{{ \App\Models\Product::formatQuantityForUnit($total['stock_difference'], $total['unit']) }}</td>
                                     </tr>
+                                    @endforeach
                                 </tfoot>
                             @endif
                         </table>

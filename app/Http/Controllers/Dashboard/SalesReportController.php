@@ -330,12 +330,13 @@ class SalesReportController extends Controller
             ->whereIn('order_id', $orderIds)
             ->select(
                 'order_details.product_id',
+                'order_details.unit',
                 DB::raw('SUM(order_details.quantity) as total_quantity'),
                 DB::raw('SUM(order_details.total) as total_revenue'),
                 DB::raw('SUM(order_details.quantity * COALESCE(COALESCE(NULLIF(order_details.cost_per_unit, 0), products.buying_price), 0)) as total_cost'),
                 DB::raw('COUNT(DISTINCT order_details.order_id) as order_count')
             )
-            ->groupBy('order_details.product_id');
+            ->groupBy('order_details.product_id', 'order_details.unit');
 
         // Apply product filter if provided
         $selectedProductId = $request->input('product_id');
@@ -352,7 +353,10 @@ class SalesReportController extends Controller
         if ($selectedProductId) {
             $summaryQuery->where('product_id', $selectedProductId);
         }
-        $totalQuantity = $summaryQuery->sum('quantity');
+        $quantityByUnit = (clone $summaryQuery)
+            ->select('unit', DB::raw('SUM(quantity) as total_quantity'))
+            ->groupBy('unit')
+            ->get();
         $totalRevenue = (clone $summaryQuery)->sum('total');
 
         // Total cost (same fallback: cost_per_unit or product.buying_price) for total profit
@@ -401,7 +405,7 @@ class SalesReportController extends Controller
             'shopFilter',
             'productSales',
             'totalProducts',
-            'totalQuantity',
+            'quantityByUnit',
             'totalRevenue',
             'totalProfit',
             'selectedProductId',

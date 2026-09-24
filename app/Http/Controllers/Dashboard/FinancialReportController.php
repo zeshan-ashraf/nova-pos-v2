@@ -295,6 +295,7 @@ class FinancialReportController extends Controller
                 'products.product_name',
                 'products.product_code',
                 'order_details.quantity',
+                'order_details.unit',
                 'order_details.unitcost as unit_sell_price',
                 'order_details.total as line_revenue',
                 DB::raw('COALESCE(order_details.cost_per_unit, 0) as cost_per_unit_used'),

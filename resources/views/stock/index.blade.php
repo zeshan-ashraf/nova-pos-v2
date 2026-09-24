@@ -84,7 +84,7 @@
                             <td>{{ $product->supplier ? $product->supplier->name : 'N/A' }}</td>
                             <td>{{ $product->selling_price }}</td>
                             <td>
-                                <span class="btn btn-warning text-white mr-2">{{ $product->product_store }}</span>
+                                <span class="btn btn-warning text-white mr-2">{{ $product->formattedQuantity() }} {{ $product->stockUnitLabel() }}</span>
                             </td>
                         </tr>
 

@@ -67,11 +67,11 @@
                         <div class="row align-items-end">
                             <div class="col-md-2">
                                 <label for="min_quantity" class="form-label">Min qty</label>
-                                <input type="number" class="form-control" name="min_quantity" id="min_quantity" placeholder="0" min="0">
+                                <input type="number" class="form-control" name="min_quantity" id="min_quantity" placeholder="0" min="0" step="0.001">
                             </div>
                             <div class="col-md-2">
                                 <label for="max_quantity" class="form-label">Max qty</label>
-                                <input type="number" class="form-control" name="max_quantity" id="max_quantity" placeholder="" min="0">
+                                <input type="number" class="form-control" name="max_quantity" id="max_quantity" placeholder="" min="0" step="0.001">
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">&nbsp;</label>
@@ -112,6 +112,7 @@
                                     <th>Code</th>
                                     <th>Category</th>
                                     <th class="text-right">Qty</th>
+                                    <th>Unit</th>
                                     <th class="text-right">Buying</th>
                                     <th class="text-right">Selling</th>
                                     <th class="text-right">Cost value</th>
@@ -153,7 +154,7 @@
     function renderTable(data) {
         reportBody.innerHTML = '';
         if (!data.data || data.data.length === 0) {
-            reportBody.innerHTML = '<tr><td colspan="9" class="text-center">No products match the filters.</td></tr>';
+            reportBody.innerHTML = '<tr><td colspan="10" class="text-center">No products match the filters.</td></tr>';
             return;
         }
         data.data.forEach(function(row) {
@@ -163,6 +164,7 @@
                 '<td>' + (row.sku || '–') + '</td>' +
                 '<td>' + (row.category || '–') + '</td>' +
                 '<td class="text-right">' + (row.quantity ?? '–') + '</td>' +
+                '<td>' + (row.unit || '–') + '</td>' +
                 '<td class="text-right">' + (row.buying_price ?? '–') + '</td>' +
                 '<td class="text-right">' + (row.selling_price ?? '–') + '</td>' +
                 '<td class="text-right">' + (row.stock_cost_value ?? '–') + '</td>' +

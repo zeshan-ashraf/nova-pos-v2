@@ -127,11 +127,12 @@ class PurchaseReportController extends Controller
             ->whereIn('purchase_id', $purchaseIds)
             ->select(
                 'product_id',
+                'unit',
                 DB::raw('SUM(quantity) as total_quantity'),
                 DB::raw('SUM(total) as total_amount'),
                 DB::raw('COUNT(DISTINCT purchase_id) as purchase_count')
             )
-            ->groupBy('product_id');
+            ->groupBy('product_id', 'unit');
 
         // Apply product filter if provided
         $selectedProductId = $request->input('product_id');
@@ -148,7 +149,10 @@ class PurchaseReportController extends Controller
         if ($selectedProductId) {
             $summaryQuery->where('product_id', $selectedProductId);
         }
-        $totalQuantity = $summaryQuery->sum('quantity');
+        $quantityByUnit = (clone $summaryQuery)
+            ->select('unit', DB::raw('SUM(quantity) as total_quantity'))
+            ->groupBy('unit')
+            ->get();
         $totalAmount = (clone $summaryQuery)->sum('total');
 
         // Get total count for pagination (without ORDER BY to avoid SQL errors)
@@ -185,7 +189,7 @@ class PurchaseReportController extends Controller
             'shopFilter',
             'productPurchases',
             'totalProducts',
-            'totalQuantity',
+            'quantityByUnit',
             'totalAmount',
             'selectedProductId',
             'selectedProduct',

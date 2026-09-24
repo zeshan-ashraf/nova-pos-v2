@@ -110,15 +110,49 @@ class Product extends Model
             $qty = 0;
         }
 
-        $formatted = app(ProductUnitValidator::class)->formatQuantity($qty);
+        return self::formatQuantityForUnit($qty, $this->unit);
+    }
 
-        if ($this->isPiece()) {
+    /**
+     * Piece stays a whole number. Kg stays three decimal places. Used by reports.
+     */
+    public static function formatQuantityForUnit(mixed $quantity, ?string $unit): string
+    {
+        $formatted = app(ProductUnitValidator::class)->formatQuantity($quantity ?? 0);
+        $resolved = in_array($unit, self::allowedUnits(), true) ? $unit : self::UNIT_PIECE;
+
+        if ($resolved === self::UNIT_PIECE) {
             $trimmed = preg_replace('/\.0+$/', '', $formatted);
 
             return ($trimmed === null || $trimmed === '') ? '0' : $trimmed;
         }
 
         return $formatted;
+    }
+
+    public static function quantityUnitLabel(?string $unit): string
+    {
+        return $unit === self::UNIT_KG ? 'kg' : 'pieces';
+    }
+
+    public static function displayQuantityWithUnit(mixed $quantity, ?string $unit): string
+    {
+        return self::formatQuantityForUnit($quantity, $unit).' '.self::quantityUnitLabel($unit);
+    }
+
+    /**
+     * Stock value = quantity × unit price. Quantity stays decimal; money is rounded to 2 places.
+     */
+    public static function moneyFromQuantity(mixed $quantity, mixed $unitPrice): string
+    {
+        $qty = app(ProductUnitValidator::class)->formatQuantity($quantity ?? '0');
+        $price = number_format(is_numeric($unitPrice) ? (float) $unitPrice : 0, 4, '.', '');
+        $raw = bcmul($qty, $price, 6);
+        $negative = str_starts_with($raw, '-');
+        $absolute = ltrim($raw, '+-');
+        $rounded = bcadd($absolute, '0.005', 2);
+
+        return ($negative ? '-' : '').$rounded;
     }
 
     public function unitLabel(): string

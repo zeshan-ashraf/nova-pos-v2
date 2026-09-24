@@ -97,7 +97,13 @@
                     <div class="card">
                         <div class="card-body">
                             <p class="text-muted mb-1">Total Quantity Purchased</p>
-                            <h4 class="mb-0">{{ number_format($totalQuantity, 0) }}</h4>
+                            <h4 class="mb-0">
+                                @forelse($quantityByUnit as $bucket)
+                                    {{ \App\Models\Product::displayQuantityWithUnit($bucket->total_quantity, $bucket->unit) }}@if(!$loop->last), @endif
+                                @empty
+                                    0
+                                @endforelse
+                            </h4>
                         </div>
                     </div>
                 </div>
@@ -156,9 +162,17 @@
                                 @forelse($productPurchases as $productPurchase)
                                 @php
                                     $product = $productPurchase->product;
-                                    $avgPrice = $productPurchase->total_quantity > 0 
-                                        ? $productPurchase->total_amount / $productPurchase->total_quantity 
-                                        : 0;
+                                    $lineUnit = $productPurchase->unit ?: ($product->unit ?? \App\Models\Product::UNIT_PIECE);
+                                    $avgPrice = app(\App\Support\ProductUnitValidator::class)->compare(
+                                        app(\App\Support\ProductUnitValidator::class)->formatQuantity($productPurchase->total_quantity),
+                                        '0'
+                                    ) > 0
+                                        ? bcdiv(
+                                            number_format((float) $productPurchase->total_amount, 4, '.', ''),
+                                            app(\App\Support\ProductUnitValidator::class)->formatQuantity($productPurchase->total_quantity),
+                                            2
+                                        )
+                                        : '0.00';
                                     // Get shop from product
                                     $shopName = 'N/A';
                                     if ($product && $product->shop) {
@@ -175,7 +189,7 @@
                                     <td>{{ $product->product_name ?? 'N/A' }}</td>
                                     <td>{{ $product->product_code ?? 'N/A' }}</td>
                                     <td>{{ $shopName }}</td>
-                                    <td>{{ number_format($productPurchase->total_quantity, 0) }}</td>
+                                    <td>{{ \App\Models\Product::displayQuantityWithUnit($productPurchase->total_quantity, $lineUnit) }}</td>
                                     <td>{{ number_format($productPurchase->total_amount, 2) }}</td>
                                     <td>{{ $productPurchase->purchase_count }}</td>
                                     <td>{{ number_format($avgPrice, 2) }}</td>

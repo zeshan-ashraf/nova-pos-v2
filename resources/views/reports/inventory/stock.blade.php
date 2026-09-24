@@ -26,14 +26,15 @@
         #stockReportTable { width: 100% !important; min-width: 100% !important; max-width: 100% !important; table-layout: fixed !important; box-sizing: border-box !important; }
         #stockReportTable th, #stockReportTable td { border: 1px solid #dee2e6 !important; box-sizing: border-box !important; }
         #stockReportTable th:nth-child(1), #stockReportTable td:nth-child(1) { width: 4% !important; }
-        #stockReportTable th:nth-child(2), #stockReportTable td:nth-child(2) { width: 20% !important; }
-        #stockReportTable th:nth-child(3), #stockReportTable td:nth-child(3) { width: 10% !important; }
-        #stockReportTable th:nth-child(4), #stockReportTable td:nth-child(4) { width: 12% !important; }
+        #stockReportTable th:nth-child(2), #stockReportTable td:nth-child(2) { width: 18% !important; }
+        #stockReportTable th:nth-child(3), #stockReportTable td:nth-child(3) { width: 9% !important; }
+        #stockReportTable th:nth-child(4), #stockReportTable td:nth-child(4) { width: 11% !important; }
         #stockReportTable th:nth-child(5), #stockReportTable td:nth-child(5) { width: 8% !important; }
-        #stockReportTable th:nth-child(6), #stockReportTable td:nth-child(6) { width: 10% !important; }
-        #stockReportTable th:nth-child(7), #stockReportTable td:nth-child(7) { width: 12% !important; }
-        #stockReportTable th:nth-child(8), #stockReportTable td:nth-child(8) { width: 12% !important; }
-        #stockReportTable th:nth-child(9), #stockReportTable td:nth-child(9) { width: 12% !important; }
+        #stockReportTable th:nth-child(6), #stockReportTable td:nth-child(6) { width: 8% !important; }
+        #stockReportTable th:nth-child(7), #stockReportTable td:nth-child(7) { width: 10% !important; }
+        #stockReportTable th:nth-child(8), #stockReportTable td:nth-child(8) { width: 10% !important; }
+        #stockReportTable th:nth-child(9), #stockReportTable td:nth-child(9) { width: 11% !important; }
+        #stockReportTable th:nth-child(10), #stockReportTable td:nth-child(10) { width: 11% !important; }
         .badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
 </style>
@@ -197,6 +198,7 @@
                                     <th><a href="{{ $sortUrl('product_code') }}" class="text-decoration-none" style="color: #32BDEA;">Code @if($currentSort === 'product_code')<i class="ri-arrow-{{ $currentOrder === 'asc' ? 'up' : 'down' }}-line"></i>@endif</a></th>
                                     <th><a href="{{ $sortUrl('category') }}" class="text-decoration-none" style="color: #32BDEA;">Category @if($currentSort === 'category')<i class="ri-arrow-{{ $currentOrder === 'asc' ? 'up' : 'down' }}-line"></i>@endif</a></th>
                                     <th class="text-right"><a href="{{ $sortUrl('product_store') }}" class="text-decoration-none" style="color: #32BDEA;">Qty @if($currentSort === 'product_store')<i class="ri-arrow-{{ $currentOrder === 'asc' ? 'up' : 'down' }}-line"></i>@endif</a></th>
+                                    <th>Unit</th>
                                     <th class="text-right">Low threshold</th>
                                     <th>Status</th>
                                     <th class="text-right">Buying price</th>
@@ -206,19 +208,21 @@
                             <tbody>
                                 @forelse($products ?? [] as $product)
                                 @php
-                                    $qty = (int) $product->product_store;
-                                    $threshold = (int) ($product->low_stock_warning ?? 0);
-                                    $isOut = $qty <= 0;
-                                    $isLow = !$isOut && $threshold > 0 && $qty <= $threshold;
-                                    $value = $qty * (float) ($product->buying_price ?? 0);
+                                    $units = app(\App\Support\ProductUnitValidator::class);
+                                    $qtyRaw = $units->formatQuantity($product->product_store ?? 0);
+                                    $thresholdRaw = $units->formatQuantity($product->low_stock_warning ?? 0);
+                                    $isOut = $units->compare($qtyRaw, '0') <= 0;
+                                    $isLow = !$isOut && $units->compare($thresholdRaw, '0') > 0 && $units->compare($qtyRaw, $thresholdRaw) <= 0;
+                                    $value = \App\Models\Product::moneyFromQuantity($product->product_store ?? 0, $product->buying_price ?? 0);
                                 @endphp
                                 <tr>
                                     <td>{{ ($products->currentPage() - 1) * $products->perPage() + $loop->iteration }}</td>
                                     <td>{{ $product->product_name }}</td>
                                     <td>{{ $product->product_code ?? '–' }}</td>
                                     <td>{{ $product->category?->name ?? '–' }}</td>
-                                    <td class="text-right">{{ number_format($qty, 0) }}</td>
-                                    <td class="text-right">{{ number_format($threshold, 0) }}</td>
+                                    <td class="text-right">{{ $product->formattedQuantity() }}</td>
+                                    <td>{{ $product->unitLabel() }}</td>
+                                    <td class="text-right">{{ $product->formattedQuantity($product->low_stock_warning ?? 0) }}</td>
                                     <td>
                                         @if($isOut)
                                         <span class="badge bg-danger">Out of stock</span>
@@ -229,11 +233,11 @@
                                         @endif
                                     </td>
                                     <td class="text-right">{{ number_format($product->buying_price ?? 0, 2) }}</td>
-                                    <td class="text-right">{{ number_format($value, 2) }}</td>
+                                    <td class="text-right">{{ number_format((float) $value, 2) }}</td>
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="9" class="text-center">No products match the selected filters.</td>
+                                    <td colspan="10" class="text-center">No products match the selected filters.</td>
                                 </tr>
                                 @endforelse
                             </tbody>

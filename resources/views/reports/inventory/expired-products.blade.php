@@ -84,6 +84,7 @@
                                     <th>Code</th>
                                     <th>Category</th>
                                     <th class="text-right">Qty</th>
+                                    <th>Unit</th>
                                     <th>Expire date</th>
                                 </tr>
                             </thead>
@@ -94,12 +95,13 @@
                                     <td>{{ $product->product_name }}</td>
                                     <td>{{ $product->product_code ?? '–' }}</td>
                                     <td>{{ $product->same_shop_category?->name ?? '–' }}</td>
-                                    <td class="text-right">{{ number_format((int) ($product->product_store ?? 0), 0) }}</td>
+                                    <td class="text-right">{{ $product->formattedQuantity() }}</td>
+                                    <td>{{ $product->unitLabel() }}</td>
                                     <td>{{ $product->expire_date ? \Carbon\Carbon::parse($product->expire_date)->format('d M Y') : '–' }}</td>
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="6" class="text-center">No expired products for the selected filters.</td>
+                                    <td colspan="7" class="text-center">No expired products for the selected filters.</td>
                                 </tr>
                                 @endforelse
                             </tbody>

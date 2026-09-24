@@ -142,8 +142,10 @@ class InventoryReportController extends Controller
                         'Code',
                         'Reference',
                         'Type',
+                        'Unit',
                         'Qty IN',
                         'Qty OUT',
+                        'Signed Qty',
                         'Balance',
                     ]);
 
@@ -163,8 +165,10 @@ class InventoryReportController extends Controller
                                 $row['product_code'] ?? '',
                                 $row['reference'] ?? '',
                                 $row['movement_type'] ?? '',
+                                $row['unit'] ?? '',
                                 $row['qty_in'] ?? 0,
                                 $row['qty_out'] ?? 0,
+                                $row['signed_qty'] ?? 0,
                                 $row['balance'] ?? 0,
                             ]);
                         }

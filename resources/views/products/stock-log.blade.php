@@ -83,6 +83,7 @@
                                     <th>Date</th>
                                     <th>Reference</th>
                                     <th>Type</th>
+                                    <th>Unit</th>
                                     <th class="text-right">Qty IN</th>
                                     <th class="text-right">Qty OUT</th>
                                     <th class="text-right">Balance</th>
@@ -91,7 +92,7 @@
                             <tbody id="reportBody"></tbody>
                             <tfoot>
                                 <tr class="font-weight-bold bg-light">
-                                    <td colspan="3" class="text-right">Total</td>
+                                    <td colspan="4" class="text-right">Total</td>
                                     <td class="text-right" id="totalQtyIn">0</td>
                                     <td class="text-right" id="totalQtyOut">0</td>
                                     <td class="text-right" id="totalBalance">0</td>
@@ -173,12 +174,8 @@
         const totalQtyInEl = document.getElementById('totalQtyIn');
         const totalQtyOutEl = document.getElementById('totalQtyOut');
         const totalBalanceEl = document.getElementById('totalBalance');
-        let totalQtyIn = 0;
-        let totalQtyOut = 0;
-        let lastBalance = 0;
-
         if (!data.data || data.data.length === 0) {
-            reportBody.innerHTML = '<tr><td colspan="6" class="text-center">No movements found for this product.</td></tr>';
+            reportBody.innerHTML = '<tr><td colspan="7" class="text-center">No movements found for this product.</td></tr>';
             totalQtyInEl.textContent = '0';
             totalQtyOutEl.textContent = '0';
             totalBalanceEl.textContent = '0';
@@ -191,18 +188,17 @@
                 '<td>' + formatDate(row.date) + '</td>' +
                 '<td>' + formatReferenceCell(row) + '</td>' +
                 '<td>' + escapeHtml(row.movement_type || '-') + '</td>' +
+                '<td>' + escapeHtml(row.unit || '-') + '</td>' +
                 '<td class="text-right">' + (row.qty_in > 0 ? row.qty_in : '-') + '</td>' +
                 '<td class="text-right">' + (row.qty_out > 0 ? row.qty_out : '-') + '</td>' +
-                '<td class="text-right">' + (row.balance ?? '-') + '</td>';
+                '<td class="text-right">' + (row.balance != null ? row.balance : '-') + '</td>';
             reportBody.appendChild(tr);
-
-            totalQtyIn += parseFloat(row.qty_in || 0);
-            totalQtyOut += parseFloat(row.qty_out || 0);
-            lastBalance = parseFloat(row.balance || 0);
         });
-        totalQtyInEl.textContent = String(totalQtyIn);
-        totalQtyOutEl.textContent = String(totalQtyOut);
-        totalBalanceEl.textContent = String(lastBalance);
+        var totals = (data.meta && data.meta.movement_totals) ? data.meta.movement_totals : [];
+        totalQtyInEl.textContent = totals.map(function (t) { return t.qty_in; }).join(', ') || '0';
+        totalQtyOutEl.textContent = totals.map(function (t) { return t.qty_out; }).join(', ') || '0';
+        var last = data.data[data.data.length - 1];
+        totalBalanceEl.textContent = last && last.balance != null ? (last.balance + ' ' + (last.unit === 'kg' ? 'kg' : 'pieces')) : '-';
     }
 
     function renderPagination(meta) {

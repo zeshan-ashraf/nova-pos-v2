@@ -2,6 +2,8 @@
 
 namespace App\Services\Reports;
 
+use App\Models\Product;
+use App\Support\ProductUnitValidator;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -74,6 +76,8 @@ class StockMovementReportService
                     ELSE NULL
                 END AS ref_party_name,
                 COALESCE(sl.qty, 0) AS qty,
+                sl.stock_qty AS signed_qty,
+                COALESCE(sl.unit, 'piece') AS unit,
                 CASE WHEN sl.direction = 'in' THEN COALESCE(sl.qty, 0) ELSE 0 END AS qty_in,
                 CASE WHEN sl.direction = 'out' THEN COALESCE(sl.qty, 0) ELSE 0 END AS qty_out,
                 SUM(
@@ -107,8 +111,28 @@ class StockMovementReportService
             $rows = $this->getRowsWithoutWindow($where, $bindings, $perPage, $offset, $orderByClause);
         }
 
+        $units = app(ProductUnitValidator::class);
         $data = [];
+        $totals = [];
         foreach ($rows as $row) {
+            $unit = in_array($row->unit ?? null, Product::allowedUnits(), true)
+                ? $row->unit
+                : Product::UNIT_PIECE;
+            $qtyIn = Product::formatQuantityForUnit($row->qty_in ?? 0, $unit);
+            $qtyOut = Product::formatQuantityForUnit($row->qty_out ?? 0, $unit);
+            $balance = Product::formatQuantityForUnit($row->balance ?? 0, $unit);
+            $signed = $row->signed_qty !== null
+                ? $units->formatQuantity($row->signed_qty)
+                : ($units->compare($units->formatQuantity($row->qty_out ?? 0), '0') > 0
+                    ? $units->subtract('0', $units->formatQuantity($row->qty ?? 0))
+                    : $units->formatQuantity($row->qty ?? 0));
+
+            if (! isset($totals[$unit])) {
+                $totals[$unit] = ['qty_in' => '0.000', 'qty_out' => '0.000'];
+            }
+            $totals[$unit]['qty_in'] = $units->add($totals[$unit]['qty_in'], $units->formatQuantity($row->qty_in ?? 0));
+            $totals[$unit]['qty_out'] = $units->add($totals[$unit]['qty_out'], $units->formatQuantity($row->qty_out ?? 0));
+
             $data[] = [
                 'id'            => (int) $row->id,
                 'product_id'    => (int) $row->product_id,
@@ -127,19 +151,31 @@ class StockMovementReportService
                 ),
                 'reference_url' => $this->referenceUrl($row->movement_type ?? null, $row->source_id ?? null),
                 'movement_type' => $row->movement_type ?? null,
-                'qty_in'        => (int) ($row->qty_in ?? 0),
-                'qty_out'       => (int) ($row->qty_out ?? 0),
-                'balance'       => (int) ($row->balance ?? 0),
+                'unit'          => $unit,
+                'qty_in'        => $qtyIn,
+                'qty_out'       => $qtyOut,
+                'signed_qty'    => Product::formatQuantityForUnit($signed, $unit),
+                'balance'       => $balance,
+            ];
+        }
+
+        $movementTotals = [];
+        foreach ($totals as $unit => $bucket) {
+            $movementTotals[] = [
+                'unit' => $unit,
+                'qty_in' => Product::displayQuantityWithUnit($bucket['qty_in'], $unit),
+                'qty_out' => Product::displayQuantityWithUnit($bucket['qty_out'], $unit),
             ];
         }
 
         return [
             'data' => $data,
             'meta' => [
-                'total'        => $total,
-                'per_page'     => $perPage,
-                'current_page' => $page,
-                'last_page'    => $lastPage,
+                'total'            => $total,
+                'per_page'         => $perPage,
+                'current_page'     => $page,
+                'last_page'        => $lastPage,
+                'movement_totals'  => $movementTotals,
             ],
         ];
     }
@@ -188,6 +224,8 @@ class StockMovementReportService
                     ELSE NULL
                 END AS ref_party_name,
                 COALESCE(sl.qty, 0) AS qty,
+                sl.stock_qty AS signed_qty,
+                COALESCE(sl.unit, 'piece') AS unit,
                 CASE WHEN sl.direction = 'in' THEN COALESCE(sl.qty, 0) ELSE 0 END AS qty_in,
                 CASE WHEN sl.direction = 'out' THEN COALESCE(sl.qty, 0) ELSE 0 END AS qty_out
             FROM stock_logs sl
@@ -207,12 +245,14 @@ class StockMovementReportService
         ";
         $rows = DB::select($sql, array_merge($bindings, [$perPage, $offset]));
 
+        $unitsFallback = app(ProductUnitValidator::class);
         // Running balance must follow the same order as the result rows are returned/displayed.
         $running = [];
         foreach ($rows as $r) {
             $key = ((int) $r->product_id) . '|' . (string) ($r->shop_id ?? 0);
-            $delta = strtolower((string) $r->direction) === 'in' ? (int) $r->qty : -(int) $r->qty;
-            $running[$key] = ($running[$key] ?? 0) + $delta;
+            $qty = $unitsFallback->formatQuantity($r->qty ?? 0);
+            $delta = strtolower((string) $r->direction) === 'in' ? $qty : $unitsFallback->subtract('0', $qty);
+            $running[$key] = $unitsFallback->add($running[$key] ?? '0', $delta);
             $r->balance = $running[$key];
         }
         // Return in the same order as query/display.

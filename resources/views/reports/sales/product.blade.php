@@ -108,7 +108,13 @@
                             </div>
                             <div class="flex-grow-1 min-w-0">
                                 <p class="text-muted mb-0 small font-weight-500">Total Quantity Sold</p>
-                                <h4 class="mb-0 font-weight-bold text-dark">{{ number_format($totalQuantity, 0) }}</h4>
+                                <h4 class="mb-0 font-weight-bold text-dark">
+                                    @forelse($quantityByUnit as $bucket)
+                                        {{ \App\Models\Product::displayQuantityWithUnit($bucket->total_quantity, $bucket->unit) }}@if(!$loop->last), @endif
+                                    @empty
+                                        0
+                                    @endforelse
+                                </h4>
                             </div>
                         </div>
                     </div>
@@ -188,9 +194,11 @@
                                 @forelse($productSales as $productSale)
                                 @php
                                     $product = $productSale->product;
-                                    $avgPrice = $productSale->total_quantity > 0 
-                                        ? $productSale->total_revenue / $productSale->total_quantity 
-                                        : 0;
+                                    $lineUnit = $productSale->unit ?: ($product->unit ?? \App\Models\Product::UNIT_PIECE);
+                                    $qtyScaled = app(\App\Support\ProductUnitValidator::class)->formatQuantity($productSale->total_quantity);
+                                    $avgPrice = app(\App\Support\ProductUnitValidator::class)->compare($qtyScaled, '0') > 0
+                                        ? bcdiv(number_format((float) $productSale->total_revenue, 4, '.', ''), $qtyScaled, 2)
+                                        : '0.00';
                                     $totalCost = (float) ($productSale->total_cost ?? 0);
                                     $profit = (float) ($productSale->total_revenue ?? 0) - $totalCost;
                                     // Get shop from product
@@ -209,7 +217,7 @@
                                     <td>{{ $product->product_name ?? 'N/A' }}</td>
                                     <td>{{ $product->product_code ?? 'N/A' }}</td>
                                     <td>{{ $shopName }}</td>
-                                    <td>{{ number_format($productSale->total_quantity, 0) }}</td>
+                                    <td>{{ \App\Models\Product::displayQuantityWithUnit($productSale->total_quantity, $lineUnit) }}</td>
                                     <td>{{ number_format($productSale->total_revenue, 2) }}</td>
                                     <td>{{ number_format($totalCost, 2) }}</td>
                                     <td>{{ number_format($profit, 2) }}</td>

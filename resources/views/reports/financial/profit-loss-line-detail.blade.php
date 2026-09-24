@@ -78,7 +78,7 @@
                             <td>{{ \Carbon\Carbon::parse($row->order_date)->format('Y-m-d') }}</td>
                             <td>{{ $row->product_name ?? '—' }}</td>
                             <td>{{ $row->product_code ?? '—' }}</td>
-                            <td class="text-right">{{ (int) $row->quantity }}</td>
+                            <td class="text-right">{{ \App\Models\Product::displayQuantityWithUnit($row->quantity, $row->unit ?? null) }}</td>
                             <td class="text-right">{{ $fmt($row->unit_sell_price) }}</td>
                             <td class="text-right">{{ $fmt($row->cost_per_unit_used) }}</td>
                             <td class="text-right">{{ $fmt($row->line_revenue) }}</td>

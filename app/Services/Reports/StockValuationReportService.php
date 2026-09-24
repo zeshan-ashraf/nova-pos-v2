@@ -4,7 +4,7 @@ namespace App\Services\Reports;
 
 use App\Models\Category;
 use App\Models\Product;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use App\Support\ProductUnitValidator;
 use Illuminate\Support\Collection;
 
 /**
@@ -45,6 +45,7 @@ class StockValuationReportService
                 'products.category_id',
                 'products.shop_id',
                 self::QTY_COLUMN . ' as quantity',
+                'products.unit',
                 'products.buying_price',
                 'products.selling_price',
                 'products.status',
@@ -103,11 +104,11 @@ class StockValuationReportService
         }
 
         if (isset($filters['min_quantity']) && $filters['min_quantity'] !== '' && $filters['min_quantity'] !== null) {
-            $query->whereRaw('COALESCE(products.' . self::QTY_COLUMN . ', 0) >= ?', [(int) $filters['min_quantity']]);
+            $query->whereRaw('COALESCE(products.' . self::QTY_COLUMN . ', 0) >= ?', [$this->decimalQuantity($filters['min_quantity'])]);
         }
 
         if (isset($filters['max_quantity']) && $filters['max_quantity'] !== '' && $filters['max_quantity'] !== null) {
-            $query->whereRaw('COALESCE(products.' . self::QTY_COLUMN . ', 0) <= ?', [(int) $filters['max_quantity']]);
+            $query->whereRaw('COALESCE(products.' . self::QTY_COLUMN . ', 0) <= ?', [$this->decimalQuantity($filters['max_quantity'])]);
         }
 
         if (empty($filters['include_zero_or_negative'])) {
@@ -125,12 +126,8 @@ class StockValuationReportService
     {
         $rows = [];
         foreach ($items as $row) {
-            $qty = (int) ($row->quantity ?? $row->{self::QTY_COLUMN} ?? 0);
-            $buying = (float) ($row->buying_price ?? 0);
-            $selling = (float) ($row->selling_price ?? 0);
-            $stockCost = (float) ($row->stock_cost_value ?? 0);
-            $stockSale = (float) ($row->stock_sale_value ?? 0);
-            $profitPotential = (float) ($row->profit_potential ?? 0);
+            $unit = $row->unit ?: Product::UNIT_PIECE;
+            $qty = Product::formatQuantityForUnit($row->quantity ?? $row->{self::QTY_COLUMN} ?? 0, $unit);
 
             $categoryName = $row->category?->name ?? null;
 
@@ -138,16 +135,36 @@ class StockValuationReportService
                 'product_id'        => (int) $row->id,
                 'product_name'     => $row->product_name ?? '',
                 'sku'               => $row->product_code ?? null,
+                'unit'              => $unit,
                 'quantity'          => $qty,
-                'buying_price'      => round($buying, 2),
-                'selling_price'     => round($selling, 2),
-                'stock_cost_value'  => round($stockCost, 2),
-                'stock_sale_value'  => round($stockSale, 2),
-                'profit_potential'  => round($profitPotential, 2),
+                'quantity_with_unit' => Product::displayQuantityWithUnit($row->quantity ?? 0, $unit),
+                'buying_price'      => number_format((float) ($row->buying_price ?? 0), 2, '.', ''),
+                'selling_price'     => number_format((float) ($row->selling_price ?? 0), 2, '.', ''),
+                'stock_cost_value'  => Product::moneyFromQuantity($row->quantity ?? 0, $row->buying_price ?? 0),
+                'stock_sale_value'  => Product::moneyFromQuantity($row->quantity ?? 0, $row->selling_price ?? 0),
+                'profit_potential'  => $this->moneyDifference($row->selling_price ?? 0, $row->buying_price ?? 0, $row->quantity ?? 0),
                 'category'         => $categoryName,
             ];
         }
         return $rows;
+    }
+
+    private function decimalQuantity(mixed $value): string
+    {
+        $units = app(ProductUnitValidator::class);
+        $normalized = $units->normalizeQuantity($value);
+
+        return $normalized === null ? '0.000' : $units->formatQuantity($normalized);
+    }
+
+    private function moneyDifference(mixed $selling, mixed $buying, mixed $quantity): string
+    {
+        $sale = Product::moneyFromQuantity($quantity, $selling);
+        $cost = Product::moneyFromQuantity($quantity, $buying);
+        $negative = bccomp($sale, $cost, 2) < 0;
+        $diff = $negative ? bcsub($cost, $sale, 2) : bcsub($sale, $cost, 2);
+
+        return ($negative ? '-' : '').$diff;
     }
 
     /**

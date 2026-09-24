@@ -28,6 +28,7 @@ SELECT
     p.product_name,
     p.product_code,
     p.product_store AS available_stock,
+    COALESCE(p.unit, 'piece') AS unit,
     p.shop_id,
 
     COALESCE(pur.total_purchased, 0) AS total_purchased,
@@ -127,16 +128,7 @@ SQL;
             return $this->exportCsv($rows);
         }
 
-        $totals = [
-            'available_stock' => $rows->sum('available_stock'),
-            'total_purchased' => $rows->sum('total_purchased'),
-            'total_sold' => $rows->sum('total_sold'),
-            'total_sale_return' => $rows->sum('total_sale_return'),
-            'total_purchase_return' => $rows->sum('total_purchase_return'),
-            'expected_stock' => $rows->sum('expected_stock'),
-            'ledger_stock' => $rows->sum('ledger_stock'),
-            'stock_difference' => $rows->sum('stock_difference'),
-        ];
+        $totals = $this->totalsByUnit($rows);
 
         return view('reports.inventory.stock_audit', [
             'rows' => $rows,
@@ -158,6 +150,7 @@ SQL;
             fputcsv($out, [
                 'Product Name',
                 'Code',
+                'Unit',
                 'Available Stock',
                 'Total Purchased',
                 'Total Sold',
@@ -169,22 +162,62 @@ SQL;
             ]);
 
             foreach ($rows as $row) {
+                $unit = $row->unit ?? 'piece';
                 fputcsv($out, [
                     $row->product_name,
                     $row->product_code,
-                    $row->available_stock,
-                    $row->total_purchased,
-                    $row->total_sold,
-                    $row->total_sale_return,
-                    $row->total_purchase_return,
-                    $row->expected_stock,
-                    $row->ledger_stock,
-                    $row->stock_difference,
+                    $unit,
+                    \App\Models\Product::formatQuantityForUnit($row->available_stock, $unit),
+                    \App\Models\Product::formatQuantityForUnit($row->total_purchased, $unit),
+                    \App\Models\Product::formatQuantityForUnit($row->total_sold, $unit),
+                    \App\Models\Product::formatQuantityForUnit($row->total_sale_return, $unit),
+                    \App\Models\Product::formatQuantityForUnit($row->total_purchase_return, $unit),
+                    \App\Models\Product::formatQuantityForUnit($row->expected_stock, $unit),
+                    \App\Models\Product::formatQuantityForUnit($row->ledger_stock, $unit),
+                    \App\Models\Product::formatQuantityForUnit($row->stock_difference, $unit),
                 ]);
             }
 
             fclose($out);
         }, 200, $headers);
+    }
+
+    /**
+     * Quantity totals stay grouped by unit. A single cross-unit sum is not a quantity.
+     *
+     * @param \Illuminate\Support\Collection<int, object> $rows
+     * @return array<int, array{unit: string, available_stock: string, total_purchased: string, total_sold: string, total_sale_return: string, total_purchase_return: string, expected_stock: string, ledger_stock: string, stock_difference: string}>
+     */
+    private function totalsByUnit($rows): array
+    {
+        $units = app(\App\Support\ProductUnitValidator::class);
+        $buckets = [];
+        foreach ($rows as $row) {
+            $unit = in_array($row->unit ?? null, \App\Models\Product::allowedUnits(), true)
+                ? $row->unit
+                : \App\Models\Product::UNIT_PIECE;
+            if (! isset($buckets[$unit])) {
+                $buckets[$unit] = [
+                    'unit' => $unit,
+                    'available_stock' => '0',
+                    'total_purchased' => '0',
+                    'total_sold' => '0',
+                    'total_sale_return' => '0',
+                    'total_purchase_return' => '0',
+                    'expected_stock' => '0',
+                    'ledger_stock' => '0',
+                    'stock_difference' => '0',
+                ];
+            }
+            foreach (['available_stock', 'total_purchased', 'total_sold', 'total_sale_return', 'total_purchase_return', 'expected_stock', 'ledger_stock', 'stock_difference'] as $field) {
+                $buckets[$unit][$field] = $units->add(
+                    $units->formatQuantity($buckets[$unit][$field]),
+                    $units->formatQuantity($row->{$field} ?? 0)
+                );
+            }
+        }
+
+        return array_values($buckets);
     }
 }
 

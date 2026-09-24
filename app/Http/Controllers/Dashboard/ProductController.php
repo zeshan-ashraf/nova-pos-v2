@@ -641,7 +641,7 @@ class ProductController extends Controller
                 'Product Code' => $product->product_code,
                 'Product Garage' => $product->product_garage,
                 'Product Image' => $product->product_image,
-                'Stock' =>$product->product_store,
+                'Stock' => $product->formattedQuantity(),
                 'Buying Date' =>$product->buying_date,
                 'Expire Date' =>$product->expire_date,
                 'Buying Price' =>$product->buying_price,

@@ -451,13 +451,15 @@ class DashboardDataService
       ->whereRaw('COALESCE(product_store, 0) <= COALESCE(low_stock_warning, 10)')
       ->orderBy('product_store')
       ->limit($limit)
-      ->get(['id', 'product_name', 'product_code', 'product_store', 'low_stock_warning'])
+      ->get(['id', 'product_name', 'product_code', 'product_store', 'low_stock_warning', 'unit'])
       ->map(fn ($p) => [
         'id' => $p->id,
         'name' => $p->product_name,
         'code' => $p->product_code,
-        'stock' => (float) $p->product_store,
-        'threshold' => (int) ($p->low_stock_warning ?? 10),
+        'unit' => $p->unit ?: \App\Models\Product::UNIT_PIECE,
+        'stock' => $p->formattedQuantity(),
+        'threshold' => $p->formattedQuantity($p->low_stock_warning ?? '10'),
+        'stock_with_unit' => $p->formattedQuantity().' '.$p->stockUnitLabel(),
         'url' => route('products.edit', $p->id),
       ])
       ->all();
