@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Purchase;
 use App\Models\StockLog;
 use App\Support\InterShopTransferStatus;
+use App\Support\ProductUnitValidator;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -95,6 +96,7 @@ class BackfillChildTransferStockLogs extends Command
         $now = now();
         $createdAt = $purchase->created_at ?? $now;
 
+        $units = app(ProductUnitValidator::class);
         $existingCounts = StockLog::withoutGlobalScopes()
             ->where('shop_id', (int) $purchase->shop_id)
             ->where('source_type', 'purchase')
@@ -102,16 +104,19 @@ class BackfillChildTransferStockLogs extends Command
             ->where('direction', 'in')
             ->whereNull('deleted_at')
             ->get(['product_id', 'qty'])
-            ->groupBy(fn ($r): string => $this->groupKey((int) $r->product_id, (int) $r->qty))
+            ->groupBy(fn ($r): string => $this->groupKey((int) $r->product_id, $units->formatQuantity($r->qty ?? '0')))
             ->map->count();
 
         $desiredGroups = $purchase->purchaseDetails
-            ->filter(fn ($pd): bool => (int) $pd->quantity > 0)
-            ->map(function ($pd): array {
+            ->filter(fn ($pd): bool => $units->compare($units->formatQuantity($pd->quantity ?? '0'), '0') > 0)
+            ->map(function ($pd) use ($units): array {
+                $qty = $units->formatQuantity($pd->quantity ?? '0');
+
                 return [
-                    'k' => $this->groupKey((int) $pd->product_id, (int) $pd->quantity),
+                    'k' => $this->groupKey((int) $pd->product_id, $qty),
                     'product_id' => (int) $pd->product_id,
-                    'qty' => (int) $pd->quantity,
+                    'qty' => $qty,
+                    'unit' => $pd->unit ?: 'piece',
                     'price' => (float) ($pd->unitcost ?? 0),
                 ];
             })
@@ -133,6 +138,7 @@ class BackfillChildTransferStockLogs extends Command
                     'product_id' => $sample['product_id'],
                     'supplier_id' => (int) $purchase->supplier_id,
                     'qty' => $sample['qty'],
+                    'unit' => $sample['unit'],
                     'stock_qty' => $sample['qty'],
                     'direction' => 'in',
                     'source_type' => 'purchase',
@@ -147,7 +153,7 @@ class BackfillChildTransferStockLogs extends Command
         return $rows;
     }
 
-    private function groupKey(int $productId, int $qty): string
+    private function groupKey(int $productId, string $qty): string
     {
         return $productId.'|'.$qty;
     }

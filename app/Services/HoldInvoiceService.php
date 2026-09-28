@@ -28,11 +28,14 @@ class HoldInvoiceService
         private ProductUnitValidator $units,
     ) {}
 
-    public function availableStock(Product $product, float $addBackQty = 0): float
+    public function availableStock(Product $product, mixed $addBackQty = '0'): string
     {
-        $physical = (float) ($product->{self::STOCK_COLUMN} ?? 0);
+        $physical = $this->units->formatQuantity($product->{self::STOCK_COLUMN} ?? '0');
+        $addBack = $this->units->formatQuantity($addBackQty);
 
-        return max(0, $physical + $addBackQty);
+        $available = $this->units->add($physical, $addBack);
+
+        return $this->units->compare($available, '0') < 0 ? '0.000' : $available;
     }
 
     /**

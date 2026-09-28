@@ -22,6 +22,8 @@ class StockAuditController extends Controller
             ]);
         }
 
+        // One product has one unit, locked after the first history row. Each later
+        // snapshot is written from that same unit, so per-product sums are one unit.
         $query = <<<'SQL'
 SELECT 
     p.id AS product_id,

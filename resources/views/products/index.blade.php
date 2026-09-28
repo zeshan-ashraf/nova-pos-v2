@@ -177,7 +177,8 @@
                                         <button type="button" class="btn btn-primary mr-2 stock-adjust-btn" data-toggle="tooltip" data-placement="top" title="Stock Adjustment" data-original-title="Stock Adjustment"
                                             data-product-id="{{ $product->id }}"
                                             data-product-name="{{ e($product->product_name) }}"
-                                            data-current-stock="{{ $product->formattedQuantity() }}">
+                                            data-current-stock="{{ $product->formattedQuantity() }}"
+                                            data-unit="{{ $product->unit ?: 'piece' }}">
                                             <i class="ri-stack-line mr-0"></i>
                                         </button>
                                             <button type="submit" class="btn btn-warning mr-2 border-none" onclick="return confirm('Are you sure you want to delete this record?')" data-toggle="tooltip" data-placement="top" title="" data-original-title="Delete"><i class="ri-delete-bin-line mr-0"></i></button>
@@ -222,9 +223,10 @@
                         <label for="adjust-product-name">Product Name</label>
                         <input type="text" class="form-control" id="adjust-product-name" readonly>
                     </div>
+                    <input type="hidden" id="adjust-unit" value="piece">
                     <div class="form-group">
                         <label for="adjust-current-stock">Current Stock</label>
-                        <input type="number" class="form-control" id="adjust-current-stock" readonly>
+                        <input type="text" class="form-control" id="adjust-current-stock" readonly>
                     </div>
                     <div class="form-group">
                         <label for="adjustment_type">Adjustment Type <span class="text-danger">*</span></label>
@@ -240,7 +242,7 @@
                     </div>
                     <div class="form-group">
                         <label for="adjust-qty">Quantity <span class="text-danger">*</span></label>
-                        <input type="number" class="form-control" name="qty" id="adjust-qty" min="1" step="1" required placeholder="0">
+                        <input type="number" class="form-control" name="qty" id="adjust-qty" min="0.001" step="0.001" required placeholder="0">
                         <small class="form-text text-muted">For Damaged / Expired / Lost: must be &le; current stock.</small>
                     </div>
                     <div class="form-group">
@@ -291,12 +293,27 @@
         showError('');
     }
 
+    function adjustUnit() {
+        return document.getElementById('adjust-unit').value || 'piece';
+    }
+
+    function parseAdjustQty(value) {
+        var n = parseFloat(value);
+        return isNaN(n) ? NaN : n;
+    }
+
+    function formatAdjustQty(n) {
+        if (isNaN(n)) return '0';
+        if (adjustUnit() === 'kg') return n.toFixed(3);
+        return String(Math.round(n));
+    }
+
     function getCurrentStock() {
-        return parseInt(document.getElementById('adjust-current-stock').value, 10) || 0;
+        return parseAdjustQty(document.getElementById('adjust-current-stock').value);
     }
 
     function getQty() {
-        return parseInt(document.getElementById('adjust-qty').value, 10) || 0;
+        return parseAdjustQty(document.getElementById('adjust-qty').value);
     }
 
     function getType() {
@@ -308,14 +325,14 @@
         var qty = getQty();
         var type = getType();
         var projected = current;
-        if (type && qty > 0) {
+        if (type && !isNaN(qty) && qty > 0) {
             if (OUT_TYPES.indexOf(type) !== -1) {
                 projected = Math.max(0, current - qty);
             } else if (IN_TYPES.indexOf(type) !== -1) {
                 projected = current + qty;
             }
         }
-        document.getElementById('adjust-projected-stock').textContent = projected;
+        document.getElementById('adjust-projected-stock').textContent = formatAdjustQty(projected);
     }
 
     function validateForm() {
@@ -325,7 +342,14 @@
         var confirmed = document.getElementById('adjust-confirm').checked;
 
         if (!type) return { ok: false, msg: 'Please select an adjustment type.' };
-        if (!qty || qty < 1) return { ok: false, msg: 'Quantity must be greater than 0.' };
+        if (isNaN(qty) || qty <= 0) return { ok: false, msg: 'Quantity must be greater than 0.' };
+        if (adjustUnit() === 'kg') {
+            if (qty < 0.001) return { ok: false, msg: 'Kg quantity must be at least 0.001.' };
+            var fraction = String(document.getElementById('adjust-qty').value).split('.')[1] || '';
+            if (fraction.length > 3) return { ok: false, msg: 'Kg quantity can have at most 3 decimal places.' };
+        } else if (Math.round(qty) !== qty) {
+            return { ok: false, msg: 'Piece quantity must be a whole number.' };
+        }
         if (!reason) return { ok: false, msg: 'Reason / notes are required.' };
         if (!confirmed) return { ok: false, msg: 'Please confirm that you understand this will permanently affect stock.' };
 
@@ -350,9 +374,19 @@
             var id = this.getAttribute('data-product-id');
             var name = this.getAttribute('data-product-name');
             var stock = this.getAttribute('data-current-stock') || '0';
+            var unit = this.getAttribute('data-unit') || 'piece';
             document.getElementById('adjust-product-id').value = id;
             document.getElementById('adjust-product-name').value = name;
+            document.getElementById('adjust-unit').value = unit;
             document.getElementById('adjust-current-stock').value = stock;
+            var qtyInput = document.getElementById('adjust-qty');
+            if (unit === 'kg') {
+                qtyInput.min = '0.001';
+                qtyInput.step = '0.001';
+            } else {
+                qtyInput.min = '1';
+                qtyInput.step = '1';
+            }
             document.getElementById('adjustment_type').value = '';
             document.getElementById('adjust-qty').value = '';
             var now = new Date();

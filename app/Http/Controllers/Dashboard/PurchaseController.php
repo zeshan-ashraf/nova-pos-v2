@@ -1018,8 +1018,10 @@ class PurchaseController extends Controller
                                 ->lockForUpdate()
                                 ->first();
                             if ($product && $purchaseDetail->quantity > 0) {
-                                $current = (int) $product->product_store;
-                                if ($current < $purchaseDetail->quantity) {
+                                $units = app(\App\Support\ProductUnitValidator::class);
+                                $current = $units->formatQuantity($product->product_store ?? '0');
+                                $reverseQty = $units->formatQuantity($purchaseDetail->quantity);
+                                if ($units->compare($current, $reverseQty) < 0) {
                                     throw new \RuntimeException(
                                         'Cannot delete purchase: product "' . ($product->product_name ?? $product->id) . '" would have negative stock.'
                                     );

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Product;
 use App\Models\StockLog;
+use App\Support\ProductUnitValidator;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -98,8 +99,9 @@ class FixDuplicateStockLog extends Command
             return false;
         }
 
-        $qty = (int) $log->qty;
-        if ($qty < 0) {
+        $units = app(ProductUnitValidator::class);
+        $qty = $units->formatQuantity($log->qty ?? '0');
+        if ($units->compare($qty, '0') < 0) {
             $this->error("Invalid stock_log.qty ({$log->qty}) for id {$id}: expected non-negative integer.");
 
             return false;
@@ -112,10 +114,10 @@ class FixDuplicateStockLog extends Command
             return false;
         }
 
-        $currentStore = (int) ($product->product_store ?? 0);
+        $currentStore = $units->formatQuantity($product->product_store ?? '0');
         $newStore = $this->computeStockAfterReversal($currentStore, $qty, $direction);
 
-        if ($newStore < 0) {
+        if ($units->compare($newStore, '0') < 0) {
             $this->error(
                 "[{$id}] Reversal would make product_store negative (current={$currentStore}, qty={$qty}, direction={$direction}). Aborting."
             );
@@ -153,12 +155,13 @@ class FixDuplicateStockLog extends Command
                     ->lockForUpdate()
                     ->firstOrFail();
 
-                $q = (int) $lockedLog->qty;
+                $units = app(ProductUnitValidator::class);
+                $q = $units->formatQuantity($lockedLog->qty ?? '0');
                 $dir = strtolower((string) ($lockedLog->direction ?? ''));
-                $store = (int) ($lockedProduct->product_store ?? 0);
+                $store = $units->formatQuantity($lockedProduct->product_store ?? '0');
                 $reversed = $this->computeStockAfterReversal($store, $q, $dir);
 
-                if ($reversed < 0) {
+                if ($units->compare($reversed, '0') < 0) {
                     throw new \RuntimeException(
                         "Reversal would make product_store negative (current={$store}, qty={$q}, direction={$dir})."
                     );
@@ -184,12 +187,13 @@ class FixDuplicateStockLog extends Command
      * Reverse the effect this log originally had on stock.
      * "in" increased stock → reversal subtracts; "out" decreased stock → reversal adds.
      */
-    private function computeStockAfterReversal(int $currentStore, int $qty, string $direction): int
+    private function computeStockAfterReversal(string $currentStore, string $qty, string $direction): string
     {
+        $units = app(ProductUnitValidator::class);
         if ($direction === 'in') {
-            return $currentStore - $qty;
+            return $units->subtract($currentStore, $qty);
         }
 
-        return $currentStore + $qty;
+        return $units->add($currentStore, $qty);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Order;
 use App\Models\StockLog;
+use App\Support\ProductUnitValidator;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -91,17 +92,21 @@ class RebuildMotherSaleStockLogs extends Command
      */
     private function buildMissingRows(Order $order): array
     {
+        $units = app(ProductUnitValidator::class);
         $desiredGroups = $order->orderDetails
-            ->map(function ($d) use ($order): array {
+            ->map(function ($d) use ($order, $units): array {
+                $qty = $units->formatQuantity($d->quantity ?? '0');
+
                 return [
                     'k' => $this->groupKey(
                         (int) $d->product_id,
-                        (int) $d->quantity,
+                        $qty,
                         (float) ($d->cost_per_unit ?? 0),
                         (string) $order->order_date
                     ),
                     'product_id' => (int) $d->product_id,
-                    'qty' => (int) $d->quantity,
+                    'qty' => $qty,
+                    'unit' => $d->unit ?: 'piece',
                     'price' => (float) ($d->unitcost ?? 0),
                     'cost_per_unit' => (float) ($d->cost_per_unit ?? 0),
                 ];
@@ -118,7 +123,7 @@ class RebuildMotherSaleStockLogs extends Command
             ->map(function ($r): string {
                 return $this->groupKey(
                     (int) $r->product_id,
-                    (int) $r->qty,
+                    $units->formatQuantity($r->qty ?? '0'),
                     (float) ($r->cost_per_unit ?? 0),
                     (string) $r->adjustment_date
                 );
@@ -144,7 +149,8 @@ class RebuildMotherSaleStockLogs extends Command
                     'shop_id' => 1,
                     'product_id' => $sample['product_id'],
                     'qty' => $sample['qty'],
-                    'stock_qty' => $sample['qty'],
+                    'unit' => $sample['unit'],
+                    'stock_qty' => $units->subtract('0', $sample['qty']),
                     'direction' => 'out',
                     'source_type' => 'sale',
                     'source_id' => (string) $order->id,
@@ -161,7 +167,7 @@ class RebuildMotherSaleStockLogs extends Command
         return $rows;
     }
 
-    private function groupKey(int $productId, int $qty, float $costPerUnit, string $adjustmentDate): string
+    private function groupKey(int $productId, string $qty, float $costPerUnit, string $adjustmentDate): string
     {
         return implode('|', [
             $productId,

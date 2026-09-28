@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Order;
 use App\Models\OrderDetails;
 use App\Models\StockLog;
+use App\Support\ProductUnitValidator;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -99,12 +100,18 @@ class FixMissingSaleStockLogs extends Command
                     $adjustmentDate = $orderDate ? (Carbon::parse($orderDate)->format('Y-m-d H:i:s')) : null;
 
                     foreach ($details as $detail) {
+                        $units = app(ProductUnitValidator::class);
+                        $qty = $units->formatQuantity($detail->quantity ?? '0');
+                        if ($units->compare($qty, '0') <= 0) {
+                            continue;
+                        }
                         StockLog::create([
                             'shop_id'         => $order->shop_id,
                             'product_id'      => $detail->product_id,
                             'supplier_id'     => null,
-                            'qty'             => (int) $detail->quantity,
-                            'stock_qty'       => -(int) $detail->quantity,
+                            'qty'             => $qty,
+                            'unit'            => $detail->unit ?: 'piece',
+                            'stock_qty'       => $units->subtract('0', $qty),
                             'direction'       => 'out',
                             'source_type'     => 'sale',
                             'source_id'       => (string) $order->id,

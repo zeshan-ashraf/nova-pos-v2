@@ -18,6 +18,7 @@ use App\Models\SaleReturn;
 use App\Models\SaleReturnDetail;
 use App\Models\Shop;
 use App\Models\StockLog;
+use App\Support\ProductUnitValidator;
 use App\Models\Supplier;
 use Illuminate\Support\Facades\DB;
 
@@ -157,8 +158,9 @@ class ShopDataResetService
             if (!$mother) {
                 continue;
             }
-            $qty = (int) ($child->product_store ?? 0);
-            if ($qty <= 0) {
+            $units = app(ProductUnitValidator::class);
+            $qty = $units->formatQuantity($child->product_store ?? '0');
+            if ($units->compare($qty, '0') <= 0) {
                 continue;
             }
             Product::where('id', $mother->id)->increment('product_store', $qty);

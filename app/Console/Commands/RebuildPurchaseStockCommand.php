@@ -10,6 +10,7 @@ use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use App\Support\ProductUnitValidator;
 use Illuminate\Support\Facades\Log;
 
 class RebuildPurchaseStockCommand extends Command
@@ -190,14 +191,15 @@ class RebuildPurchaseStockCommand extends Command
 
     private function calculateSubtotalFromDetails(array $details): float
     {
-        $subtotal = 0.0;
+        $units = app(ProductUnitValidator::class);
+        $subtotal = '0.00';
         foreach ($details as $detail) {
-            $qty = (float) ($detail->quantity ?? 0);
-            $cost = $this->resolveCostPerUnit($detail);
-            $subtotal += ($qty * $cost);
+            $qty = $units->formatQuantity($detail->quantity ?? '0');
+            $cost = number_format($this->resolveCostPerUnit($detail), 4, '.', '');
+            $subtotal = bcadd($subtotal, bcmul($qty, $cost, 4), 2);
         }
 
-        return round($subtotal, 2);
+        return (float) $subtotal;
     }
 
     private function resolveCostPerUnit($detail): float
@@ -222,7 +224,11 @@ class RebuildPurchaseStockCommand extends Command
         foreach ($details as $detail) {
             $payloads[] = [
                 'id' => (int) $detail->id,
-                'total' => round(((float) ($detail->quantity ?? 0)) * $this->resolveCostPerUnit($detail), 2),
+                'total' => (float) bcmul(
+                    app(ProductUnitValidator::class)->formatQuantity($detail->quantity ?? '0'),
+                    number_format($this->resolveCostPerUnit($detail), 4, '.', ''),
+                    2
+                ),
             ];
         }
 
@@ -245,6 +251,7 @@ class RebuildPurchaseStockCommand extends Command
                 'shop_id' => $purchase->shop_id,
                 'product_id' => (int) $detail->product_id,
                 'qty' => $qty,
+                'unit' => $detail->unit ?: 'piece',
                 'stock_qty' => $qty,
                 'direction' => 'in',
                 'source_type' => 'purchase',
@@ -336,9 +343,10 @@ class RebuildPurchaseStockCommand extends Command
      */
     private function aggregateLedgerStocksForProducts(iterable $rows, array $productIds): array
     {
+        $units = app(ProductUnitValidator::class);
         $stocks = [];
         foreach ($productIds as $productId) {
-            $stocks[$productId] = 0;
+            $stocks[$productId] = '0.000';
         }
 
         foreach ($rows as $row) {
@@ -346,20 +354,24 @@ class RebuildPurchaseStockCommand extends Command
             if (! array_key_exists($productId, $stocks)) {
                 continue;
             }
-            $qty = $this->ledgerQtyMagnitude($row->qty ?? 0);
+            $qty = $units->formatQuantity($row->qty ?? '0');
             $sign = $this->stockSignBySourceType((string) ($row->source_type ?? ''));
-            $stocks[$productId] += $qty * $sign;
+            if ($sign > 0) {
+                $stocks[$productId] = $units->add($stocks[$productId], $qty);
+            } elseif ($sign < 0) {
+                $stocks[$productId] = $units->subtract($stocks[$productId], $qty);
+            }
         }
 
         return $stocks;
     }
 
     /**
-     * Ledger invariant: qty magnitude is abs(int); sign comes only from source_type via {@see stockSignBySourceType}.
+     * Ledger invariant: qty is a positive decimal; sign comes only from source_type.
      */
-    private function ledgerQtyMagnitude(mixed $qty): int
+    private function ledgerQtyMagnitude(mixed $qty): string
     {
-        return abs((int) ($qty ?? 0));
+        return app(ProductUnitValidator::class)->formatQuantity($qty ?? '0');
     }
 
     /**
@@ -388,7 +400,7 @@ class RebuildPurchaseStockCommand extends Command
 
         $preview = [];
         foreach ($products as $product) {
-            $preview[(int) $product->id] = (int) ($product->product_store ?? 0);
+            $preview[(int) $product->id] = app(ProductUnitValidator::class)->formatQuantity($product->product_store ?? '0');
         }
 
         return $preview;

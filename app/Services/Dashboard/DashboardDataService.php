@@ -385,14 +385,14 @@ class DashboardDataService
           ->whereNull('orders.deleted_at');
       })
       ->leftJoin('products', 'products.id', '=', 'order_details.product_id')
-      ->selectRaw("COALESCE(products.product_name, CONCAT('Product #', order_details.product_id)) as name, SUM(order_details.quantity) as qty")
-      ->groupBy('order_details.product_id', 'products.product_name')
+      ->selectRaw("COALESCE(products.product_name, CONCAT('Product #', order_details.product_id)) as name, COALESCE(order_details.unit, products.unit, 'piece') as unit, SUM(order_details.quantity) as qty")
+      ->groupBy('order_details.product_id', 'products.product_name', 'order_details.unit', 'products.unit')
       ->orderByDesc('qty')
       ->limit(10)
       ->get();
 
     return [
-      'labels' => $rows->pluck('name')->all(),
+      'labels' => $rows->map(fn ($r) => $r->name.' ('.($r->unit === 'kg' ? 'kg' : 'pieces').')')->all(),
       'quantities' => $rows->pluck('qty')->map(fn ($q) => (float) $q)->all(),
     ];
   }

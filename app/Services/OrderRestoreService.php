@@ -14,6 +14,7 @@ use App\Models\StockLog;
 use App\Models\Customer;
 use App\Models\Supplier;
 use App\Services\Ledger\LedgerBalanceService;
+use App\Support\ProductUnitValidator;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -97,9 +98,10 @@ class OrderRestoreService
 
         // 6. Re-apply stock: decrement product_store (reverse of delete which incremented)
         $order->load(['orderDetails']);
+        $units = app(ProductUnitValidator::class);
         foreach ($order->orderDetails as $orderDetail) {
-            $qty = (int) $orderDetail->quantity;
-            if ($qty <= 0) {
+            $qty = $units->formatQuantity($orderDetail->quantity ?? '0');
+            if ($units->compare($qty, '0') <= 0) {
                 continue;
             }
             Product::withoutGlobalScope('shop')
@@ -173,9 +175,10 @@ class OrderRestoreService
 
         // Re-apply stock: increment product_store for each purchase detail (reverse of delete)
         $purchase->load(['purchaseDetails']);
+        $units = app(ProductUnitValidator::class);
         foreach ($purchase->purchaseDetails as $detail) {
-            $qty = (int) ($detail->quantity ?? 0);
-            if ($qty <= 0) {
+            $qty = $units->formatQuantity($detail->quantity ?? '0');
+            if ($units->compare($qty, '0') <= 0) {
                 continue;
             }
             Product::withoutGlobalScope('shop')

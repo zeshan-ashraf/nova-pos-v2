@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\PurchaseDetail;
 use App\Models\StockLog;
+use App\Support\ProductUnitValidator;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -164,13 +165,15 @@ class FixProductCost extends Command
                     ->get();
 
                 foreach ($details as $detail) {
-                    $qty = (int) ($detail->quantity ?? 0);
-                    $unitcost = $newPrice;
-                    $landedUnit = $newPrice;
-                    $itemDiscount = (float) ($detail->item_discount ?? 0);
-                    $total = max(0, ($qty * $unitcost) - $itemDiscount);
-                    $landedTotal = $qty * $landedUnit;
-                    $allocated = $landedTotal - ($qty * $unitcost);
+                    $units = app(ProductUnitValidator::class);
+                    $qty = $units->formatQuantity($detail->quantity ?? '0');
+                    $unitcost = number_format((float) $newPrice, 4, '.', '');
+                    $landedUnit = $unitcost;
+                    $itemDiscount = number_format((float) ($detail->item_discount ?? 0), 4, '.', '');
+                    $gross = bcmul($qty, $unitcost, 4);
+                    $total = bccomp($gross, $itemDiscount, 4) > 0 ? bcsub($gross, $itemDiscount, 4) : '0.0000';
+                    $landedTotal = bcmul($qty, $landedUnit, 4);
+                    $allocated = bcsub($landedTotal, $gross, 4);
 
                     $detail->update([
                         'unitcost' => $unitcost,

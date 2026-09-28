@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Order;
 use App\Models\Purchase;
 use App\Models\StockLog;
+use App\Support\ProductUnitValidator;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -94,15 +95,20 @@ class RepairStockLogs extends Command
 
             $rows = [];
             foreach ($items as $item) {
-                $qty = (int) $item->quantity;
-                $signedQty = -abs($qty);
+                $units = app(ProductUnitValidator::class);
+                $qty = $units->formatQuantity($item->quantity ?? '0');
+                if ($units->compare($qty, '0') <= 0) {
+                    continue;
+                }
+                $signedQty = $units->subtract('0', $qty);
 
                 $rows[] = [
                     'shop_id' => $shopId,
                     'product_id' => $item->product_id,
                     'supplier_id' => null,
-                    'qty' => abs($qty),
-                    'stock_qty' => -abs($qty),
+                    'qty' => $qty,
+                    'unit' => $item->unit ?: 'piece',
+                    'stock_qty' => $signedQty,
                     'direction' => 'out',
                     'source_type' => 'sale',
                     'source_id' => (string) $order->id,
@@ -130,15 +136,19 @@ class RepairStockLogs extends Command
 
             $rows = [];
             foreach ($items as $item) {
-                $qty = (int) $item->quantity;
-                $signedQty = abs($qty);
+                $units = app(ProductUnitValidator::class);
+                $qty = $units->formatQuantity($item->quantity ?? '0');
+                if ($units->compare($qty, '0') <= 0) {
+                    continue;
+                }
 
                 $rows[] = [
                     'shop_id' => $shopId,
                     'product_id' => $item->product_id,
                     'supplier_id' => $order->supplier_id,
-                    'qty' => abs($qty),
-                    'stock_qty' => abs($qty),
+                    'qty' => $qty,
+                    'unit' => $item->unit ?: 'piece',
+                    'stock_qty' => $qty,
                     'direction' => 'in',
                     'source_type' => 'purchase',
                     'source_id' => (string) $order->id,
