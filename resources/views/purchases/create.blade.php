@@ -1079,7 +1079,6 @@
         $('#saveSupplierBtnText').text('Save');
         $('#saveSupplierSpinner').addClass('d-none');
     });
-    });
 })(jQuery);
 </script>
 @endsection
